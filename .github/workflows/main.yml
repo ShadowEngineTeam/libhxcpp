@@ -83,6 +83,26 @@ jobs:
     - run: bash test/run_bindir/check.sh ${{ matrix.dir }}
       name: Run through run.n
 
+  check-musl:
+    name: Check Linux with musl
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@v4
+
+    - name: setup
+      uses: ./.github/workflows/setup
+      with:
+        haxe: 4.3.7
+
+    - name: Generate the regression tests
+      working-directory: test/regression
+      run: for test in */; do haxe -C $test build.hxml -D no-compilation -D HXCPP_M64; done
+
+    # Alpine packages Neko only in edge so far
+    - name: Build and run the regression tests on Alpine
+      run: docker run --rm -v "$PWD:/w" -w /w alpine:edge sh -c "apk add --no-cache neko g++ && sh test/regression/run-generated.sh"
+
   check-haxelib:
     name: Check installing with haxelib
     strategy:

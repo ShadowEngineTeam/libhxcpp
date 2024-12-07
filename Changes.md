@@ -189,6 +189,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed the MSVC setup scripts failing to find Visual Studio installed under a path containing !: delayed expansion dropped the ! from the path vswhere reported (hxcpp #1034)
 * Fixed a Raspberry Pi running a 64-bit system building with the 32-bit rpi hardfp profile into bin/RPi: it builds as Linux ARM64 (hxcpp #959)
 * Added FreeBSD, OpenBSD and NetBSD hosts: they build with the system clang through the Linux toolchain, into BSD, BSD64 or BSDArm64 (hxcpp #1089)
+* Fixed building on Linux with musl, such as Alpine: Sys.cpp included xlocale.h, which musl doesn't have (hxcpp #1165)
 * Added the libhxcpp define: a build that uses the library gets -D libhxcpp=<version>. Compare it with version("x.y.z"); a plain string comparison compares text
 * Added separate Linux ARMv7 and ARM64 build architectures (hxcpp #1355)
 * Fixed AndroidCompat.cpp closing its extern "C" section in the wrong place (hxcpp #1404)
