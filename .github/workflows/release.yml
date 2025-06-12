@@ -133,7 +133,6 @@ jobs:
              README.md
              build-tool
              java
-             haxelib.xml
              LICENSE.txt
 
       - name: Archive Windows Results
