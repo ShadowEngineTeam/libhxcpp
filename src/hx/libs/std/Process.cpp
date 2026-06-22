@@ -12,7 +12,7 @@
 #   include <errno.h>
 #   include <signal.h>
 #   include <fcntl.h>
-#   if defined(ANDROID) || defined(BLACKBERRY) || defined(__EMSCRIPTEN__)
+#   if defined(ANDROID) || defined(BLACKBERRY) || defined(__EMSCRIPTEN__) || defined(NEKO_BSD)
 #      include <sys/wait.h>
 #   elif !defined(NEKO_MAC)
 #      include <wait.h>
