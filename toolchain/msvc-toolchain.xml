@@ -3,7 +3,7 @@
 
 <!-- WINDOWS TOOLS -->
 
-<set name="TOOLS_EXE_SUFFIX" value=".exe" />
+<set name="TOOLS_EXE_SUFFIX" value=".exe" unless="linux_host" />
 
 <section if="HXCPP_MSVC_LLVM" >
 
@@ -73,6 +73,11 @@
 <compiler id="MSVC" exe="cl.exe" if="windows">
   <exe name="${CL_EXE}" />
   <flag value="-nologo"/>
+
+  <section if="HXCPP_MSVC_LLVM HXCPP_MSVC_ROOT">
+    <flag value="-winsysroot" />
+    <flag value="${HXCPP_MSVC_ROOT}" />
+  </section>
 
   <pchflag value="/TP" />
 
@@ -149,6 +154,7 @@
 <linker id="dll" exe="link.exe" if="windows">
   <exe name="${LINK_EXE}" />
   <flag value="-nologo"/>
+  <flag value="-winsysroot:${HXCPP_MSVC_ROOT}" if="HXCPP_MSVC_LLVM HXCPP_MSVC_ROOT" />
   <flag value="-machine:${MACHINE}"/>
   <flag value="-dll"/>
   <flag value="-debug:full" if="HXCPP_DEBUG_LINK" unless="HXCPP_FAST_LINK"/>
@@ -174,6 +180,7 @@
   <exe name="${LINK_EXE}" />
   <fromfile value="@"/>
   <flag value="-nologo"/>
+  <flag value="-winsysroot:${HXCPP_MSVC_ROOT}" if="HXCPP_MSVC_LLVM HXCPP_MSVC_ROOT" />
   <flag value="-machine:${MACHINE}"/>
   <flag value="-debug" if="HXCPP_DEBUG_LINK||HXCPP_PDB_FILE" unless="HXCPP_FAST_LINK"/>
   <flag value="-debug:fastlink" if="HXCPP_FAST_LINK HXCPP_DEBUG_LINK"/>
@@ -198,6 +205,7 @@
 <manifest exe="mt.exe" >
   <exe name="${MT_EXE}" />
   <flag value="-nologo"/>
+  <flag value="-winsysroot:${HXCPP_MSVC_ROOT}" if="HXCPP_MSVC_LLVM HXCPP_MSVC_ROOT" />
   <flag value="-manifest"/>
   <outPre value="-outputresource:" />
   <outPost value=";1" />
@@ -209,6 +217,7 @@
   <exe name="${LINK_EXE}" />
   <fromfile value="@"/>
   <flag value="-nologo"/>
+  <flag value="-winsysroot:${HXCPP_MSVC_ROOT}" if="HXCPP_MSVC_LLVM HXCPP_MSVC_ROOT" />
   <flag value="-machine:${MACHINE}"/>
   <flag value="-debug" if="HXCPP_DEBUG_LINK" unless="HXCPP_FAST_LINK"/>
   <flag value="-debug:fastlink" if="HXCPP_FAST_LINK HXCPP_DEBUG_LINK"/>
@@ -234,6 +243,7 @@
   <flag value="-LTCG:INCREMENTAL" if="HXCPP_LTCG_INCREMENTAL" unless="debug"/>
   <fromfile value="@"/>
   <flag value="-nologo"/>
+  <flag value="-winsysroot:${HXCPP_MSVC_ROOT}" if="HXCPP_MSVC_LLVM HXCPP_MSVC_ROOT" />
   <flag value="-IGNORE:4264" if="winrt" />
   <ext value="${LIBEXT}"/>
   <outflag value="-out:"/>
