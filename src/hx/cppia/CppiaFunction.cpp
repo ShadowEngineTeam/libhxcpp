@@ -514,10 +514,18 @@ void ScriptCallable::runFunction(CppiaCtx *ctx)
    #ifdef CPPIA_JIT
    if (compiled)
    {
+      {
       AutoFrame frame(ctx);
       //printf("Running compiled code...\n");
       compiled(ctx);
       //printf("Done.\n");
+      }
+      if (ctx->exception)
+      {
+         Dynamic caught = ctx->exception;
+         ctx->exception = nullptr;
+         HX_STACK_DO_THROW(caught);
+      }
    }
    else
    #endif
@@ -553,10 +561,18 @@ void ScriptCallable::runFunctionClosure(CppiaCtx *ctx)
    #ifdef CPPIA_JIT
    if (compiled)
    {
+      {
       AutoFrame frame(ctx);
       //printf("Running compiled code...\n");
       compiled(ctx);
       //printf("Done.\n");
+      }
+      if (ctx->exception)
+      {
+         Dynamic caught = ctx->exception;
+         ctx->exception = nullptr;
+         HX_STACK_DO_THROW(caught);
+      }
    }
    else
    #endif
@@ -759,7 +775,13 @@ public:
          AutoFrame frame(ctx);
          function->compiled(ctx);
          }
-         if (!ctx->exception)
+         if (ctx->exception)
+         {
+            Dynamic caught = ctx->exception;
+            ctx->exception = nullptr;
+            HX_STACK_DO_THROW(caught);
+         }
+
          {
             switch(function->returnType)
             {
