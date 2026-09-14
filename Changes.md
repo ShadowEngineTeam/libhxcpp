@@ -196,6 +196,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed the cppia JIT allocating unaligned objects in the nursery, which a conservative scan could misread (hxcpp #1411)
 * Fixed the cppia JIT failing to load a module that converts an Int subtraction to a String, with Bad move target (hxcpp #1369)
 * Fixed the cppia JIT storing a Bool constant in an Array<Any> as a number (hxcpp #1371)
+* Fixed cpp.Lib.load looking for ndlls in Windows64 on Windows ARM64 instead of WindowsArm64 (hxcpp #1400)
 * Added the libhxcpp define: a build that uses the library gets -D libhxcpp=<version>. Compare it with version("x.y.z"); a plain string comparison compares text
 * Added separate Linux ARMv7 and ARM64 build architectures (hxcpp #1355)
 * Fixed AndroidCompat.cpp closing its extern "C" section in the wrong place (hxcpp #1404)
