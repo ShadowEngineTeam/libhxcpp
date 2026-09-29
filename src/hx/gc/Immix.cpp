@@ -462,6 +462,10 @@ DECLARE_FAST_TLS_DATA(StackContext, tlsStackContext);
 
 #ifdef HXCPP_SCRIPTABLE
 extern void scriptMarkStack(hx::MarkContext *);
+extern void scriptMarkModules(hx::MarkContext *);
+#ifdef HXCPP_VISIT_ALLOCS
+extern void scriptVisitModules(hx::VisitContext *);
+#endif
 #endif
 }
 
@@ -4406,6 +4410,9 @@ public:
          VisitLocalAlloc(mLocalAllocs[i], inCtx);
 
       hx::VisitClassStatics(inCtx);
+      #if defined(HXCPP_SCRIPTABLE) && defined(HXCPP_GC_GENERATIONAL)
+      hx::scriptVisitModules(inCtx);
+      #endif
 
       {
       // For the walks only: see sGCRootLock. The visit just patches moved
@@ -4856,6 +4863,9 @@ public:
       mMarker.init();
 
       hx::MarkClassStatics(&mMarker);
+      #if defined(HXCPP_SCRIPTABLE) && defined(HXCPP_GC_GENERATIONAL)
+      hx::scriptMarkModules(&mMarker);
+      #endif
 
       {
       hx::AutoMarkPush info(&mMarker,"Roots","root");

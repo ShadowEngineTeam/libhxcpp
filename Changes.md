@@ -192,6 +192,8 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed building on Linux with musl, such as Alpine: Sys.cpp included xlocale.h, which musl doesn't have (hxcpp #1165)
 * Fixed HXCPP_GC_BIG_BLOCKS stalling or running out of memory once the heap passed 2 GiB: the large allocation target was computed in an int (hxcpp #1339)
 * Fixed a cppia script that constructs a class the host does not have crashing the process: it fails to load with Could not link new (hxcpp #1410)
+* Fixed cppia with HXCPP_GC_GENERATIONAL freeing young objects that an old script still used: a field set by name had no write barrier, and literals, JIT-embedded boxes and statics held by a loaded module were not traced by a generational collection (hxcpp #1408, #1406)
+* Fixed the cppia JIT allocating unaligned objects in the nursery, which a conservative scan could misread (hxcpp #1411)
 * Added the libhxcpp define: a build that uses the library gets -D libhxcpp=<version>. Compare it with version("x.y.z"); a plain string comparison compares text
 * Added separate Linux ARMv7 and ARM64 build architectures (hxcpp #1355)
 * Fixed AndroidCompat.cpp closing its extern "C" section in the wrong place (hxcpp #1404)
