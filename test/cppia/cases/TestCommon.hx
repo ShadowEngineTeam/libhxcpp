@@ -2,6 +2,7 @@ package cases;
 
 import cpp.cppia.Host;
 import cpp.vm.Gc;
+import cpp.vm.WeakRef;
 import utest.Test;
 import utest.Assert;
 
@@ -77,6 +78,27 @@ class TestCommon extends Test {
         final junk = [for (i in 0...100000) [i]];
 
         Assert.equals(42, kept[0]);
+    }
+
+    @:depends(testStatus)
+    function testSetFieldOfOldObject() {
+        final holder = Type.createInstance(Type.resolveClass('ClientHolder'), []);
+
+        // Full collections make the holder old: a generational collection no longer traverses it.
+        for (_ in 0...3) {
+            Gc.run(true);
+        }
+        final values = setValues(holder);
+        Gc.run(false);
+
+        Assert.notNull(values.get(), 'Freed a value set by name on an old object');
+    }
+
+    // Only a weak reference to the value leaves this frame, so that the stack does not keep it.
+    static function setValues(holder:Dynamic):WeakRef<Array<Int>> {
+        final values = [42];
+        Reflect.setField(holder, 'values', values);
+        return new WeakRef(values);
     }
 
     @:depends(testStatus)
