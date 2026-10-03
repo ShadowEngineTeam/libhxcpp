@@ -199,6 +199,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed cpp.Lib.load looking for ndlls in Windows64 on Windows ARM64 instead of WindowsArm64 (hxcpp #1400)
 * Fixed MinGW GUI builds not showing traces in the console they were started from (hxcpp #1330)
 * Fixed the build tool, built as C++, failing on a file group without a C or C++ standard (hxcpp #1405)
+* Fixed a scriptable host class failing to compile when a parent Haxe class has a toString with an optional argument (hxcpp #1403)
 * Added the libhxcpp define: a build that uses the library gets -D libhxcpp=<version>. Compare it with version("x.y.z"); a plain string comparison compares text
 * Added separate Linux ARMv7 and ARM64 build architectures (hxcpp #1355)
 * Fixed AndroidCompat.cpp closing its extern "C" section in the wrong place (hxcpp #1404)

@@ -134,6 +134,13 @@ class ClientBoolConst {
    }
 }
 
+// None overrides toString: the scriptable wrapper falls back on the host's.
+class ClientOptionalToString extends OptionalToString.OptionalToStringChild {}
+
+class ClientRequiredToString extends OptionalToString.RequiredToStringChild {}
+
+class ClientZeroArgToString extends OptionalToString.ZeroArgToString {}
+
 class Client
 {
    public static var clientBool0 = true;
