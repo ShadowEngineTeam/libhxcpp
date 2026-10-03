@@ -1,6 +1,7 @@
 package cases;
 
 import cpp.cppia.Host;
+import cpp.vm.Gc;
 import utest.Test;
 import utest.Assert;
 
@@ -63,6 +64,19 @@ class TestCommon extends Test {
         final source = sys.io.File.getBytes('bin/unlinked.cppia');
 
         Assert.raises(() -> cpp.cppia.Module.fromData(source.getData()), String, 'Linked a new of a class the host does not have');
+    }
+
+    @:depends(testStatus)
+    function testStackObjectAfterScriptAllocations() {
+        final nursery = Type.resolveClass('ClientNursery');
+        Reflect.callMethod(nursery, Reflect.field(nursery, 'allocate'), []);
+        // Only the stack references it, so only the nursery scan finds it.
+        final kept = [42];
+
+        Gc.run(false);
+        final junk = [for (i in 0...100000) [i]];
+
+        Assert.equals(42, kept[0]);
     }
 
     @:depends(testStatus)
