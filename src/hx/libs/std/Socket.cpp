@@ -845,8 +845,12 @@ Array<Dynamic> _hx_std_socket_select( Array<Dynamic> rs, Array<Dynamic> ws, Arra
       #else
       int err = errno;
       hx::ExitGCFreeZone();
+      // select_again only exists where POSIX_LABEL defines it (NEKO_POSIX);
+      // elsewhere, emscripten among them, there is no retry to jump to.
+      #ifdef NEKO_POSIX
       if( err == EINTR )
          goto select_again;
+      #endif
       #endif
       hx::Throw( HX_CSTRING("Select error ") + String(err) );
    }
@@ -890,8 +894,12 @@ void _hx_std_socket_fast_select( Array<Dynamic> rs, Array<Dynamic> ws, Array<Dyn
       #else
       int err = errno;
       hx::ExitGCFreeZone();
+      // select_again only exists where POSIX_LABEL defines it (NEKO_POSIX);
+      // elsewhere, emscripten among them, there is no retry to jump to.
+      #ifdef NEKO_POSIX
       if( err == EINTR )
          goto select_again;
+      #endif
       #endif
       hx::Throw( HX_CSTRING("Select error ") + String(err) );
    }
