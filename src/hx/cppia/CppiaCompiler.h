@@ -13,11 +13,7 @@
    #else
       #define SLJIT_CONFIG_X86_32 1
       #ifndef _WIN32
-      // The i386 System V ABI of Linux and the BSDs has the stack 16-byte
-      // aligned at every call, and code built for it may rely on that: GCC
-      // spills SSE values with aligned stores. sljit kept its frames aligned
-      // on Apple only, so JIT code called into the runtime with the stack 4
-      // or 8 bytes off. See sljitNativeX86_32.c
+      // The System V i386 ABI has the stack 16-byte aligned at every call
       #define SLJIT_X86_32_ALIGN_STACK_16 1
       #endif
    #endif

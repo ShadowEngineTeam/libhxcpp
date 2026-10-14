@@ -36,8 +36,6 @@ jobs:
           - variant: ' (big blocks)'
             flags: --debug -D HXCPP_GC_BIG_BLOCKS
             bin: TestMain-debug
-          # the moving collector, defragmenting at every collection, so a
-          # pointer the collector does not know of is left pointing at nothing
           - variant: ' (moving gc)'
             flags: --debug -D HXCPP_GC_DEBUG_ALWAYS_MOVE
             bin: TestMain-debug
@@ -177,7 +175,6 @@ jobs:
           run: haxe compile${{ inputs.arch }}.hxml
         - name: run
           env:
-            # the MySQL tests fail, rather than pass, without the server above
             HXCPP_TEST_MYSQL: ${{ runner.os == 'Linux' && '1' || '' }}
           run: ${{ inputs.arch == 'Arm64' && 'arm64' || format('cpp{0}', inputs.arch) }}${{ inputs.sep }}Test
 
@@ -230,13 +227,10 @@ jobs:
       - name: run
         run: bin${{ inputs.sep }}cpp${{ inputs.sep }}TestMain-debug
 
-  # The rest of what Haxe's own CI runs for C++ (tests/runci/targets/Cpp.hx),
-  # so the runtime keeps doing what the compiler and the standard library
-  # expect of it. Each suite runs even when one before it failed
+  # The rest of Haxe's own C++ CI, tests/runci/targets/Cpp.hx
   haxe_suites:
     runs-on: ${{ inputs.os }}
     name: haxe sys, threads and cppia suites
-    # a hung thread test would otherwise hold the runner for six hours
     timeout-minutes: 45
     defaults:
       run:
@@ -255,8 +249,7 @@ jobs:
       - name: sys
         working-directory: haxe/tests/sys
         run: |
-          # as Haxe's CI does: file names that are not valid Unicode do not
-          # work on APFS
+          # as Haxe's CI does: APFS refuses file names that are not valid Unicode
           if [ "$RUNNER_OS" = macOS ]; then echo "" > compile-fs.hxml; fi
           haxe -D $HXCPP_ARCH_FLAG --each compile-cpp.hxml
           EXISTS=1 bin/cpp/Main-debug

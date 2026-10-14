@@ -26,12 +26,7 @@
 
 /* x86 32-bit arch dependent functions. */
 
-/* libhxcpp: SLJIT_X86_32_ALIGN_STACK_16 keeps the stack 16-byte aligned at
-   every call, as the System V i386 ABI wants. It was Apple only, which also
-   passes arguments as cdecl; CppiaCompiler.h sets it on the other System V
-   targets, which use fastcall, where a third argument is pushed just before
-   the call: call_with_args pads for it and call_cleanup gives the padding
-   back once the callee has popped the argument. */
+/* libhxcpp: SLJIT_X86_32_ALIGN_STACK_16, Apple only before, also set by CppiaCompiler.h */
 #if defined(__APPLE__) && !defined(SLJIT_X86_32_ALIGN_STACK_16)
 #define SLJIT_X86_32_ALIGN_STACK_16 1
 #endif
@@ -548,7 +543,6 @@ static SLJIT_INLINE sljit_s32 call_with_args(struct sljit_compiler *compiler, sl
 	return SLJIT_SUCCESS;
 }
 
-/* After a call: release what call_with_args reserved to keep the stack aligned. */
 static SLJIT_INLINE sljit_s32 call_cleanup(struct sljit_compiler *compiler, sljit_s32 type)
 {
 #if (defined SLJIT_X86_32_FASTCALL && SLJIT_X86_32_FASTCALL) \

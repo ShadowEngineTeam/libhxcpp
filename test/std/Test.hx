@@ -38,7 +38,6 @@ extern class SslTest
    extern public static function socket_init():Void;
 }
 
-// What the drivers report beyond sys.db's interface
 extern class SqliteNative
 {
    @:native("_hx_sqlite_get_autocommit")
@@ -161,7 +160,6 @@ class Test extends utest.Test
       return 0;
    }
 
-   // Not static: utest runs instance methods only, and this one never ran
    function testDate()
    {
       log("Test date");
@@ -178,8 +176,6 @@ class Test extends utest.Test
       var diff:Float = untyped __global__.__hxcpp_timezone_offset(now.mSeconds);
       v("timezone offet:" + diff);
 
-      // Before 1970, where Windows' localtime and mktime fail: toString ended
-      // the process
       final early = Date.fromTime(-1000);
       Assert.notNull(early.toString());
       Assert.equals(1969, early.getUTCFullYear());
@@ -193,7 +189,6 @@ class Test extends utest.Test
       Assert.equals(1960, local1960.getFullYear());
       Assert.equals(12, local1960.getHours());
 
-      // and past 2038, where a 32-bit time wraps
       Assert.equals("2040-06-01 00:00:00", new Date(2040, 5, 1, 0, 0, 0).toString());
 
       Assert.equals(0.0, DateTools.makeUtc(1970, 0, 1, 0, 0, 0));
@@ -304,8 +299,6 @@ class Test extends utest.Test
       cnx.close();
    }
 
-   // How an integer column came back: an Int when the value fits one, an
-   // Int64 when it does not
    static function integerText(value:Dynamic):String
    {
       return switch (Type.typeof(value))
@@ -322,7 +315,6 @@ class Test extends utest.Test
       final cnx = Sqlite.open(":memory:");
       cnx.request("CREATE TABLE vals (i INTEGER, f REAL, s TEXT, b BLOB, n INTEGER)");
 
-      // INTEGER is 64 bits, and only its low 32 were read
       for (i in ["2147483647", "-2147483648", "2147483648", "-2147483649", "1727600000000", "9007199254740993", "9223372036854775807"])
          cnx.request('INSERT INTO vals (i) VALUES ($i)');
       final ints = [for (row in cnx.request("SELECT i FROM vals ORDER BY rowid")) integerText(row.i)];
@@ -335,7 +327,6 @@ class Test extends utest.Test
       Assert.equals(0.1, row.f);
       Assert.equals("it's 豪鬼", row.s);
       Assert.equals("00ff10", Bytes.ofData(row.b).toHex());
-      // NULL is a field holding null, not a missing one
       Assert.isTrue(Reflect.hasField(row, "n"));
       Assert.isNull(row.n);
       cnx.close();
@@ -354,10 +345,8 @@ class Test extends utest.Test
          cnx.request("INSERT INTO users VALUES ('a@b.c')")
       catch (e:Dynamic)
          error = Std.string(e);
-      // SQLite's own message, not the step's "SQL logic error"
       Assert.isTrue(error.indexOf("UNIQUE constraint failed: users.email") >= 0, error);
 
-      // and the failure ends there: the next statement and close() succeed
       Assert.equals(1, cnx.request("SELECT COUNT(*) AS c FROM users").next().c);
       cnx.close();
    }
@@ -377,7 +366,6 @@ class Test extends utest.Test
       Assert.isTrue(SqliteNative.autocommit(handle));
       Assert.equals(0, cnx.request("SELECT COUNT(*) AS c FROM t").next().c);
 
-      // begun and ended with SQL text, which the connection is not told of
       cnx.request("BEGIN");
       Assert.isFalse(SqliteNative.autocommit(handle));
       cnx.request("INSERT INTO t VALUES (2)");
@@ -387,9 +375,6 @@ class Test extends utest.Test
       cnx.close();
    }
 
-   // The test database, or null when there is no server. CI sets
-   // HXCPP_TEST_MYSQL where it runs one, so a server that failed to start is
-   // a failure there rather than a pass
    static function connectMysql():Connection
    {
       try
@@ -445,13 +430,11 @@ class Test extends utest.Test
          '1960-01-15', '2040-06-01 12:34:56.789', '2040-06-01', NULL, 'abc')");
       final row = cnx.request("SELECT * FROM Vals").next();
 
-      // integers at their full width, and DECIMAL as its exact text
       Assert.equals("Int64 9007199254740993", integerText(row.big_v));
       Assert.equals("18446744073709551615", row.ubig_v);
       Assert.equals("Int64 4294967295", integerText(row.uint_v));
       Assert.equals("12345678901234.5678", row.exact_v);
 
-      // dates read as UTC, before 1970 and past 2038, with fractional seconds
       final day:Date = row.day_v;
       Assert.equals(DateTools.makeUtc(1960, 0, 15, 0, 0, 0), day.getTime());
       final moment:Date = row.moment_v;
@@ -459,12 +442,10 @@ class Test extends utest.Test
       final late:Date = row.late_v;
       Assert.equals(DateTools.makeUtc(2040, 5, 1, 0, 0, 0), late.getTime());
 
-      // NULL is a field holding null, and a _bin collation is still text
       Assert.isTrue(Reflect.hasField(row, "null_v"));
       Assert.isNull(row.null_v);
       Assert.equals("abc", row.bin_v);
 
-      // a column named by an expression keeps that name
       final count = cnx.request("SELECT COUNT(*) FROM Vals").next();
       Assert.equals(1, Reflect.field(count, "COUNT(*)"));
 
@@ -483,8 +464,6 @@ class Test extends utest.Test
       }
       final handle = Reflect.field(cnx, "__c");
 
-      // Escaping follows the server's latest status: with NO_BACKSLASH_ESCAPES
-      // a backslash-escaped quote ends the string and the rest is SQL
       final text = "it's a \\ backslash";
       Assert.equals(text, cnx.request("SELECT " + cnx.quote(text) + " AS v").next().v);
       cnx.request("SET SESSION sql_mode = 'NO_BACKSLASH_ESCAPES'");

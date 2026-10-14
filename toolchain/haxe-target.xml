@@ -135,7 +135,7 @@
   <depend name="${HXCPP}/src/hx/cppia/CppiaStream.h" />
   <depend name="${HXCPP}/src/hx/cppia/CppiaOps.inc" />
   <depend name="${HXCPP}/src/hx/cppia/CppiaCompiler.h"  if="CPPIA_JIT" />
-  <!-- CppiaCompiler.cpp includes sljit's sources, so a change to them rebuilds it -->
+  <!-- included by CppiaCompiler.cpp -->
   <depend name="${HXCPP}/src/hx/cppia/sljit_src/sljitConfig.h" if="CPPIA_JIT" />
   <depend name="${HXCPP}/src/hx/cppia/sljit_src/sljitConfigInternal.h" if="CPPIA_JIT" />
   <depend name="${HXCPP}/src/hx/cppia/sljit_src/sljitLir.h" if="CPPIA_JIT" />

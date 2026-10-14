@@ -28,9 +28,7 @@ runs:
         ref: ${{ inputs.haxe == 'latest' && steps.haxe_sha.outputs.sha || inputs.haxe }}
         sparse-checkout: tests
 
-    # setup installs utest from git, which Haxe 4's tests do not build with.
-    # Only utest: installing from the suites' hxml files also downloads a
-    # stock hxcpp, which the hxcpp redirect then never uses
+    # Haxe 4's tests do not build with the git utest that setup installs
     - name: install utest
       if: inputs.haxe != 'latest'
       shell: bash

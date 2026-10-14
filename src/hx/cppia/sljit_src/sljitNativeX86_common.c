@@ -2548,7 +2548,7 @@ SLJIT_API_FUNC_ATTRIBUTE sljit_s32 sljit_emit_ijump(struct sljit_compiler *compi
 		}
 		if (src == SLJIT_MEM1(SLJIT_SP) && type >= SLJIT_CALL3)
 #if (defined SLJIT_X86_32_ALIGN_STACK_16 && SLJIT_X86_32_ALIGN_STACK_16)
-			srcw += 4 * sizeof(sljit_sw); /* the alignment padding and the pushed argument */
+			srcw += 4 * sizeof(sljit_sw); /* padding and the pushed argument */
 #else
 			srcw += sizeof(sljit_sw);
 #endif

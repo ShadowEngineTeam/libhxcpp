@@ -854,7 +854,6 @@ HXCPP_EXTERN_CLASS_ATTRIBUTES int     _hx_mysql_result_get_int(Dynamic handle,in
 HXCPP_EXTERN_CLASS_ATTRIBUTES Float   _hx_mysql_result_get_float(Dynamic handle,int i);
 HXCPP_EXTERN_CLASS_ATTRIBUTES Array<String> _hx_mysql_result_get_fields_names(Dynamic handle);
 
-// Beyond what sys.db.Mysql uses, for a driver that needs more
 HXCPP_EXTERN_CLASS_ATTRIBUTES Dynamic _hx_mysql_create(Dynamic params);
 HXCPP_EXTERN_CLASS_ATTRIBUTES void    _hx_mysql_open(Dynamic handle);
 HXCPP_EXTERN_CLASS_ATTRIBUTES Dynamic _hx_mysql_request_stream(Dynamic handle,String req);
