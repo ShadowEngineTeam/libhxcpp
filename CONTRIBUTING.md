@@ -8,15 +8,18 @@ Say which Haxe and libhxcpp versions you use, the platform and C++ compiler, and
 
 ## Working on libhxcpp
 
-Point haxelib at your checkout and build the build tool once:
+Point haxelib at your checkout, run the setup so builds that ask for hxcpp use it, and build the build tool once:
 
 ```
-haxelib dev hxcpp <path to your checkout>
+haxelib dev libhxcpp <path to your checkout>
+haxelib run libhxcpp setup
 cd <path to your checkout>/tools/hxcpp
 haxe compile.hxml
 ```
 
-`haxelib dev hxcpp` with no path switches back to the version you had installed.
+`haxelib run libhxcpp off` switches builds back to hxcpp, and `haxelib dev libhxcpp` with no path back to the libhxcpp you had installed.
+
+`test/haxelib/check.sh` checks the setup itself: installing, setup, an update and `off`, in a haxelib repository of its own.
 
 ## Tests
 

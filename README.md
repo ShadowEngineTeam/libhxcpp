@@ -3,7 +3,7 @@
 [![main](https://github.com/openfl/libhxcpp/actions/workflows/main.yml/badge.svg)](https://github.com/openfl/libhxcpp/actions/workflows/main.yml)
 [![License: BSD](https://img.shields.io/badge/license-BSD-blue.svg)](LICENSE.txt)
 
-libhxcpp is the runtime for the C++ target of the [Haxe](https://haxe.org/) compiler: the headers, garbage collector, standard library and build tool that turn the C++ Haxe generates into a native program. It continues hxcpp from its full history and installs under the name `hxcpp`, so existing projects use it without changes.
+libhxcpp is the runtime for the C++ target of the [Haxe](https://haxe.org/) compiler: the headers, garbage collector, standard library and build tool that turn the C++ Haxe generates into a native program. It continues hxcpp from its full history. It is installed as the haxelib `libhxcpp`, and one setup command makes everything that asks for hxcpp use it, so existing projects need no changes.
 
 ## Highlights
 
@@ -14,43 +14,49 @@ libhxcpp is the runtime for the C++ target of the [Haxe](https://haxe.org/) comp
 
 ## Installing
 
-`main` is the development version of libhxcpp 6.0.0. Until its first release is published, install it from git.
-
-### From git
+libhxcpp is a haxelib of its own, `libhxcpp`, that stands in for hxcpp. Install it, then run its setup once:
 
 ```
-haxelib git hxcpp https://github.com/openfl/libhxcpp
+haxelib install libhxcpp
+haxelib run libhxcpp setup
+```
+
+`main` is the development version of libhxcpp 6.0.0. Until 6.0.0 is published, install it from git instead:
+
+```
+haxelib git libhxcpp https://github.com/openfl/libhxcpp
+haxelib run libhxcpp setup
 ```
 
 A git checkout needs its build tool compiled once. The first build offers to do it, or you can do it yourself:
 
 ```
-cd <the path printed by: haxelib libpath hxcpp>
+cd <the path printed by: haxelib libpath libhxcpp>
 cd tools/hxcpp
 haxe compile.hxml
 ```
 
-### From a release
+A release can also be installed from its zip on the [releases](https://github.com/openfl/libhxcpp/releases) page, with the build tool and the cppia host already built: `haxelib install libhxcpp-<version>.zip`, then the setup.
 
-Download `libhxcpp-<version>.zip` from the [releases](https://github.com/openfl/libhxcpp/releases) and install it:
+### What setup does
 
-```
-haxelib install libhxcpp-<version>.zip
-```
+The Haxe compiler, `-lib hxcpp` and libraries that depend on hxcpp all ask haxelib for `hxcpp`. Setup points that name at libhxcpp, with `haxelib dev hxcpp <libhxcpp's folder>`, so they all get the same runtime. hxcpp itself, if it is installed, is not touched.
 
-It installs as `hxcpp` and becomes the current version, with the build tool and the cppia host already built.
+After `haxelib update libhxcpp`, the next build notices the newer version and moves the redirect to it by itself.
+
+Setup applies to the haxelib repository it runs in, so a project with a local repository (`haxelib newrepo`) can use libhxcpp while other projects keep hxcpp.
 
 ### Switching back to hxcpp
 
 ```
-haxelib git hxcpp https://github.com/HaxeFoundation/hxcpp
+haxelib run libhxcpp off
 ```
 
-or `haxelib set hxcpp <version>` for a release you have installed.
+Everything uses hxcpp again straight away. If hxcpp is not installed, install it with `haxelib install hxcpp`.
 
 ## Using libhxcpp
 
-Your project needs no changes: the Haxe compiler uses whichever library is installed as `hxcpp`. A build that uses the library (`-L hxcpp`) also gets the define `libhxcpp`, set to its version, so code can tell which runtime it is built against:
+Your project needs no changes. A build that uses the library, as `-lib hxcpp` or `-lib libhxcpp`, gets the defines `hxcpp` and `libhxcpp`, both set to libhxcpp's version, so code can tell which runtime it is built against:
 
 ```haxe
 #if libhxcpp
@@ -66,11 +72,11 @@ Compare versions with `version()`. A comparison with a plain string, such as `(l
 
 ## Compatibility
 
-libhxcpp keeps hxcpp's name, build XML, defines and API, and works with the code the Haxe compiler generates for hxcpp. A few fixes deliberately change behaviour to match the other Haxe targets, for example how `Std.string` formats floats, NaN and Infinity, and TLS connections now require TLS 1.2 or newer. Changes.md describes each one.
+libhxcpp keeps hxcpp's build XML, defines and API, and works with the code the Haxe compiler generates for hxcpp. A few fixes deliberately change behaviour to match the other Haxe targets, for example how `Std.string` formats floats, NaN and Infinity, and TLS connections now require TLS 1.2 or newer. Changes.md describes each one.
 
 ## Versions and releases
 
-libhxcpp follows [semantic versioning](https://semver.org) with its own numbers, starting at 6.0.0. Pre-releases are tagged `-alpha`, `-beta`, `-preview` or `-rc`. Each release is tagged `v<version>`, has its notes in [Changes.md](Changes.md), and is published on the [releases](https://github.com/openfl/libhxcpp/releases) page. [RELEASING.md](RELEASING.md) describes how a release is made.
+libhxcpp follows [semantic versioning](https://semver.org) with its own numbers, starting at 6.0.0. Pre-releases are tagged `-alpha`, `-beta`, `-preview` or `-rc`. Each release is tagged `v<version>`, has its notes in [Changes.md](Changes.md), and is published on haxelib as `libhxcpp` and on the [releases](https://github.com/openfl/libhxcpp/releases) page. [RELEASING.md](RELEASING.md) describes how a release is made.
 
 ## Building from source
 
