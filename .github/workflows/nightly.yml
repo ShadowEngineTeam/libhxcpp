@@ -1,0 +1,19 @@
+name: nightly
+# The test suites with the Haxe nightly build, once a day and by hand. It does
+# not gate releases, which check main's run: a regression in Haxe itself shows
+# here without blocking one.
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: nightly
+  cancel-in-progress: true
+
+jobs:
+  platforms:
+    name: Haxe nightly
+    uses: ./.github/workflows/platforms.yml
+    with:
+      haxe: latest
