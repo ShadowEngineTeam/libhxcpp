@@ -100,9 +100,9 @@ double __hxcpp_time_stamp()
  * On Windows localtime and gmtime return NULL for a time before 1970 (and
  * after 3000), and mktime fails for one. localtime's NULL was turned into an
  * all-zero struct tm, which strftime then refused as an invalid day of the
- * month -- through the CRT's invalid-parameter handler, which ends the
+ * month, through the CRT's invalid-parameter handler, which ends the
  * process (0xC0000409): Date.fromTime(-1000).toString() killed it. gmtime's
- * NULL was dereferenced outright.
+ * NULL was dereferenced outright. A 32-bit time_t covers only 1901 to 2038.
  */
 static long long hx_days_from_civil(long long y, long long m, long long d)
 {
@@ -114,8 +114,11 @@ static long long hx_days_from_civil(long long y, long long m, long long d)
    return era * 146097 + doe - 719468;
 }
 
-#ifndef USE_TIME_R
-// Only where localtime_r and gmtime_r are missing: they convert any time.
+static bool hx_time_t_holds(double inSeconds)
+{
+   return sizeof(time_t) >= 8 || (inSeconds >= -2147483648.0 && inSeconds < 2147483648.0);
+}
+
 static void hx_civil_from_days(long long z, long long *outY, int *outM, int *outD)
 {
    z += 719468;
@@ -208,22 +211,69 @@ static long long hx_windows_offset(double inSeconds, int *outIsDst)
    *outIsDst = offset != standard ? 1 : 0;
    return offset;
 }
+#else
+// A time time_t cannot hold is moved 28 years at a time into its range: from
+// 1901 to 2099 the calendar repeats every 28 years.
+static long long hx_posix_offset(double inSeconds, int *outIsDst)
+{
+   const double cycle = 10227.0 * 86400.0;
+   double seconds = floor(inSeconds);
+   if (!hx_time_t_holds(seconds))
+   {
+      double limit = seconds >= 0 ? 2147483647.0 : -2147483648.0;
+      double cycles = ceil(fabs(seconds - limit) / cycle);
+      seconds += seconds >= 0 ? -cycles * cycle : cycles * cycle;
+   }
+   time_t t = (time_t)seconds;
+   struct tm local;
+   #ifdef USE_TIME_R
+   localtime_r(&t, &local);
+   #else
+   struct tm *result = localtime(&t);
+   if (!result)
+   {
+      *outIsDst = 0;
+      return 0;
+   }
+   local = *result;
+   #endif
+   *outIsDst = local.tm_isdst > 0 ? 1 : 0;
+   long long localSeconds = hx_days_from_civil(local.tm_year + 1900LL, local.tm_mon + 1, local.tm_mday) * 86400
+                          + local.tm_hour * 3600 + local.tm_min * 60 + local.tm_sec;
+   return localSeconds - (long long)t;
+}
 #endif
+
+static long long hx_zone_offset(double inSeconds, int *outIsDst)
+{
+   #ifdef HX_WINDOWS
+   return hx_windows_offset(inSeconds, outIsDst);
+   #else
+   return hx_posix_offset(inSeconds, outIsDst);
+   #endif
+}
 
 // The fields of a local time the C library would not convert.
 static void hx_local_fields(double inSeconds, struct tm *time)
 {
-   #ifdef HX_WINDOWS
    int isDst = 0;
-   long long offset = hx_windows_offset(inSeconds, &isDst);
+   long long offset = hx_zone_offset(inSeconds, &isDst);
    hx_utc_fields(inSeconds + (double)offset, time);
    time->tm_isdst = isDst;
-   #else
-   hx_utc_fields(inSeconds, time);
+   #if !defined(HX_WINDOWS) && !defined(__SNC__) && !defined(__ORBIS__)
+   time->tm_gmtoff = (long)offset;
    #endif
 }
 
-#endif
+// The offset is the one at the time the fields name: a first guess, corrected once.
+static double hx_utc_from_local(long long inYear, long long inMonth, int inDay, int inHour, int inMin, int inSeconds)
+{
+   double naive = (double)(hx_days_from_civil(inYear, inMonth + 1, 1) + (inDay - 1)) * 86400.0
+                + inHour * 3600.0 + inMin * 60.0 + inSeconds;
+   int isDst = 0;
+   double guess = naive - (double)hx_zone_offset(naive, &isDst);
+   return naive - (double)hx_zone_offset(guess, &isDst);
+}
 
 /*
  * for the provided Epoch time, fills the passed struct tm with date_time representation in local time zone
@@ -244,9 +294,12 @@ void __internal_localtime(double inSeconds, struct tm* time)
    }
    time_t t = (time_t) inSeconds;
    #ifdef USE_TIME_R
-   localtime_r(&t, time);
+   if (hx_time_t_holds(inSeconds))
+      localtime_r(&t, time);
+   else
+      hx_local_fields(inSeconds, time);
    #else
-   struct tm *result = localtime(&t);
+   struct tm *result = hx_time_t_holds(inSeconds) ? localtime(&t) : 0;
    if (result)
       *time = *result;
    else
@@ -274,9 +327,12 @@ void __internal_gmtime(double inSeconds, struct tm* time)
    }
    time_t t = (time_t) inSeconds;
    #ifdef USE_TIME_R
-   gmtime_r(&t, time);
+   if (hx_time_t_holds(inSeconds))
+      gmtime_r(&t, time);
+   else
+      hx_utc_fields(inSeconds, time);
    #else
-   struct tm *result = gmtime(&t);
+   struct tm *result = hx_time_t_holds(inSeconds) ? gmtime(&t) : 0;
    if (result)
       *time = *result;
    else
@@ -303,22 +359,20 @@ double __hxcpp_new_date(int inYear,int inMonth,int inDay,int inHour, int inMin, 
    time.tm_min = inMin;
    time.tm_sec = inSeconds;
 
+   long long y = inYear + (inMonth >= 0 ? inMonth / 12 : -((11 - inMonth) / 12));
+   long long m = inMonth - (y - inYear) * 12;
+   #ifndef HX_WINDOWS
+   // A 32-bit time_t's mktime fails outside 1901 to 2038
+   if (sizeof(time_t) < 8 && (y < 1903 || y > 2036))
+      return hx_utc_from_local(y, m, inDay, inHour, inMin, inSeconds) + ((double) inMilliseconds * 0.001);
+   #endif
+
    time_t t = mktime(&time);
    #ifdef HX_WINDOWS
    // The Windows CRT's mktime fails before 1970 (and after 3000), and never
-   // returns -1 as a real time. The fields are local, so the offset is the
-   // one at the time they name, found from a first guess and corrected once.
+   // returns -1 as a real time
    if (t == (time_t)-1)
-   {
-      long long y = inYear + (inMonth >= 0 ? inMonth / 12 : -((11 - inMonth) / 12));
-      long long m = inMonth - (y - inYear) * 12;
-      double naive = (double)(hx_days_from_civil(y, m + 1, 1) + (inDay - 1)) * 86400.0
-                   + inHour * 3600.0 + inMin * 60.0 + inSeconds;
-      int isDst = 0;
-      double guess = naive - (double)hx_windows_offset(naive, &isDst);
-      double utc = naive - (double)hx_windows_offset(guess, &isDst);
-      return utc + ((double) inMilliseconds * 0.001);
-   }
+      return hx_utc_from_local(y, m, inDay, inHour, inMin, inSeconds) + ((double) inMilliseconds * 0.001);
    #endif
 
    return (t + ((double) inMilliseconds * 0.001));
@@ -329,7 +383,7 @@ double __hxcpp_utc_date(int inYear,int inMonth,int inDay,int inHour, int inMin, 
 {
    // Arithmetic, not mktime and gmtime: those read the fields in the local
    // zone and then took the zone back off, which on Windows failed before
-   // 1970 -- gmtime(-1) is NULL there, and it was dereferenced.
+   // 1970: gmtime(-1) is NULL there, and it was dereferenced.
    long long y = inYear + (inMonth >= 0 ? inMonth / 12 : -((11 - inMonth) / 12));
    long long m = inMonth - (y - inYear) * 12;
    return (double)(hx_days_from_civil(y, m + 1, 1) + (inDay - 1)) * 86400.0
@@ -554,7 +608,7 @@ String __internal_to_string(struct tm time)
    // YYYY-MM-DD hh:mm:ss
    //
    // Formatted by hand. strftime validates the fields, and the Windows CRT
-   // answers a value it rejects -- a year before 1900, say -- through its
+   // answers a value it rejects (a year before 1900, say) through its
    // invalid-parameter handler, which ends the process.
    char buf[100];
    snprintf(buf, sizeof(buf), "%04d-%02d-%02d %02d:%02d:%02d",
