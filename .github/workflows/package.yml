@@ -1,7 +1,7 @@
 name: package
+# main is the development version; a release is made by running this workflow.
 on:
-  push:
-    branches: [master]
+  workflow_dispatch:
 
 jobs:
   Package:
@@ -30,6 +30,8 @@ jobs:
         uses: "WyriHaximus/github-action-get-previous-tag@v1"
         with:
           prefix: v
+          # A new repository has no tags yet; start from the 4.3 line.
+          fallback: v4.3.0
           
       - name: Set Version
         run: haxe -p tools/version --run Write ${{ steps.previoustag.outputs.tag }} > version.env
@@ -98,6 +100,8 @@ jobs:
   Release:
     needs: Package
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
         - name: Download Linux
           uses: actions/download-artifact@v4
@@ -128,15 +132,15 @@ jobs:
 
         - name: Zip release
           run: |
-             mv hxcpp hxcpp-${{ env.hxcpp_release }}
-             zip -r hxcpp-${{ env.hxcpp_release }}.zip hxcpp-${{ env.hxcpp_release }} 
+             mv hxcpp libhxcpp-${{ env.hxcpp_release }}
+             zip -r libhxcpp-${{ env.hxcpp_release }}.zip libhxcpp-${{ env.hxcpp_release }}
       
         - name: Create Release
           uses: ncipollo/release-action@v1
           with:
             tag: v${{ env.hxcpp_release }}
             commit: ${{ github.sha }}
-            name: Release ${{ env.hxcpp_release }}
+            name: libhxcpp ${{ env.hxcpp_release }}
             draft: false
             prerelease: false
-            artifacts: ./hxcpp-${{ env.hxcpp_release }}.zip
+            artifacts: ./libhxcpp-${{ env.hxcpp_release }}.zip

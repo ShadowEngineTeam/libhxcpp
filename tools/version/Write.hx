@@ -23,7 +23,13 @@ class Write
 
                   switch json.version.split('.')
                   {
-                     case [ newMajor, newMinor, _ ]:
+                     case [ newMajorText, newMinorText, _ ]:
+                        // Compare the parts as numbers: as text, 10 sorts before 4.
+                        final previousMajor = number(previousMajor, 'tag');
+                        final previousMinor = number(previousMinor, 'tag');
+                        final newMajor      = number(newMajorText, 'haxelib.json');
+                        final newMinor      = number(newMinorText, 'haxelib.json');
+
                         if (newMajor < previousMajor || (newMajor == previousMajor && newMinor < previousMinor))
                         {
                            throw new Exception('Version in haxelib.json is older than the last tag');
@@ -35,7 +41,7 @@ class Write
                         }
                         else
                         {
-                           json.version = '$newMajor.$newMinor.${ Std.parseInt(previousPatch) + 1 }';
+                           json.version = '$newMajor.$newMinor.${ number(previousPatch, 'tag') + 1 }';
                         }
                      case _:
                         throw new Exception('Invalid version in haxelib.json');
@@ -59,5 +65,15 @@ class Write
          case other:
             throw new Exception('Invalid version $other');
       }
+   }
+
+   static function number(part:String, source:String):Int
+   {
+      final value = Std.parseInt(part);
+      if (value == null)
+      {
+         throw new Exception('Invalid version part "$part" in $source');
+      }
+      return value;
    }
 }
