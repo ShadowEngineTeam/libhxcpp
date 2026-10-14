@@ -38,6 +38,19 @@ extern class SslTest
    extern public static function socket_init():Void;
 }
 
+// What the drivers report beyond sys.db's interface
+extern class SqliteNative
+{
+   @:native("_hx_sqlite_get_autocommit")
+   extern public static function autocommit(handle:Dynamic):Bool;
+}
+
+extern class MysqlNative
+{
+   @:native("_hx_mysql_server_status")
+   extern public static function serverStatus(handle:Dynamic):Int;
+}
+
 // A server listening on loopback with a client connected to it, for the poll
 // tests. The connection is left pending unless the test accepts it.
 class LoopbackSockets
@@ -148,7 +161,8 @@ class Test extends utest.Test
       return 0;
    }
 
-   static function testDate()
+   // Not static: utest runs instance methods only, and this one never ran
+   function testDate()
    {
       log("Test date");
       var now = Date.now();
@@ -163,6 +177,28 @@ class Test extends utest.Test
 
       var diff:Float = untyped __global__.__hxcpp_timezone_offset(now.mSeconds);
       v("timezone offet:" + diff);
+
+      // Before 1970, where Windows' localtime and mktime fail: toString ended
+      // the process
+      final early = Date.fromTime(-1000);
+      Assert.notNull(early.toString());
+      Assert.equals(1969, early.getUTCFullYear());
+      Assert.equals(11, early.getUTCMonth());
+      Assert.equals(31, early.getUTCDate());
+      Assert.equals(23, early.getUTCHours());
+      Assert.equals(59, early.getUTCSeconds());
+
+      final local1960 = new Date(1960, 0, 15, 12, 30, 0);
+      Assert.equals("1960-01-15 12:30:00", local1960.toString());
+      Assert.equals(1960, local1960.getFullYear());
+      Assert.equals(12, local1960.getHours());
+
+      // and past 2038, where a 32-bit time wraps
+      Assert.equals("2040-06-01 00:00:00", new Date(2040, 5, 1, 0, 0, 0).toString());
+
+      Assert.equals(0.0, DateTools.makeUtc(1970, 0, 1, 0, 0, 0));
+      Assert.equals(-315619200000.0, DateTools.makeUtc(1960, 0, 1, 0, 0, 0));
+      Assert.equals(1960, Date.fromTime(DateTools.makeUtc(1960, 0, 1, 0, 0, 0)).getUTCFullYear());
    }
 
    function testCompress()
@@ -268,28 +304,119 @@ class Test extends utest.Test
       cnx.close();
    }
 
-
-   function testMysql()
+   // How an integer column came back: an Int when the value fits one, an
+   // Int64 when it does not
+   static function integerText(value:Dynamic):String
    {
-      log("Test mysql");
-      var cnx:sys.db.Connection = null;
+      return switch (Type.typeof(value))
+      {
+         case TInt: "Int " + value;
+         case TClass(c) if (Type.getClassName(c) == "cpp::Int64"): "Int64 " + value;
+         case other: Std.string(other) + " " + value;
+      }
+   }
 
+   function testSqliteValues()
+   {
+      log("Test sqlite values");
+      final cnx = Sqlite.open(":memory:");
+      cnx.request("CREATE TABLE vals (i INTEGER, f REAL, s TEXT, b BLOB, n INTEGER)");
+
+      // INTEGER is 64 bits, and only its low 32 were read
+      for (i in ["2147483647", "-2147483648", "2147483648", "-2147483649", "1727600000000", "9007199254740993", "9223372036854775807"])
+         cnx.request('INSERT INTO vals (i) VALUES ($i)');
+      final ints = [for (row in cnx.request("SELECT i FROM vals ORDER BY rowid")) integerText(row.i)];
+      Assert.same(["Int 2147483647", "Int -2147483648", "Int64 2147483648", "Int64 -2147483649",
+         "Int64 1727600000000", "Int64 9007199254740993", "Int64 9223372036854775807"], ints);
+
+      cnx.request("DELETE FROM vals");
+      cnx.request("INSERT INTO vals VALUES (1, 0.1, " + cnx.quote("it's 豪鬼") + ", X'00ff10', NULL)");
+      final row = cnx.request("SELECT * FROM vals").next();
+      Assert.equals(0.1, row.f);
+      Assert.equals("it's 豪鬼", row.s);
+      Assert.equals("00ff10", Bytes.ofData(row.b).toHex());
+      // NULL is a field holding null, not a missing one
+      Assert.isTrue(Reflect.hasField(row, "n"));
+      Assert.isNull(row.n);
+      cnx.close();
+   }
+
+   function testSqliteFailedStatement()
+   {
+      log("Test sqlite failed statement");
+      final cnx = Sqlite.open(":memory:");
+      cnx.request("CREATE TABLE users (email TEXT UNIQUE)");
+      cnx.request("INSERT INTO users VALUES ('a@b.c')");
+      Assert.equals(1, cnx.lastInsertId());
+
+      var error = "";
+      try
+         cnx.request("INSERT INTO users VALUES ('a@b.c')")
+      catch (e:Dynamic)
+         error = Std.string(e);
+      // SQLite's own message, not the step's "SQL logic error"
+      Assert.isTrue(error.indexOf("UNIQUE constraint failed: users.email") >= 0, error);
+
+      // and the failure ends there: the next statement and close() succeed
+      Assert.equals(1, cnx.request("SELECT COUNT(*) AS c FROM users").next().c);
+      cnx.close();
+   }
+
+   function testSqliteTransaction()
+   {
+      log("Test sqlite transaction");
+      final cnx = Sqlite.open(":memory:");
+      final handle = Reflect.field(cnx, "c");
+      cnx.request("CREATE TABLE t (v INTEGER)");
+      Assert.isTrue(SqliteNative.autocommit(handle));
+
+      cnx.startTransaction();
+      Assert.isFalse(SqliteNative.autocommit(handle));
+      cnx.request("INSERT INTO t VALUES (1)");
+      cnx.rollback();
+      Assert.isTrue(SqliteNative.autocommit(handle));
+      Assert.equals(0, cnx.request("SELECT COUNT(*) AS c FROM t").next().c);
+
+      // begun and ended with SQL text, which the connection is not told of
+      cnx.request("BEGIN");
+      Assert.isFalse(SqliteNative.autocommit(handle));
+      cnx.request("INSERT INTO t VALUES (2)");
+      cnx.request("COMMIT");
+      Assert.isTrue(SqliteNative.autocommit(handle));
+      Assert.equals(1, cnx.request("SELECT COUNT(*) AS c FROM t").next().c);
+      cnx.close();
+   }
+
+   // The test database, or null when there is no server. CI sets
+   // HXCPP_TEST_MYSQL where it runs one, so a server that failed to start is
+   // a failure there rather than a pass
+   static function connectMysql():Connection
+   {
       try
       {
-         cnx = Mysql.connect({
+         return Mysql.connect({
             host : "localhost",
             port : 3306,
             user : "hxcpp",
             pass : "hxcpp",
             socket : null,
             database : "hxcpp"
-        });
+         });
       }
       catch(e:Dynamic)
       {
-         v("mysql got error - ok because no server" );
+         if (Sys.getEnv("HXCPP_TEST_MYSQL") == "1")
+            Assert.fail("No MySQL server: " + e);
+         else
+            v("mysql got error - ok because no server" );
       }
+      return null;
+   }
 
+   function testMysql()
+   {
+      log("Test mysql");
+      final cnx = connectMysql();
       if (cnx!=null)
       {
         Assert.equals(0, implTestDb(cnx));
@@ -300,6 +427,81 @@ class Test extends utest.Test
       {
          Assert.pass();
       }
+   }
+
+   function testMysqlValues()
+   {
+      log("Test mysql values");
+      final cnx = connectMysql();
+      if (cnx == null)
+      {
+         Assert.pass();
+         return;
+      }
+      cnx.request("DROP TABLE IF EXISTS Vals");
+      cnx.request("CREATE TABLE Vals (big_v BIGINT, ubig_v BIGINT UNSIGNED, uint_v INT UNSIGNED, exact_v DECIMAL(20,4),
+         day_v DATE, moment_v DATETIME(3), late_v DATE, null_v INT, bin_v VARCHAR(8) COLLATE utf8mb4_bin)");
+      cnx.request("INSERT INTO Vals VALUES (9007199254740993, 18446744073709551615, 4294967295, 12345678901234.5678,
+         '1960-01-15', '2040-06-01 12:34:56.789', '2040-06-01', NULL, 'abc')");
+      final row = cnx.request("SELECT * FROM Vals").next();
+
+      // integers at their full width, and DECIMAL as its exact text
+      Assert.equals("Int64 9007199254740993", integerText(row.big_v));
+      Assert.equals("18446744073709551615", row.ubig_v);
+      Assert.equals("Int64 4294967295", integerText(row.uint_v));
+      Assert.equals("12345678901234.5678", row.exact_v);
+
+      // dates read as UTC, before 1970 and past 2038, with fractional seconds
+      final day:Date = row.day_v;
+      Assert.equals(DateTools.makeUtc(1960, 0, 15, 0, 0, 0), day.getTime());
+      final moment:Date = row.moment_v;
+      Assert.equals(DateTools.makeUtc(2040, 5, 1, 12, 34, 56) + 789, Math.fround(moment.getTime()));
+      final late:Date = row.late_v;
+      Assert.equals(DateTools.makeUtc(2040, 5, 1, 0, 0, 0), late.getTime());
+
+      // NULL is a field holding null, and a _bin collation is still text
+      Assert.isTrue(Reflect.hasField(row, "null_v"));
+      Assert.isNull(row.null_v);
+      Assert.equals("abc", row.bin_v);
+
+      // a column named by an expression keeps that name
+      final count = cnx.request("SELECT COUNT(*) FROM Vals").next();
+      Assert.equals(1, Reflect.field(count, "COUNT(*)"));
+
+      cnx.request("DROP TABLE Vals");
+      cnx.close();
+   }
+
+   function testMysqlSession()
+   {
+      log("Test mysql session");
+      final cnx = connectMysql();
+      if (cnx == null)
+      {
+         Assert.pass();
+         return;
+      }
+      final handle = Reflect.field(cnx, "__c");
+
+      // Escaping follows the server's latest status: with NO_BACKSLASH_ESCAPES
+      // a backslash-escaped quote ends the string and the rest is SQL
+      final text = "it's a \\ backslash";
+      Assert.equals(text, cnx.request("SELECT " + cnx.quote(text) + " AS v").next().v);
+      cnx.request("SET SESSION sql_mode = 'NO_BACKSLASH_ESCAPES'");
+      Assert.isTrue((MysqlNative.serverStatus(handle) & 512) != 0);
+      Assert.equals(text, cnx.request("SELECT " + cnx.quote(text) + " AS v").next().v);
+
+      cnx.request("DROP TABLE IF EXISTS Txn");
+      cnx.request("CREATE TABLE Txn (v INT) ENGINE=InnoDB");
+      cnx.startTransaction();
+      Assert.isTrue((MysqlNative.serverStatus(handle) & 1) != 0);
+      cnx.request("INSERT INTO Txn VALUES (1)");
+      cnx.rollback();
+      Assert.isTrue((MysqlNative.serverStatus(handle) & 1) == 0);
+      Assert.equals(0, cnx.request("SELECT COUNT(*) AS c FROM Txn").next().c);
+
+      cnx.request("DROP TABLE Txn");
+      cnx.close();
    }
 
    function testRandom()
