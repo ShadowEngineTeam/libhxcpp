@@ -5012,7 +5012,7 @@ public:
 
 
       #ifdef PROFILE_THREAD_USAGE
-      GCLOG("Thread zero waits %d/%d/%d, misses=%d, hits=%d\n", sThreadZeroPokes, sThreadZeroWaits, mFreeBlocks.size(), sThreadZeroMisses, sThreadBlockZeroCount);
+      GCLOG("Thread zero waits %d/%d/%d, misses=%d, hits=%d\n", sThreadZeroPokes, sThreadZeroWaits, (int)mFreeBlocks.size(), sThreadZeroMisses.load(), sThreadBlockZeroCount);
       sThreadZeroWaits = 0;
       sThreadZeroPokes = 0;
       sThreadZeroMisses = 0;
@@ -5462,10 +5462,10 @@ public:
       #endif
 
       #ifdef PROFILE_THREAD_USAGE
-      GCLOG("Thread chunks:%d, wakes=%d\n", sThreadChunkPushCount, sThreadChunkWakes);
+      GCLOG("Thread chunks:%d, wakes=%d\n", sThreadChunkPushCount.load(), sThreadChunkWakes);
       for(int i=-1;i<MAX_GC_THREADS;i++)
         GCLOG(" thread %d] %d + %d\n", i, sThreadMarkCount[i], sThreadArrayMarkCount[i]);
-      GCLOG("Locking spins  : %d\n", sSpinCount);
+      GCLOG("Locking spins  : %d\n", sSpinCount.load());
       sSpinCount = 0;
       #endif
 
