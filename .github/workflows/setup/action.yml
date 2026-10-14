@@ -16,7 +16,8 @@ runs:
       run: |
         haxelib git utest https://github.com/haxe-utest/utest
         haxelib git hx4compat https://github.com/HaxeFoundation/hx4compat
-        haxelib dev hxcpp ${{ github.workspace }}
+        haxelib dev libhxcpp ${{ github.workspace }}
+        haxelib run libhxcpp setup
         haxelib list
 
     - name: install native libraries

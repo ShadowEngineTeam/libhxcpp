@@ -85,7 +85,8 @@ jobs:
       - name: Set Haxelib
         run: |
           haxe -version
-          haxelib dev hxcpp .
+          haxelib dev libhxcpp .
+          haxelib run libhxcpp setup
 
       - name: Stamp the version
         run: haxe -p tools/release --run Release stamp

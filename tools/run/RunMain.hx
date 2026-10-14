@@ -125,7 +125,25 @@ class RunMain
 
    public static function main()
    {
-     if (!executeHxcpp())
+      // haxelib runs this in the library's folder and appends the caller's folder
+      var args = Sys.args();
+      var callerDir = Sys.getEnv("HAXELIB_RUN") == "1" && args.length > 0 ? args[args.length - 1] : Sys.getCwd();
+
+      switch (args.length > 1 || Sys.getEnv("HAXELIB_RUN") != "1" ? args[0] : "")
+      {
+         case "setup":
+            Redirect.setup(callerDir);
+            return;
+         case "off":
+            Redirect.off(callerDir);
+            return;
+         default:
+      }
+
+      if (Sys.getEnv("HAXELIB_RUN") == "1")
+         Redirect.followUpdates(callerDir);
+
+      if (!executeHxcpp())
          showMessage();
    }
 }

@@ -93,8 +93,9 @@ class Release
       ].join("\n"));
 
       // Builds that use the library get -D libhxcpp=<version>, so code can tell
-      // it is on libhxcpp and compare with version("x.y.z").
-      File.saveContent("extraParams.hxml", '-D libhxcpp=$version\n');
+      // it is on libhxcpp and compare with version("x.y.z"), and -D hxcpp, so code
+      // that checks for hxcpp works the same whether it asked for hxcpp or libhxcpp.
+      File.saveContent("extraParams.hxml", '-D libhxcpp=$version\n-D hxcpp=$version\n');
    }
 
    // The first section of Changes.md: a heading line underlined with dashes,

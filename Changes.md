@@ -190,6 +190,9 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Haxe code is compiled with -fwrapv on gcc and clang, so Int overflow wraps as it does on the other targets instead of being undefined behaviour the optimiser may exploit
 * Fixed toggling a define such as HXCPP_TELEMETRY, HXCPP_GC_BIG_BLOCKS or HXCPP_M64 not recompiling the runtime and hxcpp's libraries, which left objects built both ways and could fail to link
 * Fixed debugger, debug and telemetry builds aborting on macOS when a thread ends after main returns: the debugger's and the stack map's mutexes were destroyed with the other statics, and libc++ throws when a destroyed mutex is locked
+
+* libhxcpp is installed as its own haxelib, `libhxcpp`. `haxelib run libhxcpp setup` points the name hxcpp at it, so the compiler, `-lib hxcpp` and libraries that depend on hxcpp all use the same runtime; `haxelib run libhxcpp off` switches back to hxcpp, which setup never touches. After `haxelib update libhxcpp`, the next build moves the redirect to the new version by itself
+* A build that uses the library, as `-lib hxcpp` or `-lib libhxcpp`, gets both `-D libhxcpp` and `-D hxcpp`, set to libhxcpp's version
 * Fixed the GC freeing an object that a thread paused for a collection, or in a GC-free zone, held only in a register, on 32-bit Windows: the pausing function had saved that register below the scanned stack. Every target now copies the pausing frame along with the registers, as Windows x64 already did
 
 4.3.xx

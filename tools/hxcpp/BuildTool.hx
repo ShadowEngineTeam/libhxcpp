@@ -1529,7 +1529,9 @@ class BuildTool
    {
       try
       {
-         var json = Json.parse (sys.io.File.getContent (PathManager.getHaxelib ("hxcpp") + "/haxelib.json"));
+         // This tool's own library, whatever name haxelib resolved to reach it
+         var dir = HXCPP != "" ? HXCPP : PathManager.getHaxelib ("libhxcpp");
+         var json = Json.parse (sys.io.File.getContent (dir + "/haxelib.json"));
          return json.version;
       }
       catch (e:Dynamic)
@@ -1959,7 +1961,7 @@ class BuildTool
       Log.println("                            \\ \\_\\   \\ \\_\\ ");
       Log.println("                             \\/_/    \\/_/ \x1b[0m");
       Log.println("");
-      Log.println("\x1b[1mhxcpp \x1b[0m\x1b[3;37m(Haxe C++ Runtime Support)\x1b[0m \x1b[1m(" + getVersion() + ")\x1b[0m");
+      Log.println("\x1b[1mlibhxcpp \x1b[0m\x1b[3;37m(Haxe C++ Runtime Support)\x1b[0m \x1b[1m(" + getVersion() + ")\x1b[0m");
       Log.println("");
    }
 

@@ -29,6 +29,26 @@ jobs:
     - run: bash test/gc-defines/check.sh
       name: Compile the GC under each define
 
+  check-haxelib:
+    name: Check installing with haxelib
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+    - name: checkout
+      uses: actions/checkout@v4
+
+    - uses: krdlab/setup-haxe@v2
+      with:
+        haxe-version: 4.3.7
+
+    - run: bash test/haxelib/check.sh
+      name: Install, setup, update and off
+      # Git Bash on Windows
+      shell: bash
+
   Windows32:
     strategy:
       fail-fast: false

@@ -1,12 +1,12 @@
 {
-  "name": "hxcpp",
+  "name": "libhxcpp",
   "url": "https://github.com/openfl/libhxcpp/",
   "license": "BSD",
   "tags": ["haxe", "hxcpp", "cpp", "libhxcpp"],
-  "description": "libhxcpp is the runtime support for the C++ backend of the Haxe compiler, continuing hxcpp. This contains the headers, libraries and support code required to generate a fully compiled executable from Haxe code.",
+  "description": "libhxcpp is the runtime for the C++ target of the Haxe compiler, continuing hxcpp. Run 'haxelib run libhxcpp setup' once so the compiler and libraries that ask for hxcpp use it.",
   "version": "6.0.0",
   "releasenote": "See Changes.md",
-  "contributors": ["gamehaxe", "HaxeFoundation"],
+  "contributors": ["Dimensionscape"],
   "binaryversion": 48,
   "dependencies": {
 
