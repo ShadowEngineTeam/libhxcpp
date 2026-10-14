@@ -135,6 +135,20 @@
   <depend name="${HXCPP}/src/hx/cppia/CppiaStream.h" />
   <depend name="${HXCPP}/src/hx/cppia/CppiaOps.inc" />
   <depend name="${HXCPP}/src/hx/cppia/CppiaCompiler.h"  if="CPPIA_JIT" />
+  <!-- CppiaCompiler.cpp includes sljit's sources, so a change to them rebuilds it -->
+  <depend name="${HXCPP}/src/hx/cppia/sljit_src/sljitConfig.h" if="CPPIA_JIT" />
+  <depend name="${HXCPP}/src/hx/cppia/sljit_src/sljitConfigInternal.h" if="CPPIA_JIT" />
+  <depend name="${HXCPP}/src/hx/cppia/sljit_src/sljitLir.h" if="CPPIA_JIT" />
+  <depend name="${HXCPP}/src/hx/cppia/sljit_src/sljitLir.c" if="CPPIA_JIT" />
+  <depend name="${HXCPP}/src/hx/cppia/sljit_src/sljitUtils.c" if="CPPIA_JIT" />
+  <depend name="${HXCPP}/src/hx/cppia/sljit_src/sljitExecAllocator.c" if="CPPIA_JIT" />
+  <depend name="${HXCPP}/src/hx/cppia/sljit_src/sljitProtExecAllocator.c" if="CPPIA_JIT" />
+  <depend name="${HXCPP}/src/hx/cppia/sljit_src/sljitNativeX86_common.c" if="CPPIA_JIT" />
+  <depend name="${HXCPP}/src/hx/cppia/sljit_src/sljitNativeX86_32.c" if="CPPIA_JIT" />
+  <depend name="${HXCPP}/src/hx/cppia/sljit_src/sljitNativeX86_64.c" if="CPPIA_JIT" />
+  <depend name="${HXCPP}/src/hx/cppia/sljit_src/sljitNativeARM_32.c" if="CPPIA_JIT" />
+  <depend name="${HXCPP}/src/hx/cppia/sljit_src/sljitNativeARM_T2_32.c" if="CPPIA_JIT" />
+  <depend name="${HXCPP}/src/hx/cppia/sljit_src/sljitNativeARM_64.c" if="CPPIA_JIT" />
   <compilerflag value="-DHX_UNDEFINE_H" />
   <compilerflag value="-DCPPIA_JIT" if="CPPIA_JIT" />
 
