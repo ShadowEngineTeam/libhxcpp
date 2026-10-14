@@ -47,11 +47,12 @@ namespace hx
 const char* EXTERN_CLASS_NAME = "extern";
 
 #ifdef HXCPP_STACK_IDS
-static std::mutex sStackMapMutex;
 typedef std::unordered_map<int, StackContext *> StackMap;
 // Never destroyed: a thread leaves the map as it ends, and a thread can end
 // while the main thread, having returned from main, runs the static
-// destructors. A static map was destroyed under it, and the erase faulted.
+// destructors. A static map was destroyed under it, and the erase faulted;
+// a static mutex, destroyed the same way, makes libc++ throw and abort.
+static std::mutex &sStackMapMutex = *new std::mutex();
 static StackMap &sStackMap = *new StackMap();
 #endif
 

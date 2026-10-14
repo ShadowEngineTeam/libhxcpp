@@ -86,10 +86,11 @@ static void read_memory_barrier()
 const char *_hx_dbg_find_scriptable_class_name(String className);
 
 
-static std::mutex gMutex;
 // Never destroyed: a thread's context leaves them as the thread ends, and a
 // thread can end while the main thread, having returned from main, runs the
-// static destructors.
+// static destructors. That goes for the mutex too: libc++ destroys the
+// pthread mutex, and locking it afterwards throws, which aborts the process.
+static std::mutex &gMutex = *new std::mutex();
 static std::map<int, DebuggerContext *> &gMap = *new std::map<int, DebuggerContext *>();
 static std::list<DebuggerContext *> &gList = *new std::list<DebuggerContext *>();
 
