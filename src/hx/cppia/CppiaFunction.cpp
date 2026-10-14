@@ -1007,8 +1007,10 @@ void CppiaFunction::link( )
 #ifdef CPPIA_JIT
 void CppiaFunction::compile()
 {
-   if (funExpr)
-      funExpr->compile();
+   // An abstract function's body is a bare RETURN, not a FUN
+   ScriptCallable *callable = dynamic_cast<ScriptCallable *>((CppiaExpr *)funExpr);
+   if (callable)
+      callable->compile();
 }
 #endif
 

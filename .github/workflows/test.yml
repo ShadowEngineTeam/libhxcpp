@@ -276,9 +276,7 @@ jobs:
           haxe compile-cppia-host.hxml -D $HXCPP_ARCH_FLAG
           haxe compile-cppia.hxml -D no_http
           bin/cppia/Host-debug bin/unit.cppia
-          # The JIT crashes in this suite on ARM64 (a bus error before the first
-          # test), where Haxe's own CI does not run it either
-          if [ "${{ inputs.arch }}" != Arm64 ]; then bin/cppia/Host-debug bin/unit.cppia -jit; fi
+          bin/cppia/Host-debug bin/unit.cppia -jit
 
   build_tool:
     runs-on: ${{ inputs.os }}

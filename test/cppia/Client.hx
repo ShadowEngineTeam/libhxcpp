@@ -14,6 +14,20 @@ class ClientFoo implements IFoo {
    }
 }
 
+private interface IClientAbstract {
+   function implemented():Int;
+}
+
+abstract class ClientAbstractBase implements IClientAbstract {
+   public function new() {}
+   abstract public function value():Int;
+}
+
+class ClientAbstractChild extends ClientAbstractBase {
+   public function value() return 3;
+   public function implemented() return 4;
+}
+
 class Client
 {
    public static var clientBool0 = true;
@@ -136,6 +150,13 @@ class Client
       if (c.getGeneration()!=2)
       {
          Common.status = "Error calling cppia super function";
+         return;
+      }
+
+      var a:ClientAbstractBase = new ClientAbstractChild();
+      if (a.value()!=3 || a.implemented()!=4)
+      {
+         Common.status = "Bad abstract class call";
          return;
       }
 
