@@ -840,7 +840,7 @@ HXCPP_EXTERN_CLASS_ATTRIBUTES void _hx_inflate_end(Dynamic handle);
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES void _hx_zip_set_flush_mode(Dynamic handle, String flushMode);
 
-// sys.db.Mysql.hx -> src/hx/libs/regexp/RegExp.cpp
+// sys.db.Mysql.hx -> src/hx/libs/mysql/Mysql.cpp
 HXCPP_EXTERN_CLASS_ATTRIBUTES Dynamic _hx_mysql_connect(Dynamic params);
 HXCPP_EXTERN_CLASS_ATTRIBUTES void    _hx_mysql_select_db(Dynamic handle,String db);
 HXCPP_EXTERN_CLASS_ATTRIBUTES Dynamic _hx_mysql_request(Dynamic handle,String req);
@@ -854,18 +854,35 @@ HXCPP_EXTERN_CLASS_ATTRIBUTES int     _hx_mysql_result_get_int(Dynamic handle,in
 HXCPP_EXTERN_CLASS_ATTRIBUTES Float   _hx_mysql_result_get_float(Dynamic handle,int i);
 HXCPP_EXTERN_CLASS_ATTRIBUTES Array<String> _hx_mysql_result_get_fields_names(Dynamic handle);
 
+// Beyond what sys.db.Mysql uses, for a driver that needs more
+HXCPP_EXTERN_CLASS_ATTRIBUTES Dynamic _hx_mysql_create(Dynamic params);
+HXCPP_EXTERN_CLASS_ATTRIBUTES void    _hx_mysql_open(Dynamic handle);
+HXCPP_EXTERN_CLASS_ATTRIBUTES Dynamic _hx_mysql_request_stream(Dynamic handle,String req);
+HXCPP_EXTERN_CLASS_ATTRIBUTES Dynamic _hx_mysql_insert_id(Dynamic handle);
+HXCPP_EXTERN_CLASS_ATTRIBUTES Dynamic _hx_mysql_affected_rows(Dynamic handle);
+HXCPP_EXTERN_CLASS_ATTRIBUTES String  _hx_mysql_server_version(Dynamic handle);
+HXCPP_EXTERN_CLASS_ATTRIBUTES int     _hx_mysql_server_status(Dynamic handle);
+HXCPP_EXTERN_CLASS_ATTRIBUTES bool    _hx_mysql_ping(Dynamic handle);
+HXCPP_EXTERN_CLASS_ATTRIBUTES int     _hx_mysql_errno(Dynamic handle);
+HXCPP_EXTERN_CLASS_ATTRIBUTES String  _hx_mysql_sqlstate(Dynamic handle);
+HXCPP_EXTERN_CLASS_ATTRIBUTES Float   _hx_mysql_thread_id(Dynamic handle);
+HXCPP_EXTERN_CLASS_ATTRIBUTES bool    _hx_mysql_is_tls(Dynamic handle);
+HXCPP_EXTERN_CLASS_ATTRIBUTES Array<int> _hx_mysql_keepalive(Dynamic handle);
+HXCPP_EXTERN_CLASS_ATTRIBUTES String  _hx_mysql_auth_plugin(Dynamic handle);
+
 namespace cpp { template<typename T> class Function; }
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES void _hx_mysql_set_conversion(
       cpp::Function< Dynamic(Dynamic) > inCharsToBytes,
       cpp::Function< Dynamic(Float) > inTimeToDate );
 
-// sys.db.Sqlite.hx -> src/hx/libs/sqlite/RegExp.cpp
+// sys.db.Sqlite.hx -> src/hx/libs/sqlite/Sqlite.cpp
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES Dynamic _hx_sqlite_connect(String filename);
 HXCPP_EXTERN_CLASS_ATTRIBUTES Dynamic _hx_sqlite_request(Dynamic handle,String req);
 HXCPP_EXTERN_CLASS_ATTRIBUTES void    _hx_sqlite_close(Dynamic handle);
 HXCPP_EXTERN_CLASS_ATTRIBUTES int     _hx_sqlite_last_insert_id(Dynamic handle);
+HXCPP_EXTERN_CLASS_ATTRIBUTES bool    _hx_sqlite_get_autocommit(Dynamic handle);
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES int     _hx_sqlite_result_get_length(Dynamic handle);
 HXCPP_EXTERN_CLASS_ATTRIBUTES int     _hx_sqlite_result_get_nfields(Dynamic handle);
