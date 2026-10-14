@@ -26,6 +26,16 @@
 
 /* x86 32-bit arch dependent functions. */
 
+/* libhxcpp: SLJIT_X86_32_ALIGN_STACK_16 keeps the stack 16-byte aligned at
+   every call, as the System V i386 ABI wants. It was Apple only, which also
+   passes arguments as cdecl; CppiaCompiler.h sets it on the other System V
+   targets, which use fastcall, where a third argument is pushed just before
+   the call: call_with_args pads for it and call_cleanup gives the padding
+   back once the callee has popped the argument. */
+#if defined(__APPLE__) && !defined(SLJIT_X86_32_ALIGN_STACK_16)
+#define SLJIT_X86_32_ALIGN_STACK_16 1
+#endif
+
 static sljit_s32 emit_do_imm(struct sljit_compiler *compiler, sljit_u8 opcode, sljit_sw imm)
 {
 	sljit_u8 *inst;
@@ -157,7 +167,7 @@ SLJIT_API_FUNC_ATTRIBUTE sljit_s32 sljit_emit_enter(struct sljit_compiler *compi
 
 	SLJIT_ASSERT(SLJIT_LOCALS_OFFSET > 0);
 
-#if defined(__APPLE__)
+#if (defined SLJIT_X86_32_ALIGN_STACK_16 && SLJIT_X86_32_ALIGN_STACK_16)
 	/* Ignore pushed registers and SLJIT_LOCALS_OFFSET when computing the aligned local size. */
 	saveds = (2 + (scratches > 9 ? (scratches - 9) : 0) + (saveds <= 3 ? saveds : 3)) * sizeof(sljit_uw);
 	local_size = ((SLJIT_LOCALS_OFFSET + saveds + local_size + 15) & ~15) - saveds;
@@ -187,7 +197,7 @@ SLJIT_API_FUNC_ATTRIBUTE sljit_s32 sljit_emit_enter(struct sljit_compiler *compi
 
 	SLJIT_ASSERT(local_size > 0);
 
-#if !defined(__APPLE__)
+#if !(defined SLJIT_X86_32_ALIGN_STACK_16 && SLJIT_X86_32_ALIGN_STACK_16)
 	if (options & SLJIT_F64_ALIGNMENT) {
 		EMIT_MOV(compiler, TMP_REG1, 0, SLJIT_SP, 0);
 
@@ -249,7 +259,7 @@ SLJIT_API_FUNC_ATTRIBUTE sljit_s32 sljit_set_context(struct sljit_compiler *comp
 	if (options & SLJIT_F64_ALIGNMENT)
 		compiler->locals_offset = (compiler->locals_offset + sizeof(sljit_f64) - 1) & ~(sizeof(sljit_f64) - 1);
 
-#if defined(__APPLE__)
+#if (defined SLJIT_X86_32_ALIGN_STACK_16 && SLJIT_X86_32_ALIGN_STACK_16)
 	saveds = (2 + (scratches > 9 ? (scratches - 9) : 0) + (saveds <= 3 ? saveds : 3)) * sizeof(sljit_uw);
 	compiler->local_size = ((SLJIT_LOCALS_OFFSET + saveds + local_size + 15) & ~15) - saveds;
 #else
@@ -274,7 +284,7 @@ SLJIT_API_FUNC_ATTRIBUTE sljit_s32 sljit_emit_return(struct sljit_compiler *comp
 
 	SLJIT_ASSERT(compiler->local_size > 0);
 
-#if !defined(__APPLE__)
+#if !(defined SLJIT_X86_32_ALIGN_STACK_16 && SLJIT_X86_32_ALIGN_STACK_16)
 	if (compiler->options & SLJIT_F64_ALIGNMENT)
 		EMIT_MOV(compiler, SLJIT_SP, 0, SLJIT_MEM1(SLJIT_SP), compiler->local_size)
 	else
@@ -495,6 +505,16 @@ static SLJIT_INLINE sljit_s32 call_with_args(struct sljit_compiler *compiler, sl
 	sljit_u8 *inst;
 
 #if (defined SLJIT_X86_32_FASTCALL && SLJIT_X86_32_FASTCALL)
+#if (defined SLJIT_X86_32_ALIGN_STACK_16 && SLJIT_X86_32_ALIGN_STACK_16)
+	if (type >= SLJIT_CALL3) {
+		inst = (sljit_u8*)ensure_buf(compiler, 1 + 3);
+		FAIL_IF(!inst);
+		INC_SIZE(3);
+		*inst++ = GROUP_BINARY_83;
+		*inst++ = MOD_REG | SUB | reg_map[SLJIT_SP];
+		*inst++ = 3 * sizeof(sljit_sw);
+	}
+#endif
 	inst = (sljit_u8*)ensure_buf(compiler, type >= SLJIT_CALL3 ? 1 + 2 + 1 : 1 + 2);
 	FAIL_IF(!inst);
 	INC_SIZE(type >= SLJIT_CALL3 ? 2 + 1 : 2);
@@ -524,6 +544,28 @@ static SLJIT_INLINE sljit_s32 call_with_args(struct sljit_compiler *compiler, sl
 		*inst++ = (0x4 /* none*/ << 3) | reg_map[SLJIT_SP];
 		*inst++ = 2 * sizeof(sljit_sw);
 	}
+#endif
+	return SLJIT_SUCCESS;
+}
+
+/* After a call: release what call_with_args reserved to keep the stack aligned. */
+static SLJIT_INLINE sljit_s32 call_cleanup(struct sljit_compiler *compiler, sljit_s32 type)
+{
+#if (defined SLJIT_X86_32_FASTCALL && SLJIT_X86_32_FASTCALL) \
+	&& (defined SLJIT_X86_32_ALIGN_STACK_16 && SLJIT_X86_32_ALIGN_STACK_16)
+	sljit_u8 *inst;
+
+	if (type >= SLJIT_CALL3) {
+		inst = (sljit_u8*)ensure_buf(compiler, 1 + 3);
+		FAIL_IF(!inst);
+		INC_SIZE(3);
+		*inst++ = GROUP_BINARY_83;
+		*inst++ = MOD_REG | ADD | reg_map[SLJIT_SP];
+		*inst++ = 3 * sizeof(sljit_sw);
+	}
+#else
+	SLJIT_UNUSED_ARG(compiler);
+	SLJIT_UNUSED_ARG(type);
 #endif
 	return SLJIT_SUCCESS;
 }

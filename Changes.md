@@ -167,6 +167,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * MySQL and SQLite: values are read exactly. Integers are an Int or an Int64, DECIMAL is its exact text, DATE, DATETIME and TIMESTAMP are UTC with their fractional seconds, NULL is null, and SQLite INTEGER keeps all 64 bits. Dates before 1970 no longer end the process on Windows
 * MySQL: queries and escaped values are sent by their UTF-8 byte length (non-ASCII text cut the end off a statement), escaping follows the server's NO_BACKSLASH_ESCAPES status, a write's result has no rows instead of throwing, floats are parsed in the C locale, and counts or lengths no server sends are refused instead of crashing the process
 * SQLite: a failed step finalizes its statement at once and reports SQLite's own message, so the next statement and close() no longer fail as well. FTS5 and JSON1 can be enabled with -D sqlite_fts5 and -D sqlite_json1
+* Fixed the cppia JIT calling into the runtime with the stack off the 16-byte alignment the ABI requires, on 32-bit x86 outside Windows: frames were aligned on macOS only, and a call with three arguments pushed the third. Native code relying on the alignment could crash; Haxe's own unit suite did, in sys.ssl.Digest.sign
 
 * Added the libhxcpp define: a build that uses the library gets -D libhxcpp=<version>. Compare it with version("x.y.z"); a plain string comparison compares text
 * Added separate Linux ARMv7 and ARM64 build architectures (hxcpp #1355)

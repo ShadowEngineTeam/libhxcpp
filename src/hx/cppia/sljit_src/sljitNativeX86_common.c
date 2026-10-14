@@ -2521,6 +2521,10 @@ SLJIT_API_FUNC_ATTRIBUTE struct sljit_jump* sljit_emit_jump(struct sljit_compile
 
 	*inst++ = 0;
 	*inst++ = type + 2;
+#if (defined SLJIT_CONFIG_X86_32 && SLJIT_CONFIG_X86_32)
+	if (type >= SLJIT_CALL1)
+		PTR_FAIL_IF(call_cleanup(compiler, type));
+#endif
 	return jump;
 }
 
@@ -2543,7 +2547,11 @@ SLJIT_API_FUNC_ATTRIBUTE sljit_s32 sljit_emit_ijump(struct sljit_compiler *compi
 			src = TMP_REG1;
 		}
 		if (src == SLJIT_MEM1(SLJIT_SP) && type >= SLJIT_CALL3)
+#if (defined SLJIT_X86_32_ALIGN_STACK_16 && SLJIT_X86_32_ALIGN_STACK_16)
+			srcw += 4 * sizeof(sljit_sw); /* the alignment padding and the pushed argument */
+#else
 			srcw += sizeof(sljit_sw);
+#endif
 #endif
 #endif
 #if (defined SLJIT_CONFIG_X86_64 && SLJIT_CONFIG_X86_64) && defined(_WIN64)
@@ -2584,6 +2592,10 @@ SLJIT_API_FUNC_ATTRIBUTE sljit_s32 sljit_emit_ijump(struct sljit_compiler *compi
 		*inst++ = GROUP_FF;
 		*inst |= (type >= SLJIT_FAST_CALL) ? CALL_rm : JMP_rm;
 	}
+#if (defined SLJIT_CONFIG_X86_32 && SLJIT_CONFIG_X86_32)
+	if (type >= SLJIT_CALL1)
+		FAIL_IF(call_cleanup(compiler, type));
+#endif
 	return SLJIT_SUCCESS;
 }
 
