@@ -11,8 +11,9 @@ on:
 jobs:
   Windows32:
     uses: ./.github/workflows/test.yml
-    name: Test Windows (32bit)
+    name: Windows 32
     with:
+      label: Windows 32
       haxe: ${{ inputs.haxe }}
       arch: 32
       sep: \
@@ -21,8 +22,9 @@ jobs:
 
   Windows64:
     uses: ./.github/workflows/test.yml
-    name: Test Windows (64bit)
+    name: Windows 64
     with:
+      label: Windows 64
       haxe: ${{ inputs.haxe }}
       arch: 64
       sep: \
@@ -31,8 +33,9 @@ jobs:
 
   MacOS64:
     uses: ./.github/workflows/test.yml
-    name: Test MacOS (x86_64)
+    name: macOS Intel
     with:
+      label: macOS Intel
       haxe: ${{ inputs.haxe }}
       arch: 64
       sep: /
@@ -41,8 +44,9 @@ jobs:
 
   MacOSArm:
     uses: ./.github/workflows/test.yml
-    name: Test MacOS (Arm64)
+    name: macOS arm64
     with:
+      label: macOS arm64
       haxe: ${{ inputs.haxe }}
       arch: Arm64
       sep: /
@@ -51,8 +55,9 @@ jobs:
 
   Linux32:
     uses: ./.github/workflows/test.yml
-    name: Test Linux (32bit)
+    name: Linux 32
     with:
+      label: Linux 32
       haxe: ${{ inputs.haxe }}
       arch: 32
       sep: /
@@ -61,8 +66,9 @@ jobs:
 
   Linux64:
     uses: ./.github/workflows/test.yml
-    name: Test Linux (64bit)
+    name: Linux 64
     with:
+      label: Linux 64
       haxe: ${{ inputs.haxe }}
       arch: 64
       sep: /

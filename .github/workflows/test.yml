@@ -17,6 +17,9 @@ on:
       os:
         required: true
         type: string
+      label:
+        required: true
+        type: string
 
 env:
   HXCPP_ARCH_FLAG: ${{ inputs.arch == 'Arm64' && 'HXCPP_ARM64' || format('HXCPP_M{0}', inputs.arch) }}
@@ -40,7 +43,7 @@ jobs:
             flags: --debug -D HXCPP_GC_DEBUG_ALWAYS_MOVE
             bin: TestMain-debug
     runs-on: ${{ inputs.os }}
-    name: haxe${{ matrix.variant }}
+    name: '${{ inputs.label }}: runtime${{ matrix.variant }}'
     defaults:
       run:
         working-directory: test/haxe
@@ -58,7 +61,7 @@ jobs:
 
   cffi:
     runs-on: ${{ inputs.os }}
-    name: cffi
+    name: '${{ inputs.label }}: cffi'
     defaults:
       run:
         working-directory: test/cffi
@@ -98,7 +101,7 @@ jobs:
           - suffix: -debug
             mode: debug
     runs-on: ${{ inputs.os }}
-    name: telemetry (${{ matrix.mode }})
+    name: '${{ inputs.label }}: telemetry (${{ matrix.mode }})'
     defaults:
       run:
         working-directory: test/telemetry
@@ -116,7 +119,7 @@ jobs:
 
   debugger:
     runs-on: ${{ inputs.os }}
-    name: debugger
+    name: '${{ inputs.label }}: debugger'
     defaults:
       run:
         working-directory: test/debugger
@@ -134,7 +137,7 @@ jobs:
 
   native:
       runs-on: ${{ inputs.os }}
-      name: native
+      name: '${{ inputs.label }}: native'
       defaults:
         run:
           working-directory: test/native
@@ -152,7 +155,7 @@ jobs:
 
   std:
       runs-on: ${{ inputs.os }}
-      name: std
+      name: '${{ inputs.label }}: std'
       defaults:
         run:
           working-directory: test/std
@@ -179,15 +182,8 @@ jobs:
           run: ${{ inputs.arch == 'Arm64' && 'arm64' || format('cpp{0}', inputs.arch) }}${{ inputs.sep }}Test
 
   cppia:
-    strategy:
-      fail-fast: false
-      matrix:
-        mode: [ interp, jit ]
-        include:
-          - suffix: -jit
-            mode: jit
     runs-on: ${{ inputs.os }}
-    name: cppia (${{ matrix.mode }})
+    name: '${{ inputs.label }}: cppia'
     defaults:
       run:
         working-directory: test/cppia
@@ -203,11 +199,14 @@ jobs:
       - name: build client
         run: haxe compile-client.hxml -D ${{ env.HXCPP_ARCH_FLAG }}
       - name: run
-        run: bin${{ inputs.sep }}CppiaHost bin${{ inputs.sep }}client.cppia ${{ matrix.suffix }}
+        run: bin${{ inputs.sep }}CppiaHost bin${{ inputs.sep }}client.cppia
+      - name: run with the jit
+        if: ${{ !cancelled() }}
+        run: bin${{ inputs.sep }}CppiaHost bin${{ inputs.sep }}client.cppia -jit
 
   suite:
     runs-on: ${{ inputs.os }}
-    name: haxe test suite
+    name: '${{ inputs.label }}: haxe unit'
     defaults:
       run:
         working-directory: haxe/tests/unit
@@ -230,7 +229,7 @@ jobs:
   # The rest of Haxe's own C++ CI, tests/runci/targets/Cpp.hx
   haxe_suites:
     runs-on: ${{ inputs.os }}
-    name: haxe sys, threads and cppia suites
+    name: '${{ inputs.label }}: haxe sys, threads, cppia'
     timeout-minutes: 45
     defaults:
       run:
@@ -280,7 +279,7 @@ jobs:
 
   build_tool:
     runs-on: ${{ inputs.os }}
-    name: build tool tests
+    name: '${{ inputs.label }}: build tool'
     steps:
       - name: checkout
         uses: actions/checkout@v4
@@ -299,7 +298,7 @@ jobs:
 
   regression:
     runs-on: ${{ inputs.os }}
-    name: regression tests
+    name: '${{ inputs.label }}: regression'
     defaults:
       run:
         working-directory: test/regression
