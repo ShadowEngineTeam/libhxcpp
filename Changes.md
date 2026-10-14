@@ -1,16 +1,8 @@
 
-4.3.xx
+libhxcpp 6.0.0 (in development)
 ------------------------------------------------------------
 
-* Added support for killing processes on OS' other than Windows, Apple TV, and Apple Watch
-* Added register capturing on Linux
-* Added HXCPP_CPP17 define
-* Added ASM and NASM support to build xml
-* Added support for name and value entries to build xml
-* Added tracy profiler
-* Added support for Android NDKs higher than 21
-* Added x86_64 support to older Android NDKs
-* Added optional detaching of main thread
+The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4.3.xx below), with the following on top.
 
 * Added an opt-in PCRE2 JIT for EReg (-D HXCPP_PCRE_JIT): 3-5x faster matching, search and replace. A match that runs out of JIT stack is retried on the interpreter, so results never change; off on iOS, tvOS, watchOS, emscripten and WinRT
 * Improved Map/StringMap/IntMap lookup performance by ~16-26% by lowering the default hash table load factor
@@ -132,15 +124,9 @@
 * Fixed sys.ssl.Digest.sign and verify overflowing a 32-byte buffer with SHA-384 and SHA-512 digests
 * Fixed mbedtls on Windows failing every lock -- "CTR_DRBG - The entropy source failed" -- for code that is not hxcpp's in a program that never used sys.ssl, such as a static Lime build's curl: its mutexes are now installed before main
 * Fixed closing a listening sys.ssl.Socket freeing the TLS configuration its accepted connections run on: they read freed memory on every record afterwards, which on mbedtls 3.6 and Linux crashed in a renegotiation the garbage asked for. A configuration now lives until its handle is closed and the last connection set up on it has gone
-* Updated sqlite to 3.40.1
-* Updated zlib to 1.2.13
 
 * Fixed crash writing to the null device on Windows
-* Fixed SSL socket non blocking handshake throwing an exception on 64bit Windows
-* Fixed Windows 64bit architecture detection
-* Fixed critial error handler returning the wrong callstack
-* Fixed ARM64 library names on Mac
-* Fixed generational GC when used with HXCPP_ALIGN_ALLOC
+
 * Fixed heap corruption in the moving/compacting GC (HXCPP_GC_MOVING) with HXCPP_ALIGN_ALLOC: the alignment padding added to the destination position was not deducted from the remaining hole length, so the free-space count drifted and an object could be relocated past the end of a block, corrupting adjacent objects
 * Fixed the moving GC not adjusting pointers held by large (non-block) objects after a compaction, leaving them dangling
 * Fixed heap corruption sorting arrays of Bool or small integer element types (Array&lt;Bool&gt;.sort, cpp.UInt8/Int16/etc): the buffer was reinterpreted as an array of Dynamic and read/written out of bounds
@@ -163,6 +149,39 @@
 * Fixed EReg.matchSub integer overflow with huge lengths, regex runtime errors (e.g. match limit) being silently treated as no-match, and undefined behaviour passing unvalidated UTF-16 subjects to PCRE2 with the no-check flag
 * Fixed sys.thread.Semaphore on Linux throwing spurious exceptions when a signal interrupts acquire/tryAcquire (EINTR is now retried)
 * Fixed sys.thread.Semaphore.tryAcquire on Apple platforms truncating fractional timeouts to whole seconds (0.5 became 0), and a dispatch semaphore leak per Semaphore object
+
+* Fixed String(unsigned int) appending a literal "d" (from a "%ud" format) for raw unsigned ints formatted via the runtime
+* Fixed Std.string of NaN/Infinity to match other targets ("NaN", "Infinity", "-Infinity") instead of platform printf output ("-nan(ind)", "inf")
+* Fixed Std.string(Float) losing precision: now emits the shortest representation that round-trips (e.g. 0.1+0.2 prints "0.30000000000000004"), so String<->parseFloat is lossless and matches other targets
+* Normalized float exponent formatting to minimal digits ("1e-7" instead of "1e-07"), matching other targets
+* Fixed out-of-bounds read when deleting a fixed field of an anonymous object (Reflect.deleteField)
+* Fixed String.indexOf with a negative start index reading out of bounds and returning a bogus negative result (now clamps to 0, matching other targets)
+* Fixed String.lastIndexOf with a negative start index returning -1 instead of matching at index 0 (now clamps to 0, matching other targets)
+* Fixed Dynamic modulo (%) dereferencing a null operand without a guard (now coerces null to 0 like the other dynamic operators)
+* Fixed compilation with HXCPP_GC_DYNAMIC_SIZE
+
+4.3.xx
+------------------------------------------------------------
+
+* Added support for killing processes on OS' other than Windows, Apple TV, and Apple Watch
+* Added register capturing on Linux
+* Added HXCPP_CPP17 define
+* Added ASM and NASM support to build xml
+* Added support for name and value entries to build xml
+* Added tracy profiler
+* Added support for Android NDKs higher than 21
+* Added x86_64 support to older Android NDKs
+* Added optional detaching of main thread
+
+* Updated mbedtls to 2.28.2
+* Updated sqlite to 3.40.1
+* Updated zlib to 1.2.13
+
+* Fixed SSL socket non blocking handshake throwing an exception on 64bit Windows
+* Fixed Windows 64bit architecture detection
+* Fixed critial error handler returning the wrong callstack
+* Fixed ARM64 library names on Mac
+* Fixed generational GC when used with HXCPP_ALIGN_ALLOC
 * Fixed pthread structured being unaligned
 * Fixed cppia crash on functions with empty bodies
 * Fixed regression parsing integers which wrap around
@@ -174,14 +193,6 @@
 * Fixed behaviour of indexOf and lastIndexOf on empty strings not aligning with other targets
 * Fixed behaviour of directory reading function not aligning with other targets
 * Fixed haxelib not being invoked with the current working directory
-* Fixed String(unsigned int) appending a literal "d" (from a "%ud" format) for raw unsigned ints formatted via the runtime
-* Fixed Std.string of NaN/Infinity to match other targets ("NaN", "Infinity", "-Infinity") instead of platform printf output ("-nan(ind)", "inf")
-* Fixed Std.string(Float) losing precision: now emits the shortest representation that round-trips (e.g. 0.1+0.2 prints "0.30000000000000004"), so String<->parseFloat is lossless and matches other targets
-* Normalized float exponent formatting to minimal digits ("1e-7" instead of "1e-07"), matching other targets
-* Fixed out-of-bounds read when deleting a fixed field of an anonymous object (Reflect.deleteField)
-* Fixed String.indexOf with a negative start index reading out of bounds and returning a bogus negative result (now clamps to 0, matching other targets)
-* Fixed String.lastIndexOf with a negative start index returning -1 instead of matching at index 0 (now clamps to 0, matching other targets)
-* Fixed Dynamic modulo (%) dereferencing a null operand without a guard (now coerces null to 0 like the other dynamic operators)
 
 * Removed Haxe 3 support
 
