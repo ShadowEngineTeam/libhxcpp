@@ -19,6 +19,16 @@ jobs:
           include
       name: Check public headers
 
+  check-gc-defines:
+    name: Check GC defines
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@v4
+
+    - run: bash test/gc-defines/check.sh
+      name: Compile the GC under each define
+
   Windows32:
     strategy:
       fail-fast: false
