@@ -168,6 +168,14 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * MySQL: queries and escaped values are sent by their UTF-8 byte length (non-ASCII text cut the end off a statement), escaping follows the server's NO_BACKSLASH_ESCAPES status, a write's result has no rows instead of throwing, floats are parsed in the C locale, and counts or lengths no server sends are refused instead of crashing the process
 * SQLite: a failed step finalizes its statement at once and reports SQLite's own message, so the next statement and close() no longer fail as well. FTS5 and JSON1 can be enabled with -D sqlite_fts5 and -D sqlite_json1
 
+* Added the libhxcpp define: a build that uses the library gets -D libhxcpp=<version>. Compare it with version("x.y.z"); a plain string comparison compares text
+* Added separate Linux ARMv7 and ARM64 build architectures (hxcpp #1355)
+* Fixed AndroidCompat.cpp closing its extern "C" section in the wrong place (hxcpp #1404)
+* Fixed Android builds failing with "no member named 'sscanf' in namespace 'std'": GcCommon.cpp now includes <cstdio>
+* Fixed x86_64 Android builds producing arm64 code when they ask for HXCPP_X86_64 without HXCPP_M64, as Lime does
+* Fixed telemetry unlocking its allocation mutex before locking it when it skips an allocation made inside a CFFI call; on Windows that left the mutex held and the next thread that tracked an allocation blocked forever
+* Debug builds now trap when a GC block's row counts exceed its useful lines, before the counts skew the heap stats
+
 4.3.xx
 ------------------------------------------------------------
 
