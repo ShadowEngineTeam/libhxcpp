@@ -49,6 +49,10 @@ class Write
 
                   File.saveContent(jsonFile, Json.stringify(json, '\t'));
 
+                  // Builds that use the library get -D libhxcpp=<version>, so code can tell
+                  // it is on libhxcpp and compare with version("x.y.z").
+                  File.saveContent("extraParams.hxml", '-D libhxcpp=${ json.version }\n');
+
                   final define = "HXCPP_VERSION";
                   final lines  = [
                      '#ifndef $define',
