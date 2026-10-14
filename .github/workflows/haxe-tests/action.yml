@@ -1,0 +1,37 @@
+name: haxe tests
+description: Checks out Haxe's own test suites, at the commit of the Haxe being tested, into haxe/tests
+inputs:
+  haxe:
+    required: true
+    type: string
+runs:
+  using: composite
+  steps:
+    - name: get the haxe commit
+      if: inputs.haxe == 'latest'
+      id: haxe_sha
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        version=$(haxe --version)
+        short_sha=${version##*+}
+        full_sha=$(gh api repos/HaxeFoundation/haxe/commits/$short_sha --jq '.sha')
+        echo "Haxe $version is commit $full_sha"
+        echo "sha=$full_sha" >> "$GITHUB_OUTPUT"
+
+    - name: checkout haxe
+      uses: actions/checkout@v4
+      with:
+        repository: HaxeFoundation/haxe
+        path: haxe
+        ref: ${{ inputs.haxe == 'latest' && steps.haxe_sha.outputs.sha || inputs.haxe }}
+        sparse-checkout: tests
+
+    # setup installs utest from git, which Haxe 4's tests do not build with.
+    # Only utest: installing from the suites' hxml files also downloads a
+    # stock hxcpp, which the hxcpp redirect then never uses
+    - name: install utest
+      if: inputs.haxe != 'latest'
+      shell: bash
+      run: haxelib install utest --always

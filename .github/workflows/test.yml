@@ -221,43 +221,66 @@ jobs:
         uses: ./.github/workflows/setup
         with:
           haxe: ${{ inputs.haxe }}
-      - name: Get Haxe commit SHA
-        if: inputs.haxe == 'latest'
-        id: haxe_sha
-        shell: bash
-        working-directory:
-          ${{github.workspace}}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          version=$(haxe --version)
-          short_sha=${version##*+}
-          full_sha=$(gh api repos/HaxeFoundation/haxe/commits/$short_sha --jq '.sha')
-          echo "Haxe version: $version"
-          echo "sha=$full_sha" >> "$GITHUB_OUTPUT"
-          echo "Commit SHA: $short_sha, Full SHA: $full_sha"
-      - name: checkout haxe (latest)
-        if: inputs.haxe == 'latest'
-        uses: actions/checkout@v4
+      - name: haxe tests
+        uses: ./.github/workflows/haxe-tests
         with:
-          ref: ${{ steps.haxe_sha.outputs.sha }}
-          repository: HaxeFoundation/haxe
-          path: haxe
-      - name: checkout haxe (stable)
-        if: inputs.haxe != 'latest'
-        uses: actions/checkout@v4
-        with:
-          repository: HaxeFoundation/haxe
-          path: haxe
-          ref: ${{ inputs.haxe }}
-      - name: install haxe libs
-        run: haxelib install compile-cpp.hxml --always
-        # haxe 4 tests don't build with latest utest
-        if: inputs.haxe != 'latest'
+          haxe: ${{ inputs.haxe }}
       - name: build
         run: haxe compile-cpp.hxml -D ${{ env.HXCPP_ARCH_FLAG }} -D no_http
       - name: run
         run: bin${{ inputs.sep }}cpp${{ inputs.sep }}TestMain-debug
+
+  # The rest of what Haxe's own CI runs for C++ (tests/runci/targets/Cpp.hx),
+  # so the runtime keeps doing what the compiler and the standard library
+  # expect of it. Each suite runs even when one before it failed
+  haxe_suites:
+    runs-on: ${{ inputs.os }}
+    name: haxe sys, threads and cppia suites
+    # a hung thread test would otherwise hold the runner for six hours
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+      - name: setup
+        uses: ./.github/workflows/setup
+        with:
+          haxe: ${{ inputs.haxe }}
+      - name: haxe tests
+        uses: ./.github/workflows/haxe-tests
+        with:
+          haxe: ${{ inputs.haxe }}
+      - name: sys
+        working-directory: haxe/tests/sys
+        run: |
+          haxe -D $HXCPP_ARCH_FLAG --each compile-cpp.hxml
+          EXISTS=1 bin/cpp/Main-debug
+      - name: threads
+        if: ${{ !cancelled() }}
+        working-directory: haxe/tests/threads
+        run: |
+          haxe -D $HXCPP_ARCH_FLAG build.hxml -cpp export/cpp
+          export/cpp/Main
+      - name: event loop
+        if: ${{ !cancelled() }}
+        working-directory: haxe/tests/misc/eventLoop
+        run: |
+          haxe -D $HXCPP_ARCH_FLAG build-cpp.hxml
+          cpp/Main
+      - name: misc
+        if: ${{ !cancelled() }}
+        working-directory: haxe/tests/misc/cpp
+        run: haxe run.hxml
+      - name: cppia
+        if: ${{ !cancelled() }}
+        working-directory: haxe/tests/unit
+        run: |
+          haxe compile-cppia-host.hxml -D $HXCPP_ARCH_FLAG
+          haxe compile-cppia.hxml -D no_http
+          bin/cppia/Host-debug bin/unit.cppia
+          bin/cppia/Host-debug bin/unit.cppia -jit
 
   build_tool:
     runs-on: ${{ inputs.os }}
