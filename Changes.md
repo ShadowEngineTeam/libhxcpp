@@ -38,7 +38,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed an operator-precedence bug destroying every mbedtls error code reported from SSL (eleven call sites reported "UNKNOWN ERROR CODE (0001)" instead of the real failure)
 * Fixed sys.ssl writeByte silently dropping the byte on would-block/error and readByte turning a non-blocking retry into a spurious end-of-file
 * Sped up sys.ssl Socket.read ~64x fewer native calls per TLS record (256-byte drain buffer -> 16KB)
-* Sped up print/println on Windows by caching the stdout console probe (was a kernel call per print), and only force-flushing per line when stdout is interactive (a redirected stream no longer pays a write syscall per println)
+* Sped up print/println on Windows by caching the stdout console probe (was a kernel call per print)
 * Fixed cppia array access through host-class getters returning garbage (the linked getter was validated but never invoked - the argument frame was read back as the result)
 * Fixed cppia float constants parsing locale-dependently (comma-decimal hosts)
 * Sped up Std.isOfType(x, Int) by replacing RTTI dynamic_casts with cheap type probes
@@ -89,8 +89,8 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Mixing Int64 and Float values in an untyped array now promotes to object storage instead of silently rounding Int64 values beyond 2^53 through a double
 * haxe.zip.Uncompress.run no longer reallocates and copies the whole accumulated output per 64KB chunk (quadratic - decompressing 100MB copied ~80GB), and guards against 2GB overflow instead of writing past the output
 * A zlib stream requesting a preset dictionary (FDICT) now throws instead of looping forever (denial of service on hostile input); zlib failures now include the error code and zlib's message text instead of a bare "ZLib Error"
-* Fixed haxe.zip streaming buffers held as raw pointers across the GC free zone while zlib runs (moving-GC corruption window), an uninitialized flush mode for unknown mode strings, Compress.run copying its whole result an extra time to shrink it, and using a closed Uncompress reporting "Compress closed"
-* Writing to a dead child process's stdin no longer kills the whole host process via SIGPIPE on Linux/macOS - it throws like other closed-stream writes (SIGPIPE is now ignored process-wide once sys.io.Process is used)
+* Fixed haxe.zip streaming buffers held as raw pointers across the GC free zone while zlib runs (moving-GC corruption window), an uninitialized flush mode for unknown mode strings, Compress.run copying its whole result an extra time to shrink it (a result under half of its worst-case buffer is still copied, to an exact fit, so it does not keep that buffer alive), and using a closed Uncompress reporting "Compress closed"
+* Writing to a dead child process's stdin no longer kills the whole host process via SIGPIPE on Linux/macOS - it throws like other closed-stream writes (SIGPIPE is now ignored process-wide once sys.io.Process is used, and restored to its default in the children it starts)
 * Process.kill/exitCode/getPid after close() now throw instead of operating on a recycled OS handle - kill() could terminate an unrelated process and exitCode() hang forever
 * A child process killed by a signal (crash, kill()) no longer reports exit code 0: exitCode() returns 128+signal (shell convention); a command that cannot be executed reports 127 instead of 1
 * Fixed Process.exitCode(false) on Windows conflating exit code 259 with "still running" (could poll forever) and reading an uninitialized exit code when the status query failed; on Linux a stale EINTR turned the non-blocking poll into a 100% CPU busy-wait
@@ -175,6 +175,20 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed x86_64 Android builds producing arm64 code when they ask for HXCPP_X86_64 without HXCPP_M64, as Lime does
 * Fixed telemetry unlocking its allocation mutex before locking it when it skips an allocation made inside a CFFI call; on Windows that left the mutex held and the next thread that tracked an allocation blocked forever
 * Debug builds now trap when a GC block's row counts exceed its useful lines, before the counts skew the heap stats
+
+* Fixed socket polling on 64-bit Windows: fd_set allocations and copies were sized 4 bytes short of the socket array, so select() was handed a corrupted socket, failed on every call, and Poll reported no socket ready
+* Poll now reports a socket that closed or failed: on Windows it also waits on the error set, and when select() fails every registered read socket is reported so the caller finds the dead one; on Linux and macOS POLLERR and POLLNVAL count as ready
+* Sped up Poll on Windows with many sockets: ready sockets are found in one walk instead of a search of the set per registered socket, which grew with the square of the connection count
+* Fixed a TLS write to a peer that had gone (one that left mid-handshake, or closed without close_notify) ending the process with SIGPIPE on Linux; it now fails like a plain socket write
+* TLS servers resume sessions with RFC 5077 tickets, so a returning client skips the full handshake (30 to 50 times more returning-client connections a second in testing); -D HXCPP_SSL_NO_TICKETS builds without them
+* mbedTLS's symbols are compiled hidden under every toolchain, including watchOS's and custom ones, so a library loaded later with its own mbedTLS (a Lime ndll, for example) cannot bind to hxcpp's copy
+* UDP sockets no longer get SO_REUSEADDR outside Windows: on Linux it let two sockets share a port, so a bind to port 0 could hand out one already in use
+* Fixed formatting a host address on macOS and the BSDs returning "[inet_ntoa error]" when several threads did it at once; it now uses inet_ntop into a buffer of its own
+* Fixed a rare race where a thread starting while another thread collects could be handed rows that other threads are also given, so two live objects shared memory
+* Fixed Array.sort crashing, corrupting the heap or hanging when the comparator is inconsistent (one returning random results to shuffle, for example) or changes the array it sorts: both sorts use a stable merge sort that stays in range whatever the comparator returns
+* Fixed copying an array crashing with telemetry's allocation tracking on: the tracker read the type of an object whose constructor had not run
+* Haxe code is compiled with -fwrapv on gcc and clang, so Int overflow wraps as it does on the other targets instead of being undefined behaviour the optimiser may exploit
+* Fixed toggling a define such as HXCPP_TELEMETRY, HXCPP_GC_BIG_BLOCKS or HXCPP_M64 not recompiling the runtime and hxcpp's libraries, which left objects built both ways and could fail to link
 
 4.3.xx
 ------------------------------------------------------------
