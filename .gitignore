@@ -443,3 +443,6 @@ FodyWeavers.xsd
 
 # The release tool, which the Visual Studio rules above would ignore
 !tools/release/
+
+# hxcpp compile cache used by CI
+/.hxcpp-cache/

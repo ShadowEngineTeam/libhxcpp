@@ -20,6 +20,9 @@ on:
 
 env:
   HXCPP_ARCH_FLAG: ${{ inputs.arch == 'Arm64' && 'HXCPP_ARM64' || format('HXCPP_M{0}', inputs.arch) }}
+  # hxcpp's compile cache, so a job that builds several programs compiles the
+  # runtime once: the regression suite alone builds eight
+  HXCPP_COMPILE_CACHE: ${{ github.workspace }}/.hxcpp-cache
 
 jobs:
   haxe:

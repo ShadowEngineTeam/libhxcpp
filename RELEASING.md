@@ -52,7 +52,7 @@ haxe -p tools/release --run Release notes notes.md
 
 The first runs the same check the release workflow does; the second writes the release notes it will publish.
 
-Push the commit to `main` and wait for the `main` workflow to pass on it.
+Push the commit to `main` and wait for the `main` workflow to pass on it. CI skips commits that change only documentation, so run the release on the release commit itself: it changes `haxelib.json`, so CI always runs on it.
 
 ### 3. Run the release workflow
 

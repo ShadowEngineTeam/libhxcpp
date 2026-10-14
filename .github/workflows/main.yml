@@ -1,5 +1,24 @@
 name: main
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE.txt'
+      - '.github/ISSUE_TEMPLATE/**'
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE.txt'
+      - '.github/ISSUE_TEMPLATE/**'
+  workflow_dispatch:
+
+# A newer push to the same branch or pull request supersedes the run in progress
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   check-headers:
