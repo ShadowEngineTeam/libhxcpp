@@ -5366,7 +5366,7 @@ public:
       size_t mem = mRowsInUse<<IMMIX_LINE_BITS;
       size_t baseMem = full ? bytesInUse : mem;
       #ifdef HXCPP_GC_DYNAMIC_SIZE
-      size_t targetFree = std::max(hx::sgMinimumFreeSpace, baseMem * profileCollectSummary.spaceFactor );
+      size_t targetFree = std::max(hx::sgMinimumFreeSpace, (size_t)(baseMem * profileCollectSummary.spaceFactor) );
       #else
       size_t targetFree = std::max(hx::sgMinimumFreeSpace, baseMem / 100 *hx::sgTargetFreeSpacePercentage );
       #endif
