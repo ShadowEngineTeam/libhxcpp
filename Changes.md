@@ -159,6 +159,14 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed String.lastIndexOf with a negative start index returning -1 instead of matching at index 0 (now clamps to 0, matching other targets)
 * Fixed Dynamic modulo (%) dereferencing a null operand without a guard (now coerces null to 0 like the other dynamic operators)
 * Fixed compilation with HXCPP_GC_DYNAMIC_SIZE
+* Fixed GC block row counts overflowing with HXCPP_GC_BIG_BLOCKS, which made the GC underestimate the live heap and collect on almost every new block
+
+* MySQL: logs in to MySQL 8 and later servers (caching_sha2_password, sha256_password and auth switch requests, with the password RSA-encrypted under the server's key when the connection is not encrypted) and connects over TLS, with sslMode from disabled to verifying the server's identity. MySQL 8's default collation, utf8mb4_0900_ai_ci, and the other missing charsets are known
+* MySQL: connectTimeout, readTimeout and writeTimeout bound every wait, and the connect timeout is one deadline for the whole open. TCP keepalive can be enabled and read back. Errors carry the server's error number and SQLSTATE and never include the statement, and a lost connection fails with CR_SERVER_LOST. New ping, errno, sqlstate and thread id accessors
+* MySQL: results can be streamed a row at a time instead of read whole, and the insert id, affected rows, server version and server status are available without extra queries
+* MySQL and SQLite: values are read exactly. Integers are an Int or an Int64, DECIMAL is its exact text, DATE, DATETIME and TIMESTAMP are UTC with their fractional seconds, NULL is null, and SQLite INTEGER keeps all 64 bits. Dates before 1970 no longer end the process on Windows
+* MySQL: queries and escaped values are sent by their UTF-8 byte length (non-ASCII text cut the end off a statement), escaping follows the server's NO_BACKSLASH_ESCAPES status, a write's result has no rows instead of throwing, floats are parsed in the C locale, and counts or lengths no server sends are refused instead of crashing the process
+* SQLite: a failed step finalizes its statement at once and reports SQLite's own message, so the next statement and close() no longer fail as well. FTS5 and JSON1 can be enabled with -D sqlite_fts5 and -D sqlite_json1
 
 4.3.xx
 ------------------------------------------------------------
