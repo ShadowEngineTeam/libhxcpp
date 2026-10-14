@@ -1,5 +1,5 @@
 
-libhxcpp 6.0.0 (in development)
+libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
 The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4.3.xx below), with the following on top.

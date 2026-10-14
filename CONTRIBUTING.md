@@ -36,7 +36,7 @@ Each suite builds against the checkout haxelib points at. Use `-D HXCPP_M32`, `-
 - Open them against `main`, one fix or feature each.
 - Add a test that fails without the change when one is possible: a case in `test/haxe` or `test/std`, or a program of its own in `test/regression` when the problem needs a fresh process (a crash, something at exit, a race).
 - Say what was wrong and how the change fixes it, in the pull request and in the commit message.
-- Add a line to the top section of [Changes.md](Changes.md) for anything a user would notice.
+- Add a line to the unreleased section at the top of [Changes.md](Changes.md) for anything a user would notice. Releases themselves are described in [RELEASING.md](RELEASING.md).
 
 ## License
 
