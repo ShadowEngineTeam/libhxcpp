@@ -71,11 +71,13 @@ using hx::gRememberedByteMarkID;
 
 namespace hx
 {
+// The GC's own containers and locks are allocated once and never destroyed:
+//  exit() runs static destructors while other threads may still allocate
 #ifdef HXCPP_GC_DEBUG_ALWAYS_MOVE
 
 enum { gAlwaysMove = true };
 typedef std::unordered_set<void *> PointerMovedSet;
-PointerMovedSet sgPointerMoved;
+PointerMovedSet &sgPointerMoved = *new PointerMovedSet();
 
 #else
 enum { gAlwaysMove = false };
@@ -603,7 +605,7 @@ enum AllocType { allocNone, allocString, allocObject, allocMarked };
 struct BlockDataInfo *gBlockStack = 0;
 typedef hx::QuickVec<hx::Object *> ObjectStack;
 
-static std::mutex sThreadPoolLock;
+static std::mutex &sThreadPoolLock = *new std::mutex();
 
 // For threaded marking/block reclaiming
 static unsigned int sRunningThreads = 0;
@@ -722,7 +724,7 @@ struct GroupInfo
 
 };
  
-hx::QuickVec<GroupInfo> gAllocGroups;
+hx::QuickVec<GroupInfo> &gAllocGroups = *new hx::QuickVec<GroupInfo>();
 
 
 
@@ -2508,7 +2510,7 @@ class WeakRef;
 typedef hx::QuickVec<WeakRef *> WeakRefs;
 
 FILE_SCOPE std::mutex *sFinalizerLock = 0;
-FILE_SCOPE WeakRefs sWeakRefs;
+FILE_SCOPE WeakRefs &sWeakRefs = *new WeakRefs();
 
 class WeakRef : public hx::Object
 {
@@ -2541,26 +2543,26 @@ typedef hx::QuickVec<InternalFinalizer *> FinalizerList;
 FILE_SCOPE FinalizerList *sgFinalizers = 0;
 
 typedef std::unordered_map<hx::Object *,hx::finalizer> FinalizerMap;
-FILE_SCOPE FinalizerMap sFinalizerMap;
+FILE_SCOPE FinalizerMap &sFinalizerMap = *new FinalizerMap();
 
 typedef void (*HaxeFinalizer)(Dynamic);
 typedef std::unordered_map<hx::Object *,HaxeFinalizer> HaxeFinalizerMap;
-FILE_SCOPE HaxeFinalizerMap sHaxeFinalizerMap;
+FILE_SCOPE HaxeFinalizerMap &sHaxeFinalizerMap = *new HaxeFinalizerMap();
 
-hx::QuickVec<int> sFreeObjectIds;
+hx::QuickVec<int> &sFreeObjectIds = *new hx::QuickVec<int>();
 typedef std::unordered_map<hx::Object *,int> ObjectIdMap;
 typedef hx::QuickVec<hx::Object *> IdObjectMap;
-FILE_SCOPE ObjectIdMap sObjectIdMap;
-FILE_SCOPE IdObjectMap sIdObjectMap;
+FILE_SCOPE ObjectIdMap &sObjectIdMap = *new ObjectIdMap();
+FILE_SCOPE IdObjectMap &sIdObjectMap = *new IdObjectMap();
 
 typedef std::unordered_set<hx::Object *> MakeZombieSet;
-FILE_SCOPE MakeZombieSet sMakeZombieSet;
+FILE_SCOPE MakeZombieSet &sMakeZombieSet = *new MakeZombieSet();
 
 typedef hx::QuickVec<hx::Object *> ZombieList;
-FILE_SCOPE ZombieList sZombieList;
+FILE_SCOPE ZombieList &sZombieList = *new ZombieList();
 
 typedef hx::QuickVec<hx::HashRoot *> WeakHashList;
-FILE_SCOPE WeakHashList sWeakHashList;
+FILE_SCOPE WeakHashList &sWeakHashList = *new WeakHashList();
 
 
 InternalFinalizer::InternalFinalizer(hx::Object *inObj, finalizer inFinalizer)
@@ -2692,7 +2694,7 @@ struct Finalizable
    }
 };
 typedef hx::QuickVec< Finalizable > FinalizableList;
-FILE_SCOPE FinalizableList sFinalizableList;
+FILE_SCOPE FinalizableList &sFinalizableList = *new FinalizableList();
 
 
 static double tFinalizers;
@@ -3100,7 +3102,7 @@ struct MoveBlockJob
 #ifndef HX_MEMORY_H_OVERRIDE
 
 #if 0
-static hx::QuickVec<void *> sBlockPool;
+static hx::QuickVec<void *> &sBlockPool = *new hx::QuickVec<void *>();
 static int gcBlockAllocs = 0;
 
 void *HxAllocGCBlock(size_t size)

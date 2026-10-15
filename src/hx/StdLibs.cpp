@@ -987,7 +987,7 @@ Dynamic __hxcpp_create_var_args(Dynamic &inArrayFunc)
 
 
 
-static std::mutex sgFieldMapMutex;
+static std::mutex &sgFieldMapMutex = *new std::mutex();
 
 // Transparent comparator: lets find() take the raw char* without
 // constructing a std::string (a heap allocation) per lookup - val_id is

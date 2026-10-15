@@ -9,8 +9,8 @@
 
 struct hx::thread::ThreadLocal_obj::Impl
 {
-	static std::mutex slotLock;
-	static std::list<Impl*> slots;
+	static std::mutex &slotLock;
+	static std::list<Impl*> &slots;
 	static int counter;
 
 	const int slot;
@@ -44,9 +44,9 @@ struct hx::thread::ThreadLocal_obj::Impl
 	}
 };
 
-std::mutex hx::thread::ThreadLocal_obj::Impl::slotLock;
+std::mutex &hx::thread::ThreadLocal_obj::Impl::slotLock = *new std::mutex();
 
-std::list<hx::thread::ThreadLocal_obj::Impl*> hx::thread::ThreadLocal_obj::Impl::slots;
+std::list<hx::thread::ThreadLocal_obj::Impl*> &hx::thread::ThreadLocal_obj::Impl::slots = *new std::list<hx::thread::ThreadLocal_obj::Impl*>();
 
 int hx::thread::ThreadLocal_obj::Impl::counter = 0;
 
