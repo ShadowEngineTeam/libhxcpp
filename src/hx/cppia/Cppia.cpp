@@ -3745,7 +3745,8 @@ CppiaExpr *createStaticAccess(CppiaExpr *inSrc,FieldStorage inType, void *inPtr)
 
 static void SLJIT_CALL stringCat(String *ioValue, String *inValue)
 {
-   *ioValue += *inValue;
+   // Not +=, which skips a null right-hand side
+   *ioValue = *ioValue + *inValue;
 }
 
 static hx::Object * SLJIT_CALL dynamicCatString(hx::Object *inLeft, String *inRight)
