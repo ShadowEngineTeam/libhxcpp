@@ -64,7 +64,7 @@ In the Actions tab, open **release** and run it on `main`. It stops without rele
 - `v<version>` is already released;
 - CI did not pass on the commit. If a failure is known and unrelated, run it again with **allow_failed_ci** and say why in the release notes.
 
-Otherwise it writes the version into `include/HxcppVersion.h` (`HXCPP_VERSION` and `LIBHXCPP_VERSION`) and `extraParams.hxml` (`-D libhxcpp=<version>` and `-D hxcpp=<version>`), builds the build tool and the cppia host for Windows, macOS and Linux, tags `v<version>`, and publishes the release with the top section of Changes.md as its notes. A pre-release version is published as a GitHub pre-release.
+Otherwise it writes the version into `include/HxcppVersion.h` (`HXCPP_VERSION` and `LIBHXCPP_VERSION`) and `extraParams.hxml` (the `libhxcpp` and `hxcpp` defines, set by a macro rather than `-D` lines, which hxp misreads), builds the build tool and the cppia host for Windows, macOS and Linux, tags `v<version>`, and publishes the release with the top section of Changes.md as its notes. A pre-release version is published as a GitHub pre-release.
 
 Then submit the release's zip to haxelib, from an account listed in `contributors` in `haxelib.json`:
 
