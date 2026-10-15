@@ -779,10 +779,10 @@ static int sni_callback( void *arg, mbedtls_ssl_context *ctx, const unsigned cha
 #if (HXCPP_API_LEVEL>=500)
 		auto cb  = hx::Callable<::Dynamic(::String)>(shared->sni);
 		auto n   = reinterpret_cast<const char*>(name);
-		auto ret = cb(String(n, strlen(n)));
+		auto ret = cb(String::create(n, (int)len));
 #else
 		const char *n = (const char *)name;
-		Dynamic ret = shared->sni->__run( String(n,strlen(n)) );
+		Dynamic ret = shared->sni->__run( String::create(n,(int)len) );
 #endif
 		if( ret != null() ){
 			// TODO authmode and ca
