@@ -449,8 +449,17 @@ int CppiaClassInfo::getEnumIndex(String inName)
 bool CppiaClassInfo::implementsInterface(CppiaClassInfo *inInterface)
 {
    for(int i=0;i<implements.size();i++)
+   {
       if (implements[i] == inInterface->typeId)
          return true;
+      CppiaClassInfo *parent = cppia.types[implements[i]]->cppiaClass;
+      if (parent && parent!=this && parent->implementsInterface(inInterface))
+         return true;
+   }
+   // An interface's superclass is the interface it extends
+   CppiaClassInfo *super = superType ? superType->cppiaClass : 0;
+   if (super && super!=this)
+      return super==inInterface || super->implementsInterface(inInterface);
    return false;
 }
 
