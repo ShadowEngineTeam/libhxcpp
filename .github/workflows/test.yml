@@ -311,6 +311,16 @@ jobs:
         if: runner.os == 'Windows'
         shell: powershell
         run: powershell -NoProfile -File test/msvc_setup/check.ps1
+      - name: test copyFile overwrite
+        working-directory: test/copy_file
+        shell: bash
+        run: |
+          mkdir -p out
+          echo old > out/kept.txt
+          echo old > out/replaced.txt
+          haxelib run hxcpp Build.xml
+          test "$(tr -d '\r' < out/kept.txt)" = old
+          test "$(tr -d '\r' < out/replaced.txt)" = new
       - name: test the build profile on a 64-bit Raspberry Pi
         if: runner.os == 'Linux'
         run: bash test/rpi_host/check.sh

@@ -2419,7 +2419,7 @@ class BuildTool
                       new CopyFile(substitute(el.att.name),
                                    substitute(el.att.from),
                                    el.has.allowMissing ?  subBool(el.att.allowMissing) : false,
-                                   el.has.overwrite ? substitute(el.att.overwrite) : Overwrite.ALWAYS,
+                                   el.has.overwrite ? CopyFile.parseOverwrite(substitute(el.att.overwrite)) : Overwrite.ALWAYS,
                                    el.has.toolId ?  substitute(el.att.toolId) : null ) );
                case "section" :
                   parseXML(el,"",forceRelative);

@@ -25,6 +25,20 @@ class CopyFile
    }
 
 
+   // overwrite="true" and "false", as the build xml docs once showed, mean always and never
+   public static function parseOverwrite(value:String):Overwrite
+   {
+      switch(value)
+      {
+         case "always", "true": return Overwrite.ALWAYS;
+         case "ifNewer": return Overwrite.IF_NEWER;
+         case "never", "false": return Overwrite.NEVER;
+         default:
+            Log.warn('Unknown copyFile overwrite "$value": use ${Overwrite.ALWAYS}, ${Overwrite.IF_NEWER} or ${Overwrite.NEVER}. Copying anyway');
+            return Overwrite.ALWAYS;
+      }
+   }
+
    public static function copyFile(fromFile:String, toFile:String, allowMissing = false, overwrite:Overwrite = Overwrite.ALWAYS, addExePermission=false)
    {
       if (!FileSystem.exists(fromFile))

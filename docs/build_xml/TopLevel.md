@@ -95,9 +95,9 @@ The top-level nodes live inside an "xml" node, and can be:
   </target>
   ```
 
-- *copyFile* - Copy a file after given toolId is run into target output directory
+- *copyFile* - Copy a file after given toolId is run into target output directory. 'overwrite' is always (the default), ifNewer or never
   ```xml
-  <copyFile name="destination" from="src" allowMissing="true" overwrite="true" toolId="filter" >
+  <copyFile name="destination" from="src" allowMissing="true" overwrite="ifNewer" toolId="filter" >
   ```
 
 - *magiclib* - Internal for replacing dlls with object files
