@@ -24,7 +24,7 @@ $env:msvc_host_arch = "x64"
 $failures = 0
 # VsDevCmd writes to stderr, which Stop would turn into an error
 $ErrorActionPreference = "Continue"
-foreach ($script in "msvc-setup", "msvc64-setup", "msvc-arm64-setup", "msvc-winrt-setup", "msvc-winrt64-setup") {
+foreach ($script in "msvc-setup", "msvc64-setup", "msvc-arm64-setup", "msvc-winrt-setup", "msvc-winrt64-setup", "msvc-winrt-arm64-setup") {
    $out = cmd /c "$root\toolchain\$script.bat" 2>&1 | Out-String
    if ($out -match "(?m)^HXCPP_VARS" -and $out -match [regex]::Escape("VSINSTALLDIR=$vs\")) {
       "ok   $script"

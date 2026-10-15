@@ -209,6 +209,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Added the arm64 macOS Cppia host to releases, in bin/MacArm64, and project/compile-cppia.hxml builds the host's own architecture unless one is given (hxcpp #1149)
 * Changed the build tool to decide on colour from the terminal's environment instead of running tput, to honour NO_COLOR, and to take HXCPP_COLOR to force colour on (hxcpp #1146)
 * Added compile progress to the build tool: each group says how many files it compiles, and each file how many of them have finished (hxcpp #1140, #1423)
+* Added WinRT ARM64 builds: Setup's msvc-winrt-arm64-setup.bat exists, and they go to bin/WinRTArm64, where cpp.Lib.load looks. Desktop ARM64 objects move from obj/msvc*-armarm64 to obj/msvc*arm64 (hxcpp #1335)
 * Added the libhxcpp define: a build that uses the library gets -D libhxcpp=<version>. Compare it with version("x.y.z"); a plain string comparison compares text
 * Added separate Linux ARMv7 and ARM64 build architectures (hxcpp #1355)
 * Fixed AndroidCompat.cpp closing its extern "C" section in the wrong place (hxcpp #1404)

@@ -479,7 +479,9 @@ String __hxcpp_get_bin_dir()
 {
    return
 #if defined(HX_WINRT)
-  #ifdef HXCPP_M64
+  #ifdef HXCPP_ARM64
+    HX_CSTRING("WinRTArm64");
+  #elif defined(HXCPP_M64)
     HX_CSTRING("WinRT64");
   #else
     HX_CSTRING("WinRT");
