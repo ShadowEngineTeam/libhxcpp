@@ -186,6 +186,7 @@ hx::thread::ThreadImpl_obj::ThreadImpl_obj(const int _id, Thread_obj::CreateFunc
 hx::thread::ThreadImpl_obj::Native::Native(Thread_obj::CreateFunction _job, ThreadImpl _thread, CountingSemaphore _semaphore)
 	: thread(run, _thread, _job, _semaphore)
 	, handle(thread.native_handle())
+	, ownsHandle(false)
 {
 	// Only Windows implements thread name getting and setting currently, and this requires the thread to be attached.
 	// Threads are normally only detached once the thread object is finalised and this was causing the 32bit linux tests to hit OS resource limits.

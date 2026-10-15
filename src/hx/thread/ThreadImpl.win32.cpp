@@ -52,4 +52,18 @@ void hx::thread::ThreadImpl_obj::setName(const String& name)
 	}
 }
 
-hx::thread::ThreadImpl_obj::Native::Native() : thread(), handle(GetCurrentThread()) {}
+// A real handle: GetCurrentThread's pseudo-handle names whichever thread uses it
+hx::thread::ThreadImpl_obj::Native::Native()
+	: thread()
+	, handle(OpenThread(THREAD_QUERY_LIMITED_INFORMATION | THREAD_SET_LIMITED_INFORMATION, FALSE, GetCurrentThreadId()))
+	, ownsHandle(handle != nullptr)
+{
+	if (!handle)
+		handle = GetCurrentThread();
+}
+
+hx::thread::ThreadImpl_obj::Native::~Native()
+{
+	if (ownsHandle)
+		CloseHandle(handle);
+}

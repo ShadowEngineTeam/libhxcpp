@@ -105,6 +105,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed a ThreadLocal reading the value of the collected ThreadLocal whose slot it reused, or a legacy __hxcpp_tls value with the same id
 * Fixed debugger, debug and telemetry builds aborting on macOS when a thread ends after main returns: the debugger's and the stack map's mutexes were destroyed with the other statics, and libc++ throws when a destroyed mutex is locked
 * Fixed Semaphore.tryAcquire throwing "Failed to wait for semaphore" on Linux and Android for negative, NaN and huge timeouts, and returning early on Windows for huge ones; sub-millisecond waits on Windows now round up instead of returning at once, so Lock.wait no longer busy-polls the last millisecond of a timed wait, and Lock.wait with a huge timeout no longer spins where time_t is 32-bit
+* Fixed the Windows main and natively attached thread objects holding GetCurrentThread's pseudo-handle, so setName and getName called from another thread named that thread instead; and fixed Scratch's copy assignment (Haxe 5) keeping its old view and release function and freeing the malloc path twice
 
 ### Strings, numbers, Dynamic and reflection
 

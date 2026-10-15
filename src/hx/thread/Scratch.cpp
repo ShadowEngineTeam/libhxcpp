@@ -62,15 +62,16 @@ hx::thread::Scratch::~Scratch()
 
 hx::thread::Scratch& hx::thread::Scratch::operator=(const Scratch& _other)
 {
-	auto old = *count;
+	(*_other.count)++;
 
-	count = _other.count;
-	(*count)++;
-
-	if (0 == (--old))
+	if (0 == --(*count))
 	{
 		release(view);
 	}
+
+	count = _other.count;
+	view = _other.view;
+	release = _other.release;
 
 	return *this;
 }

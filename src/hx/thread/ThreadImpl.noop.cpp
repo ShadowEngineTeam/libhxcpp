@@ -12,4 +12,6 @@ void hx::thread::ThreadImpl_obj::setName(const String& name)
 	//
 }
 
-hx::thread::ThreadImpl_obj::Native::Native() : thread(), handle() {}
+hx::thread::ThreadImpl_obj::Native::Native() : thread(), handle(), ownsHandle(false) {}
+
+hx::thread::ThreadImpl_obj::Native::~Native() {}

@@ -31,9 +31,11 @@ namespace hx
 			{
 				std::thread thread;
 				std::thread::native_handle_type handle;
+				bool ownsHandle;
 
 				Native();
 				Native(Thread_obj::CreateFunction _job, ThreadImpl _thread, CountingSemaphore _semaphore);
+				~Native();
 			};
 
 			const int id;
