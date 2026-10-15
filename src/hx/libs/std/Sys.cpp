@@ -546,7 +546,7 @@ Dynamic _hx_std_sys_stat( String path )
 
    hx::ExitGCFreeZone();
    if (err)
-      return null();
+      hx::Throw(HX_CSTRING("Could not stat ") + path);
    hx::Anon o = hx::Anon_obj::Create();
 
    STATF(gid);
