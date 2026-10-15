@@ -72,7 +72,7 @@ Compare versions with `version()`. A comparison with a plain string, such as `(l
 
 ## Compatibility
 
-libhxcpp keeps hxcpp's build XML, defines and API, and works with the code the Haxe compiler generates for hxcpp. A few fixes deliberately change behaviour to match the other Haxe targets, for example how `Std.string` formats floats, NaN and Infinity, and TLS connections now require TLS 1.2 or newer. Changes.md describes each one.
+libhxcpp keeps hxcpp's build XML, defines and API, and works with the code Haxe 4.2 and later generates for hxcpp. A few fixes deliberately change behaviour to match the other Haxe targets, for example how `Std.string` formats floats, NaN and Infinity, and TLS connections now require TLS 1.2 or newer. Changes.md describes each one.
 
 ## Versions and releases
 

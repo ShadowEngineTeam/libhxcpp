@@ -235,12 +235,12 @@ Dynamic __hxcpp_thread_current()
 
 void __hxcpp_thread_send(Dynamic inThread, Dynamic inMessage)
 {
-	hx::Throw(HX_CSTRING("Not Implemented"));
+	hx::Throw(HX_CSTRING("Thread messages need Haxe 4.2 or later"));
 }
 
 Dynamic __hxcpp_thread_read_message(bool inBlocked)
 {
-	return hx::Throw(HX_CSTRING("Not Implemented"));
+	return hx::Throw(HX_CSTRING("Thread messages need Haxe 4.2 or later"));
 }
 
 bool __hxcpp_is_current_thread(hx::Object *inThread)
