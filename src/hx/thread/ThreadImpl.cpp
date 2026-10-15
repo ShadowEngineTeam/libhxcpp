@@ -143,7 +143,10 @@ hx::thread::ThreadImpl_obj::ThreadImpl_obj(const int _id)
 	: id(_id)
 	, native(new Native())
 	, scratch(std::numeric_limits<uint16_t>::max(), std::numeric_limits<uint16_t>::max())
-	, slots(0, 0) { }
+	, slots(0, 0)
+{
+	HX_OBJ_WB_NEW_MARKED_OBJECT(this);
+}
 
 hx::thread::ThreadImpl_obj::ThreadImpl_obj(const int _id, Thread_obj::CreateFunction _job, CountingSemaphore _semaphore)
 	: id(_id)
@@ -151,6 +154,7 @@ hx::thread::ThreadImpl_obj::ThreadImpl_obj(const int _id, Thread_obj::CreateFunc
 	, scratch(std::numeric_limits<uint16_t>::max(), std::numeric_limits<uint16_t>::max())
 	, slots(0, 0)
 {
+	HX_OBJ_WB_NEW_MARKED_OBJECT(this);
 }
 
 hx::thread::ThreadImpl_obj::Native::Native(Thread_obj::CreateFunction _job, ThreadImpl _thread, CountingSemaphore _semaphore)
