@@ -2612,6 +2612,8 @@ void FindZombies(MarkContext &inContext)
 
 bool IsWeakRefValid(const HX_CHAR *inPtr)
 {
+   if (((unsigned int *)inPtr)[-1] & HX_GC_CONST_ALLOC_BIT)
+      return true;
    unsigned char mark = ((unsigned char *)inPtr)[HX_ENDIAN_MARK_ID_BYTE];
 
     // Special case of member closure - check if the 'this' pointer is still alive
@@ -2620,6 +2622,8 @@ bool IsWeakRefValid(const HX_CHAR *inPtr)
 
 bool IsWeakRefValid(hx::Object *inPtr)
 {
+   if (((unsigned int *)inPtr)[-1] & HX_GC_CONST_ALLOC_BIT)
+      return true;
    unsigned char mark = ((unsigned char *)inPtr)[HX_ENDIAN_MARK_ID_BYTE];
 
     // Special case of member closure - check if the 'this' pointer is still alive
@@ -2839,25 +2843,7 @@ void RunFinalizers()
       else
       {
          // what about the reference?
-         hx::Object *r = ref->mRef.mPtr;
-         unsigned char mark = ((unsigned char *)r)[HX_ENDIAN_MARK_ID_BYTE];
-
-         // Special case of member closure - check if the 'this' pointer is still alive
-         if ( mark!=gByteMarkID && r->__GetType()==vtFunction)
-         {
-            hx::Object *thiz = (hx::Object *)r->__GetHandle();
-            if (thiz)
-            {
-               mark = ((unsigned char *)thiz)[HX_ENDIAN_MARK_ID_BYTE];
-               if (mark==gByteMarkID)
-               {
-                  // The object is still alive, so mark the closure and continue
-                  MarkAlloc(r,0);
-               }
-            }
-         }
-
-         if ( mark!=gByteMarkID )
+         if (!IsWeakRefValid(ref->mRef.mPtr))
          {
             ref->mRef.mPtr = 0;
             sWeakRefs.qerase(i);
