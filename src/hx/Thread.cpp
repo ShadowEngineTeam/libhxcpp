@@ -375,18 +375,7 @@ public:
 
 	hx::InternalFinalizer *mFinalizer;
 
-	#if defined(HX_WINDOWS)
-	double Now()
-	{
-		// Monotonic, 64-bit and fine-grained: haxe.Timer.stamp's clock, the
-		// performance counter.  clock() is a 32-bit millisecond count on
-		// MSVC, which wraps negative after ~24.8 days of process uptime and
-		// breaks every timed wait from then on.  GetTickCount64 does not
-		// wrap, but it moves only on the ~15.6ms system tick, so a deadline
-		// taken from it came due up to a tick late: a 1ms wait took 15ms
-		return __time_stamp();
-	}
-	#elif defined(__SNC__)
+	#if defined(__SNC__)
 	double Now()
 	{
 		return (double)clock()/CLOCKS_PER_SEC;
@@ -394,9 +383,14 @@ public:
 	#else
 	double Now()
 	{
-		struct timeval tv;
-		gettimeofday(&tv,0);
-		return tv.tv_sec + tv.tv_usec*0.000001;
+		// Monotonic, 64-bit and fine-grained: haxe.Timer.stamp's clock.
+		// clock() is a 32-bit millisecond count on MSVC, which wraps
+		// negative after ~24.8 days of process uptime and breaks every
+		// timed wait from then on.  GetTickCount64 does not wrap, but it
+		// moves only on the ~15.6ms system tick, so a deadline taken from
+		// it came due up to a tick late: a 1ms wait took 15ms.  The wall
+		// clock moves when the system time is changed
+		return __time_stamp();
 	}
 	#endif
 

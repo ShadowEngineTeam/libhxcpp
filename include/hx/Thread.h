@@ -33,7 +33,11 @@
 #include <errno.h>
 #include <pthread.h>
 #include <sys/time.h>
+#include <time.h>
 #include <stdio.h>
+#ifdef __APPLE__
+#include <mach/mach_time.h>
+#endif
 #define HXCPP_PTHREADS
 #endif
 
@@ -215,6 +219,12 @@ struct HxSemaphore
 
 #define HX_THREAD_SEMAPHORE_LOCKABLE
 
+// Timed waits run on a clock that changing the system time does not move.
+// Apple has no condition clock, so it waits for the time left instead.
+#if !defined(__APPLE__) && (!defined(__ANDROID__) || __ANDROID_API__ >= 21)
+#define HX_THREAD_COND_MONOTONIC
+#endif
+
 struct HxSemaphore
 {
    HxMutex         mMutex;
@@ -226,7 +236,15 @@ struct HxSemaphore
    {
       mSet = false;
       mCondition = new pthread_cond_t();
+      #ifdef HX_THREAD_COND_MONOTONIC
+      pthread_condattr_t attr;
+      pthread_condattr_init(&attr);
+      pthread_condattr_setclock(&attr, CLOCK_MONOTONIC);
+      pthread_cond_init(mCondition,&attr);
+      pthread_condattr_destroy(&attr);
+      #else
       pthread_cond_init(mCondition,0);
+      #endif
    }
    ~HxSemaphore()
    {
@@ -268,31 +286,63 @@ struct HxSemaphore
          pthread_cond_wait( mCondition, mMutex.mMutex );
       mSet = false;
    }
+   static void Now(timespec &outNow)
+   {
+      #ifdef __APPLE__
+      static mach_timebase_info_data_t timebase;
+      if (!timebase.denom)
+         mach_timebase_info(&timebase);
+      unsigned long long ns = mach_absolute_time() * timebase.numer / timebase.denom;
+      outNow.tv_sec = ns / 1000000000;
+      outNow.tv_nsec = ns % 1000000000;
+      #elif defined(HX_THREAD_COND_MONOTONIC)
+      clock_gettime(CLOCK_MONOTONIC, &outNow);
+      #else
+      clock_gettime(CLOCK_REALTIME, &outNow);
+      #endif
+   }
+   int TimedWait(const timespec &inDeadline)
+   {
+      #ifdef __APPLE__
+      timespec now;
+      Now(now);
+      timespec left;
+      left.tv_sec = inDeadline.tv_sec - now.tv_sec;
+      left.tv_nsec = inDeadline.tv_nsec - now.tv_nsec;
+      if (left.tv_nsec<0)
+      {
+         left.tv_nsec += 1000000000;
+         left.tv_sec--;
+      }
+      if (left.tv_sec<0)
+         return ETIMEDOUT;
+      return pthread_cond_timedwait_relative_np( mCondition, mMutex.mMutex, &left );
+      #else
+      return pthread_cond_timedwait( mCondition, mMutex.mMutex, &inDeadline );
+      #endif
+   }
    // Returns true if the wait was success, false on timeout.
    bool WaitSeconds(double inSeconds)
    {
-      struct timeval tv;
-      gettimeofday(&tv, 0);
-
       // double->int is undefined past 2^31
       if (inSeconds > 0x7fffffff)
          inSeconds = 0x7fffffff;
       int isec = (int)inSeconds;
-      int usec = (int)((inSeconds-isec)*1000000.0);
       timespec spec;
-      spec.tv_nsec = (tv.tv_usec + usec) * 1000;
+      Now(spec);
+      spec.tv_nsec += (long)((inSeconds-isec)*1000000000.0);
       if (spec.tv_nsec>=1000000000)
       {
          spec.tv_nsec-=1000000000;
          isec++;
       }
-      spec.tv_sec = tv.tv_sec + isec;
+      spec.tv_sec += isec;
 
       AutoLock lock(mMutex);
 
       int result = 0;
       // Wait for set to be true...
-      while( !mSet &&  (result=pthread_cond_timedwait( mCondition, mMutex.mMutex, &spec )) != ETIMEDOUT)
+      while( !mSet &&  (result=TimedWait(spec)) != ETIMEDOUT)
       {
          if (result!=0)
          {

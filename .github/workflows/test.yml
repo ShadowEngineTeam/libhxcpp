@@ -320,3 +320,20 @@ jobs:
           haxe: ${{ inputs.haxe }}
       - name: run
         run: haxe --run Run -D ${{ env.HXCPP_ARCH_FLAG }}
+      # Moves the system clock, which the Windows runners don't allow
+      - name: stop time sync
+        if: runner.os != 'Windows'
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            sudo timedatectl set-ntp false
+          else
+            sudo systemsetup -setusingnetworktime off
+          fi
+      - name: build the clock change test
+        if: runner.os != 'Windows'
+        working-directory: test/clock_change
+        run: haxe build.hxml -D ${{ env.HXCPP_ARCH_FLAG }}
+      - name: run the clock change test
+        if: runner.os != 'Windows'
+        working-directory: test/clock_change
+        run: bin/Main

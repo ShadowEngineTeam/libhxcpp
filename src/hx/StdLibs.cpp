@@ -9,6 +9,9 @@
 #elif defined(__unix__) || defined(__APPLE__)
 #include <sys/time.h>
 #include <unistd.h>
+#ifdef __APPLE__
+#include <mach/mach_time.h>
+#endif
 #ifndef __EMSCRIPTEN__
 typedef int64_t __int64;
 #endif
@@ -441,12 +444,22 @@ double  __time_stamp()
          return (now-t0)*period;
    }
    return (double)clock() / ( (double)CLOCKS_PER_SEC);
-#elif defined(__unix__) || defined(__APPLE__)
+#elif defined(__APPLE__)
+   static mach_timebase_info_data_t timebase;
+   static unsigned long long t0 = 0;
+   unsigned long long now = mach_absolute_time();
+   if (t0==0)
+   {
+      mach_timebase_info(&timebase);
+      t0 = now;
+   }
+   return (double)(now-t0) * timebase.numer / timebase.denom * 1e-9;
+#elif defined(__unix__)
    static double t0 = 0;
-   struct timeval tv;
-   if( gettimeofday(&tv,0) )
+   struct timespec ts;
+   if( clock_gettime(CLOCK_MONOTONIC,&ts) )
       throw Dynamic("Could not get time");
-   double t =  ( tv.tv_sec + ((double)tv.tv_usec) / 1000000.0 );
+   double t =  ( ts.tv_sec + ((double)ts.tv_nsec) / 1000000000.0 );
    if (t0==0) t0 = t;
    return t-t0;
 #else

@@ -1,9 +1,14 @@
 #include <hxcpp.h>
 #include <semaphore.h>
-#include <sys/time.h>
+#include <time.h>
 #include <memory>
 #include <cerrno>
 #include <hx/thread/CountingSemaphore.hpp>
+
+// sem_timedwait takes a deadline on the wall clock, which changing the system time moves
+#if (defined(__GLIBC__) && (__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 30))) || (defined(__ANDROID__) && __ANDROID_API__ >= 30)
+#define HX_SEM_CLOCKWAIT
+#endif
 
 struct hx::thread::CountingSemaphore_obj::Impl
 {
@@ -71,24 +76,31 @@ bool hx::thread::CountingSemaphore_obj::tryAcquire(Null<double> timeout)
 	{
 		hx::EnterGCFreeZone();
 
-		struct timeval tv;
 		struct timespec t;
 		auto delta = timeout.value;
 		int idelta = (int)delta, idelta2;
 		delta -= idelta;
 		delta *= 1.0e9;
-		gettimeofday(&tv, NULL);
-		delta += tv.tv_usec * 1000.0;
+		#ifdef HX_SEM_CLOCKWAIT
+		clock_gettime(CLOCK_MONOTONIC, &t);
+		#else
+		clock_gettime(CLOCK_REALTIME, &t);
+		#endif
+		delta += t.tv_nsec;
 		idelta2 = (int)(delta / 1e9);
 		delta -= idelta2 * 1e9;
-		t.tv_sec = tv.tv_sec + idelta + idelta2;
+		t.tv_sec += idelta + idelta2;
 		t.tv_nsec = (long)delta;
 
 		// Retry on EINTR - the absolute deadline keeps the timeout intact
 		int r;
 		do
 		{
+			#ifdef HX_SEM_CLOCKWAIT
+			r = sem_clockwait(&impl->semaphore, CLOCK_MONOTONIC, &t);
+			#else
 			r = sem_timedwait(&impl->semaphore, &t);
+			#endif
 		}
 		while (0 != r && EINTR == errno);
 
