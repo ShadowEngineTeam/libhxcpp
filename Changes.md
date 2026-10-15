@@ -213,6 +213,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Added MSVC builds with clang-cl and the LLVM tools, with -D HXCPP_MSVC_LLVM, and cross-compiling them from Linux with -D HXCPP_MSVC_ROOT (hxcpp #1361)
 * Fixed an SSL server crashing when an accepted socket handshakes after its listener was closed and collected, and, on Haxe 5, any SNI handshake after a collection: the SNI callback, certificate, key and CA the configuration uses were not kept alive
 * Fixed the cppia JIT corrupting memory or crashing on Array<cpp.Float32>, and failing to load a Float32 array literal with Type mismatch
+* Fixed the cppia JIT with the moving collector using stale addresses for boxed string literals, PosInfos and script enum constants, which it had written into its code
 * Added the libhxcpp define: a build that uses the library gets -D libhxcpp=<version>. Compare it with version("x.y.z"); a plain string comparison compares text
 * Added separate Linux ARMv7 and ARM64 build architectures (hxcpp #1355)
 * Fixed AndroidCompat.cpp closing its extern "C" section in the wrong place (hxcpp #1404)

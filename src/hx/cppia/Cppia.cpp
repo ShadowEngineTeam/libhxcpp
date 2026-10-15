@@ -4802,10 +4802,9 @@ struct StringVal : public CppiaExprWithValue
       switch(destType)
       {
          case etObject:
-           //TODO - GC!
            if (!value.mPtr)
               value = strVal;
-           compiler->move(inDest, (void *) value.mPtr );
+           genLoadHeldObject(compiler, inDest, &value.mPtr);
            break;
 
 
@@ -4951,8 +4950,7 @@ struct PosInfo : public CppiaExprWithValue
    #ifdef CPPIA_JIT
    void genCode(CppiaCompiler *compiler, const JitVal &inDest, ExprType destType) HXCPP_OVERRIDE
    {
-      // TODO GC
-      compiler->move(inDest, (void *)value.mPtr );
+      genLoadHeldObject(compiler, inDest, &value.mPtr);
    }
    #endif
 

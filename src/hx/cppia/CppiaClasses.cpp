@@ -236,15 +236,20 @@ struct EnumField : public CppiaDynamicExpr
       return this;
    }
 
-   hx::Object *getValue()
+   hx::Object **getValueHolder()
    {
       if (value)
-         return value->value.mPtr;
+         return &value->value.mPtr;
       if (!enumValue.mPtr)
       {
          enumValue = enumClass->ConstructEnum(enumName,null());
       }
-      return enumValue.mPtr;
+      return &enumValue.mPtr;
+   }
+
+   hx::Object *getValue()
+   {
+      return *getValueHolder();
    }
 
    hx::Object *runObject(CppiaCtx *ctx) HXCPP_OVERRIDE
@@ -285,9 +290,8 @@ struct EnumField : public CppiaDynamicExpr
       int s = args.size();
       if (s==0)
       {
-          // TODO GC pin
          if (destType==etObject)
-            compiler->move(inDest, (void *)getValue());
+            genLoadHeldObject(compiler, inDest, getValueHolder());
       }
       else if (value)
       {

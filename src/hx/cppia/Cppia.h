@@ -966,6 +966,16 @@ template<> struct ExprTypeOf<float> { enum { value = etFloat }; };
 template<> struct ExprTypeOf<String> { enum { value = etString }; };
 
 
+#ifdef CPPIA_JIT
+// Loads the object a field holds when the code runs. A moving collection
+// updates the field, while an address written into the code would go stale.
+inline void genLoadHeldObject(CppiaCompiler *compiler, const JitVal &inDest, hx::Object **inHolder)
+{
+   compiler->move( sJitTemp0, JitVal( (void *)inHolder ) );
+   compiler->move( inDest, sJitTemp0.star(jtPointer,0) );
+}
+#endif
+
 template<typename T>
 struct ExprTypeIsBool { enum { value = false }; };
 template<> struct ExprTypeIsBool<bool> { enum { value = true }; };
