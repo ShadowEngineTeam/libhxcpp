@@ -2182,24 +2182,32 @@ void MarkObjectAllocUnchecked(hx::Object *inPtr,hx::MarkContext *__inCtx)
 
 
       int size = flags & 0xffff;
-      int start = (int)(ptr_i & IMMIX_BLOCK_OFFSET_MASK);
-      int startRow = start>>IMMIX_LINE_BITS;
-      int blockId = *(BlockIdType *)(ptr_i & IMMIX_BLOCK_BASE_MASK);
-      BlockDataInfo *info = (*gBlockInfo)[blockId];
+      if (size)
+      {
+         int start = (int)(ptr_i & IMMIX_BLOCK_OFFSET_MASK);
+         int startRow = start>>IMMIX_LINE_BITS;
+         int blockId = *(BlockIdType *)(ptr_i & IMMIX_BLOCK_BASE_MASK);
+         BlockDataInfo *info = (*gBlockInfo)[blockId];
 
-      int endRow = (start + size + sizeof(int) + IMMIX_LINE_LEN-1)>>IMMIX_LINE_BITS;
-      *(unsigned int *)ptr_i = flags = (flags & IMMIX_HEADER_PRESERVE) |
-                                       (endRow -startRow) |
-                                       (size<<IMMIX_ALLOC_SIZE_SHIFT) |
-                                       gMarkID;
+         int endRow = (start + size + sizeof(int) + IMMIX_LINE_LEN-1)>>IMMIX_LINE_BITS;
+         *(unsigned int *)ptr_i = flags = (flags & IMMIX_HEADER_PRESERVE) |
+                                          (endRow -startRow) |
+                                          (size<<IMMIX_ALLOC_SIZE_SHIFT) |
+                                          gMarkID;
 
-      unsigned int *pos = info->allocStart + startRow;
-      unsigned int val = *pos;
-      while(_hx_atomic_compare_exchange( (volatile int *)pos, val, val|gImmixStartFlag[start&127]) != val)
-         val = *pos;
-      #ifdef HXCPP_GC_GENERATIONAL
-      info->mHasSurvivor = true;
-      #endif
+         unsigned int *pos = info->allocStart + startRow;
+         unsigned int val = *pos;
+         while(_hx_atomic_compare_exchange( (volatile int *)pos, val, val|gImmixStartFlag[start&127]) != val)
+            val = *pos;
+         #ifdef HXCPP_GC_GENERATIONAL
+         info->mHasSurvivor = true;
+         #endif
+      }
+      else
+      {
+         // Large nursery object
+         ((unsigned char *)inPtr)[HX_ENDIAN_MARK_ID_BYTE] = gByteMarkID;
+      }
    }
    else
    #endif
@@ -2280,6 +2288,11 @@ void MarkObjectAllocUnchecked(hx::Object *inPtr,hx::MarkContext *__inCtx)
       }
 
    // MARK_ROWS_UNCHECKED_END
+   }
+   else if (flags & IMMIX_ALLOC_IS_CONTAINER)
+   {
+      // Large objects have no rows, but their members still need marking
+      __inCtx->pushObj(inPtr);
    }
 }
 
@@ -3315,7 +3328,7 @@ public:
       }
    }
 
-   void *AllocLarge(size_t inSize, bool inClear)
+   void *AllocLarge(size_t inSize, bool inClear, bool inContainer=false)
    {
       if (hx::gPauseForCollect)
          __hxcpp_gc_safe_point();
@@ -3401,9 +3414,9 @@ public:
 
       result[0] = static_cast<unsigned int>(inSize);
       #ifdef HXCPP_GC_NURSERY
-      result[1] = 0;
+      result[1] = inContainer ? IMMIX_ALLOC_IS_CONTAINER : 0;
       #else
-      result[1] = hx::gMarkID;
+      result[1] = hx::gMarkID | (inContainer ? IMMIX_ALLOC_IS_CONTAINER : 0);
       #endif
 
       if (do_lock && !isLocked)
@@ -6740,7 +6753,7 @@ void *InternalNew(size_t inSize,bool inIsObject)
 
    if (inSize>=IMMIX_LARGE_OBJ_SIZE)
    {
-      void* result{ sGlobalAlloc->AllocLarge(inSize, true) };
+      void* result{ sGlobalAlloc->AllocLarge(inSize, true, inIsObject) };
       return result;
    }
    else

@@ -301,6 +301,8 @@ namespace hx
 
 // The size info is stored in the header 8 bits to the right
 #define IMMIX_ALLOC_SIZE_SHIFT  6
+// The largest object a block header can describe; bigger ones are large allocations
+#define IMMIX_MAX_BLOCK_OBJECT_SIZE 16380
 
 // Indicates that __Mark must be called recursively
 #define IMMIX_ALLOC_IS_CONTAINER   0x00800000
@@ -371,6 +373,9 @@ public:
    // These allocate the function using the garbage-collected malloc
    inline static void *alloc(ImmixAllocator *alloc, size_t inSize, bool inContainer, const char *inName )
    {
+      if (inSize > IMMIX_MAX_BLOCK_OBJECT_SIZE)
+         return InternalNew(inSize, inContainer);
+
       #ifdef HXCPP_GC_NURSERY
 
          #ifdef HXCPP_ALIGN_ALLOC

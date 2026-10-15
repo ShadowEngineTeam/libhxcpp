@@ -242,6 +242,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * The GC returns fully empty block groups to the system without HXCPP_GC_MOVING too, after a full collection that leaves much more memory than it needs and on Gc.compact
 * Fixed Int -2147483648 % -1 crashing the process; it gives 0, as on the other targets
 * Fixed a thread polling Mutex.tryAcquire, Condition.tryAcquire, Semaphore.tryAcquire(0) or Lock.wait(0) without allocating deadlocking the process when another thread started a collection
+* Fixed the members of large container objects (4000 bytes or more, such as cppia classes with many fields) never being marked, so they were freed while still referenced; with the generational GC marking one also corrupted block metadata
 * Added the libhxcpp define: a build that uses the library gets -D libhxcpp=<version>. Compare it with version("x.y.z"); a plain string comparison compares text
 * Added separate Linux ARMv7 and ARM64 build architectures (hxcpp #1355)
 * Fixed AndroidCompat.cpp closing its extern "C" section in the wrong place (hxcpp #1404)
