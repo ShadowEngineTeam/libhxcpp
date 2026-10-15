@@ -17,7 +17,7 @@ namespace hx
 	{
 		class ThreadImpl_obj final : public Thread_obj
 		{
-			int cursor;
+			int cursor = 0;
 			Array<uint8_t> scratch;
 			Array<Dynamic> slots;
 
@@ -33,8 +33,8 @@ namespace hx
 				Native(Thread_obj::CreateFunction _job, ThreadImpl _thread, CountingSemaphore _semaphore);
 			};
 
-			Native* native;
 			const int id;
+			Native* native;
 
 			ThreadImpl_obj(const int _id);
 			ThreadImpl_obj(const int _id, Thread_obj::CreateFunction _run, CountingSemaphore _semaphore);
