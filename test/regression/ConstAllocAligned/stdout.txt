@@ -1,0 +1,2 @@
+class aligned true
+boxed char aligned true

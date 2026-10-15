@@ -2942,7 +2942,8 @@ bool IsConstAlloc(const void *inData)
 void *InternalCreateConstBuffer(const void *inData, size_t inSize, bool inAddStringHash)
 {
    bool addHash{ inAddStringHash && inSize > 0 };
-   unsigned int* result{ static_cast<unsigned int*>(HxAlloc(inSize + sizeof(int) + (addHash ? sizeof(int) : 0))) };
+   // Two words before the data keep it 8-byte aligned, like the GC heap
+   unsigned int* result{ static_cast<unsigned int*>(HxAlloc(inSize + 2 * sizeof(int))) };
 
    if (addHash)
    {
@@ -2956,6 +2957,7 @@ void *InternalCreateConstBuffer(const void *inData, size_t inSize, bool inAddStr
    }
    else
    {
+      *result++ = 0;
       *result++ = HX_GC_CONST_ALLOC_BIT;
    }
 
