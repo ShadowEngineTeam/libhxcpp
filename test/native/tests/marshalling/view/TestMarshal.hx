@@ -123,9 +123,11 @@ class TestMarshal extends Test {
 		Assert.raises(() -> Marshal.asWideCharView(null));
 	}
 
+	#if !disable_unicode_strings
 	function test_asCharView_wrong_encoding() {
 		Assert.raises(() -> Marshal.asCharView("😂"));
 	}
+	#end
 
 	function test_asWideCharView_wrong_encoding() {
 		Assert.raises(() -> Marshal.asWideCharView("hello"));
@@ -137,9 +139,11 @@ class TestMarshal extends Test {
 		Assert.equals(5i64, view.length);
 	}
 
+	#if !disable_unicode_strings
 	function test_asWideCharView() {
 		final view = "😂".asWideCharView();
-		
+
 		Assert.equals(2i64, view.length);
 	}
+	#end
 }

@@ -225,6 +225,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed DEFINE_PRIM_MULT exporting nothing with HXCPP_JS_PRIME (Emscripten): primitives with more than five arguments are exported and take their arguments as a JavaScript array
 * Fixed a jitted cppia exception thrown back to native code returning null, and every later jitted call returning null with it
 * Fixed CallStack.exceptionStack() for cppia: script throws are recorded, and a catch under the JIT stops adding frames to the stack
+* Fixed cpp.encoding.Ascii without smart strings taking any string as ASCII: isEncoded checks the bytes and encode rejects non-ASCII text
 * Added the libhxcpp define: a build that uses the library gets -D libhxcpp=<version>. Compare it with version("x.y.z"); a plain string comparison compares text
 * Added separate Linux ARMv7 and ARM64 build architectures (hxcpp #1355)
 * Fixed AndroidCompat.cpp closing its extern "C" section in the wrong place (hxcpp #1404)

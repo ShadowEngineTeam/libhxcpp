@@ -12,7 +12,19 @@ bool cpp::encoding::Ascii::isEncoded(const String& string)
         hx::NullReference("String", false);
     }
 
+#if defined(HX_SMART_STRINGS)
     return string.isAsciiEncoded();
+#else
+    for (auto i = 0; i < string.length; i++)
+    {
+        if (static_cast<unsigned char>(string.raw_ptr()[i]) > 127)
+        {
+            return false;
+        }
+    }
+
+    return true;
+#endif
 }
 
 int64_t cpp::encoding::Ascii::encode(const String& string, View<uint8_t> buffer)
@@ -22,7 +34,7 @@ int64_t cpp::encoding::Ascii::encode(const String& string, View<uint8_t> buffer)
         hx::NullReference("String", false);
     }
 
-    if (string.isUTF16Encoded())
+    if (!isEncoded(string))
     {
         hx::Throw(HX_CSTRING("String cannot be encoded to ASCII"));
     }
