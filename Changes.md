@@ -173,6 +173,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed Date where time_t is 32 bits (32-bit Linux and Android): new Date(...) after 2038 or before 1902 gave 1969-12-31 23:59:59, and such a time read back wrapped round. Those dates are converted by calendar arithmetic, with the zone's offset taken 28 years closer, where the calendar repeats
 
 * Fixed Sys.print and Sys.println of a null value printing (null), or crashing where the compiler turns the printf into puts(NULL); they print null (hxcpp #964)
+* Fixed HXCPP_GC_VERIFY reporting an unmarked row with the generational collector: its verification mark advanced the mark id a second time each collection, so dead objects' stale entries could match the current mark before they were cleared (hxcpp #1415)
 * Added the libhxcpp define: a build that uses the library gets -D libhxcpp=<version>. Compare it with version("x.y.z"); a plain string comparison compares text
 * Added separate Linux ARMv7 and ARM64 build architectures (hxcpp #1355)
 * Fixed AndroidCompat.cpp closing its extern "C" section in the wrong place (hxcpp #1404)

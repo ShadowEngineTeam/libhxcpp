@@ -42,6 +42,9 @@ jobs:
           - variant: ' (moving gc)'
             flags: --debug -D HXCPP_GC_DEBUG_ALWAYS_MOVE
             bin: TestMain-debug
+          - variant: ' (gc verify)'
+            flags: -D HXCPP_GC_VERIFY
+            bin: TestMain
     runs-on: ${{ inputs.os }}
     name: '${{ inputs.label }}: runtime${{ matrix.variant }}'
     defaults:
