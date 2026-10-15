@@ -371,9 +371,9 @@ public:
 
    inline void EnsureSize(int inLen) const
    {
-      if (inLen>length)
+      if ((unsigned int)inLen>(unsigned int)length)
       {
-         if (inLen>mAlloc)
+         if (inLen<0 || inLen>mAlloc)
             Realloc(inLen);
          length = inLen;
       }

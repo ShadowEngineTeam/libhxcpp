@@ -118,8 +118,14 @@ Array<Dynamic> ArrayBase::__new(int inSize,int inReserve)
 
 ArrayBase::ArrayBase(int inSize,int inReserve,int inElementSize,bool inAtomic)
 {
-   length = inSize;
    int alloc = inSize < inReserve ? inReserve : inSize;
+   if ((unsigned int)alloc > 0x7fffffffU/inElementSize)
+   {
+      mBase = 0;
+      mAlloc = length = 0;
+      hx::Throw( HX_CSTRING("Array allocation too large") );
+   }
+   length = inSize;
    if (alloc)
    {
       mBase = (char *)hx::InternalNew(alloc * inElementSize,false);
@@ -178,6 +184,8 @@ void ArrayBase::reserve(int inSize) const
 void ArrayBase::Realloc(int inSize) const
 {
    // Try to detect "push" case vs resizing to big array size explicitly by looking at gap
+   if (inSize<0)
+      hx::Throw( HX_CSTRING("Array allocation too large") );
    bool pushCase = (inSize<=mAlloc + 16);
    if (!pushCase)
    {
@@ -275,7 +283,7 @@ void ArrayBase::Blit(int inDestElement, ArrayBase *inSourceArray, int inSourceEl
    int srcSize = inSourceArray->GetElementSize();
    int srcElems = inSourceArray->length;
    if (inDestElement<0 || inSourceElement<0 || inElementCount<0 ||
-        inElementCount > srcElems-inSourceElement)
+        inElementCount > srcElems-inSourceElement || inElementCount > 0x7fffffff-inDestElement)
       hx::Throw( HX_CSTRING("blit out of bounds") );
    if (srcSize!=GetElementSize())
       hx::Throw( HX_CSTRING("blit array mismatch") );
@@ -284,9 +292,9 @@ void ArrayBase::Blit(int inDestElement, ArrayBase *inSourceArray, int inSourceEl
    if (newSize>length)
       resize(newSize);
 
-   const char *src = inSourceArray->mBase + inSourceElement*srcSize;
-   char *dest = mBase + inDestElement*srcSize;
-   int len = inElementCount*srcSize;
+   const char *src = inSourceArray->mBase + (size_t)inSourceElement*srcSize;
+   char *dest = mBase + (size_t)inDestElement*srcSize;
+   size_t len = (size_t)inElementCount*srcSize;
    if (src+len < dest || dest+len<src)
       memcpy(dest,src,len);
    else
@@ -330,6 +338,8 @@ void ArrayBase::__SetSizeExact(int inSize)
    else if (inSize!=length || inSize!=mAlloc)
    {
       int elemSize = GetElementSize();
+      if ((unsigned int)inSize > 0x7fffffffU/elemSize)
+         hx::Throw( HX_CSTRING("Array allocation too large") );
       int bytes = inSize * elemSize;
       if (mBase)
       {
@@ -480,28 +490,31 @@ String ArrayBase::joinArray(Array_obj<String> *inArray, String inSeparator)
    if (length==0)
       return HX_CSTRING("");
 
-   int len = 0;
+   long long total = 0;
    bool isWChar = false;
    for(int i=0;i<length;i++)
    {
       String strI = inArray->__unsafe_get(i);
       if (strI.raw_ptr())
       {
-         len += strI.length;
+         total += strI.length;
          #ifdef HX_SMART_STRINGS
          if (strI.isUTF16Encoded())
             isWChar = true;
          #endif
       }
       else
-         len += 4;
+         total += 4;
    }
 
-   len += (length-1) * inSeparator.length;
+   total += (long long)(length-1) * inSeparator.length;
    #ifdef HX_SMART_STRINGS
    bool sepIsWide = inSeparator.isUTF16Encoded();
    if (isWChar || sepIsWide)
    {
+      if (total > (0x7fffffff-8)/2)
+         hx::Throw( HX_CSTRING("String too long") );
+      int len = (int)total;
       char16_t *buf = String::allocChar16Ptr(len);
       int pos = 0;
       bool separated = inSeparator.length>0;
@@ -552,6 +565,9 @@ String ArrayBase::joinArray(Array_obj<String> *inArray, String inSeparator)
    }
    #endif
    {
+      if (total > 0x7fffffff-8)
+         hx::Throw( HX_CSTRING("String too long") );
+      int len = (int)total;
       char *buf = hx::NewString(len);
 
       int pos = 0;
