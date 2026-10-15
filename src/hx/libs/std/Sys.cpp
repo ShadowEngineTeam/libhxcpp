@@ -141,7 +141,7 @@ void _hx_std_put_env( String e, String v )
 #ifdef HX_WINRT
    // Do nothing
 #elif defined(NEKO_WINDOWS)
-   String set = e + HX_CSTRING("=") + (v != null()?v:"");
+   String set = e + HX_CSTRING("=") + (v != null()?v:HX_CSTRING(""));
 
    // Convert before taking the lock - conversion can allocate, and an
    // allocation must not happen under it (see _hx_std_get_env)

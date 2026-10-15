@@ -45,6 +45,9 @@ jobs:
           - variant: ' (gc verify)'
             flags: -D HXCPP_GC_VERIFY
             bin: TestMain
+          - variant: ' (c++20)'
+            flags: -D HXCPP_CXX_STANDARD=20
+            bin: TestMain
     runs-on: ${{ inputs.os }}
     name: '${{ inputs.label }}: runtime${{ matrix.variant }}'
     defaults:
