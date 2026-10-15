@@ -358,7 +358,7 @@ class Compiler
       catch(e:Dynamic) { }
    }
 
-   public function compile(inFile:File,inTid:Int,headerFunc:Void->Void,pchTimeStamp:Null<Float>)
+   public function compile(inFile:File,inTid:Int,headerFunc:Void->Void,pchTimeStamp:Null<Float>,inProgress:Progress)
    {
       var obj_name = getObjName(inFile);
       var args = getArgs(inFile);
@@ -460,7 +460,7 @@ class Compiler
             {
                if (!Log.verbose)
                {
-                  Log.info(fileName);
+                  Log.info(" " + inProgress.label() + fileName);
                }
                var err = ProcessManager.runProcessThreaded(exe, args, null);
                cleanTmp(tmpFile);
@@ -470,13 +470,15 @@ class Compiler
                      FileSystem.deleteFile(obj_name);
                   BuildTool.setThreadError(err);
                }
+               else
+                  inProgress.fileDone();
             }
          }
          else
          {
             if (!Log.verbose)
             {
-               Log.info(fileName);
+               Log.info(" " + inProgress.label() + fileName);
             }
             var result = ProcessManager.runProcessThreaded(exe, args, null);
             cleanTmp(tmpFile);
@@ -487,6 +489,7 @@ class Compiler
                Tools.exit (result);
                //throw "Error : " + result + " - build cancelled";
             }
+            inProgress.fileDone();
          }
 
          if (cacheName!=null && !useCacheInPlace)
