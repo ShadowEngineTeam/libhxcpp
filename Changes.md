@@ -299,6 +299,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed calling a cppia function with too many arguments killing the process; it throws a catchable error
 * Fixed malformed .cppia files crashing the host; bad counts, lengths, type ids and string ids throw a load error
 * Fixed cppia functions with an untyped return reading an uninitialised return type
+* Fixed the cppia interpreter giving charCodeAt's character instead of its code in a string or Float context: "c" + s.charCodeAt(1) was "ce" and var f:Float = s.charCodeAt(1) was 0
 
 ### CFFI, ndlls, the debugger and telemetry
 

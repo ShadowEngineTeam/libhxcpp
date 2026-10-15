@@ -178,11 +178,21 @@ struct CharAtExpr : public StringExpr
 
    String runString(CppiaCtx *ctx) HXCPP_OVERRIDE
    {
+      if (CODE)
+      {
+         hx::Object *code = runObject(ctx);
+         BCR_CHECK;
+         return code ? code->toString() : String();
+      }
       String val = strVal->runString(ctx);
       BCR_CHECK;
       int idx = a0->runInt(ctx);
       BCR_CHECK;
       return val.charAt(idx);
+   }
+   Float runFloat(CppiaCtx *ctx) HXCPP_OVERRIDE
+   {
+      return runInt(ctx);
    }
    int runInt(CppiaCtx *ctx) HXCPP_OVERRIDE
    {
