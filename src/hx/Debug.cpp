@@ -64,7 +64,7 @@ static Dynamic sCriticalErrorHandler;
 
 static void setStaticHandler(Dynamic &inStore, Dynamic inValue)
 {
-   if ( inStore==null() != inValue==null())
+   if ( (inStore==null()) != (inValue==null()) )
    {
       if ( inValue!=null() )
          GCAddRoot(&inStore.mPtr);
