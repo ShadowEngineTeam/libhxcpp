@@ -59,6 +59,44 @@ jobs:
     - run: clang++ -arch arm64 -std=c++11 -c -DHX_MACOS -DHXCPP_M64 -Iinclude src/hx/gc/GcRegCapture.cpp -o capture.o
       name: Compile the register capture
 
+  check-android:
+    name: Build for Android (${{ matrix.abi }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - abi: arm64-v8a
+            flag: HXCPP_ARM64
+          - abi: armeabi-v7a
+            flag: HXCPP_ARMV7
+          - abi: x86_64
+            flag: HXCPP_X86_64
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@v4
+
+    - name: setup
+      uses: ./.github/workflows/setup
+      with:
+        haxe: 4.3.7
+
+    - name: Use the runner's NDK
+      run: echo "ANDROID_NDK_ROOT=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
+
+    # Built and not run, which would need a device or an emulator
+    - name: Build the runtime tests
+      working-directory: test/haxe
+      run: haxe compile.hxml -D android -D ${{ matrix.flag }}
+
+    - name: Build the native tests
+      working-directory: test/native
+      run: haxe compile.hxml -D android -D ${{ matrix.flag }}
+
+    - name: Build the std tests
+      working-directory: test/std
+      run: haxe -m Test -L hx4compat -L utest --cpp android -D android -D exe_link -D ${{ matrix.flag }}
+
   check-apple-ssl:
     name: Check SSL for iOS and tvOS
     runs-on: macos-latest
