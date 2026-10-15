@@ -507,7 +507,8 @@ inline void MarkAlloc(void *inPtr ,hx::MarkContext *__inCtx)
 {
    #ifdef __EMSCRIPTEN__
    // Unaligned must be constants...
-   if ( !( ((size_t)inPtr) & 3) )
+   if ( ((size_t)inPtr) & 3 )
+      return;
    #endif
    // This will also skip const regions
    unsigned int header;
