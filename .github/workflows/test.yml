@@ -22,9 +22,6 @@ on:
       os:
         required: true
         type: string
-      label:
-        required: true
-        type: string
       # full: every job; smoke: the core job only
       scope:
         required: false
@@ -49,7 +46,7 @@ env:
 jobs:
   core:
     runs-on: ${{ inputs.os }}
-    name: '${{ inputs.label }}: core'
+    name: core
     timeout-minutes: 90
     defaults:
       run:
@@ -214,7 +211,7 @@ jobs:
   gc:
     if: inputs.scope == 'full'
     runs-on: ${{ inputs.os }}
-    name: '${{ inputs.label }}: gc and telemetry'
+    name: gc and telemetry
     timeout-minutes: 90
     defaults:
       run:
@@ -271,7 +268,7 @@ jobs:
       matrix:
         group: ${{ fromJSON(inputs.stress) }}
     runs-on: ${{ inputs.os }}
-    name: '${{ inputs.label }}: gc stress (${{ matrix.group }})'
+    name: gc stress
     timeout-minutes: 90
     steps:
       - name: checkout
@@ -309,7 +306,7 @@ jobs:
   cppia:
     if: inputs.scope == 'full'
     runs-on: ${{ inputs.os }}
-    name: '${{ inputs.label }}: cppia and haxe sys, threads'
+    name: cppia and haxe sys, threads
     timeout-minutes: 90
     defaults:
       run:
@@ -379,7 +376,7 @@ jobs:
   unit:
     if: inputs.scope == 'full'
     runs-on: ${{ inputs.os }}
-    name: '${{ inputs.label }}: haxe unit'
+    name: haxe unit
     timeout-minutes: 90
     defaults:
       run:
