@@ -9,6 +9,15 @@
 #include "CppiaStream.h"
 #include <stdlib.h>
 
+void __hx_stack_set_last_exception();
+
+#if defined(CPPIA_JIT) && defined(HXCPP_STACK_TRACE)
+static void SLJIT_CALL jitSetLastException()
+{
+   __hx_stack_set_last_exception();
+}
+#endif
+
 
 // Really microsoft?
 #ifdef interface
@@ -871,6 +880,7 @@ void SLJIT_CALL callDynamic(CppiaCtx *ctx, hx::Object *inFunction, int inArgs)
    if (!inFunction)
    {
       ctx->exception = Dynamic(HX_CSTRING("Null Function")).mPtr;
+      __hx_stack_set_last_exception();
       return;
    }
    // ctx.frame points to 0th arg
@@ -1286,6 +1296,7 @@ struct CastExpr : public CppiaDynamicExpr
       if (!obj || !typeData->isClassOf(obj) )
       {
          CppiaCtx::getCurrent()->exception = HX_INVALID_CAST.mPtr;
+         __hx_stack_set_last_exception();
          return 0;
       }
 
@@ -1997,6 +2008,9 @@ void genNullReferenceExceptionCheck(CppiaCompiler *compiler, const JitVal &reg)
 
    JumpId nonNull = compiler->compare(cmpP_NOT_EQUAL, reg.as(jtPointer), (void *)0);
    compiler->move( sJitCtx.star(jtPointer, offsetof(hx::StackContext,exception)), (void *)nullException );
+   #ifdef HXCPP_STACK_TRACE
+   compiler->callNative( (void *)jitSetLastException );
+   #endif
    compiler->addThrow();
    compiler->comeFrom(nonNull);
    #endif
@@ -6597,8 +6611,10 @@ struct TryExpr : public CppiaVoidExpr
    #ifdef CPPIA_JIT
    static int SLJIT_CALL isExceptionCatch(hx::Object *exception, TypeData *inType)
    {
-      // TODO - HX_STACK_BEGIN_CATCH
-      return inType->isClassOf(exception);
+      if (!inType->isClassOf(exception))
+         return 0;
+      HX_STACK_BEGIN_CATCH
+      return 1;
    }
 
    void genCode(CppiaCompiler *compiler, const JitVal &inDest, ExprType destType) HXCPP_OVERRIDE
@@ -7087,13 +7103,15 @@ struct ThrowExpr : public CppiaVoidExpr
    }
    void runVoid(CppiaCtx *ctx) HXCPP_OVERRIDE
    {
-      // HX_STACK_DO_THROW ?
-      throw Dynamic( value->runObject(ctx) );
+      HX_STACK_DO_THROW( Dynamic(value->runObject(ctx)) );
    }
    #ifdef CPPIA_JIT
    void genCode(CppiaCompiler *compiler, const JitVal &inDest, ExprType destType) HXCPP_OVERRIDE
    {
       value->genCode(compiler, sJitCtx.star(jtPointer, offsetof(hx::StackContext,exception)), etObject);
+      #ifdef HXCPP_STACK_TRACE
+      compiler->callNative( (void *)jitSetLastException );
+      #endif
       compiler->addThrow();
    }
    #endif
