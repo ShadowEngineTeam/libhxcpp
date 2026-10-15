@@ -288,10 +288,14 @@ bool _hx_std_set_cwd( String d )
 {
    #if !defined(HX_WINRT) && !defined(EPPC)
 #ifdef NEKO_WINDOWS
-   return SetCurrentDirectoryW(d.wchar_str()) == 0;
+   // _wchdir also updates the drive's =X: variable, as the CRT and the other targets do
+   bool ok = _wchdir(d.wchar_str()) == 0;
 #else
-   return chdir(d.utf8_str()) == 0;
+   bool ok = chdir(d.utf8_str()) == 0;
 #endif
+   if (!ok)
+      hx::Throw(HX_CSTRING("Could not set the current directory to ") + d);
+   return true;
    #else
    return false;
    #endif
