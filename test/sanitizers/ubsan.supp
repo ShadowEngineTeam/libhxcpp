@@ -1,0 +1,6 @@
+# cppia frames hold values at 4-byte offsets until openfl/libhxcpp#157
+alignment:*/src/hx/cppia/*
+alignment:*/include/hx/Scriptable.h
+alignment:*/include/hx/StackContext.h
+alignment:*/include/hxString.h
+alignment:*/src/String.cpp

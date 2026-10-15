@@ -126,6 +126,40 @@ jobs:
     - name: Build and run the regression tests on Alpine
       run: docker run --rm -v "$PWD:/w" -w /w alpine:edge sh -c "apk add --no-cache neko g++ linux-headers && sh test/regression/run-generated.sh"
 
+  # The regression suite under UBSan and ASan. A sanitizer report fails its
+  # test; the reports go to files because the runner only shows stdout.
+  check-sanitizers:
+    name: Check with ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - name: UBSan
+          sanitize: undefined
+        - name: ASan
+          sanitize: address
+    runs-on: ubuntu-latest
+    env:
+      UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1:suppressions=${{ github.workspace }}/test/sanitizers/ubsan.supp:log_path=/tmp/sanitizer/report
+      # The conservative GC cannot see locals moved to a fake stack
+      ASAN_OPTIONS: detect_leaks=0:detect_stack_use_after_return=0:log_path=/tmp/sanitizer/report
+    steps:
+    - name: checkout
+      uses: actions/checkout@v7
+
+    - name: setup
+      uses: ./.github/workflows/setup
+      with:
+        haxe: 4.3.7
+
+    - name: Run the regression tests
+      working-directory: test/regression
+      run: haxe --run Run -D HXCPP_M64 -D HXCPP_SANITIZE=${{ matrix.sanitize }}
+
+    - name: Show the sanitizer reports
+      if: ${{ !cancelled() }}
+      run: cat /tmp/sanitizer/report.* 2>/dev/null || echo "No sanitizer reports"
+
   check-haxelib:
     name: Check installing with haxelib
     strategy:
