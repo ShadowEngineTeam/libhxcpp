@@ -105,6 +105,8 @@ struct vprocess : public hx::Object
    int eread;
    int iwrite;
    int pid;
+   bool reaped;
+   int exitStatus;
    #define HANDLE_INIT -1
 #endif
 
@@ -114,6 +116,10 @@ struct vprocess : public hx::Object
       oread = HANDLE_INIT;
       eread = HANDLE_INIT;
       iwrite = HANDLE_INIT;
+      #ifndef NEKO_WINDOWS
+      reaped = false;
+      exitStatus = 0;
+      #endif
       _hx_set_finalizer(this, finalize);
    }
 
@@ -143,7 +149,7 @@ struct vprocess : public hx::Object
             // Reap if the child already exited - a process the user never
             // calls exitCode() on otherwise stays a zombie until the host
             // exits (a still-running child is left for the OS to reparent)
-            if (pid > 0)
+            if (pid > 0 && !reaped)
                waitpid(pid, 0, WNOHANG);
             pid = -1;
          #endif
@@ -664,6 +670,23 @@ void _hx_std_process_stdin_close( Dynamic handle )
    p->iwrite = HANDLE_INIT;
 }
 
+#ifndef NEKO_WINDOWS
+// Once reaped, the pid may belong to another process, so the status is kept
+static int reapStatus(vprocess *p, int inStatus)
+{
+   p->reaped = true;
+   if( WIFEXITED(inStatus) )
+      p->exitStatus = WEXITSTATUS(inStatus);
+   else if( WIFSIGNALED(inStatus) )
+      // Shell convention - a crashed or killed child must not read as a
+      // clean exit 0
+      p->exitStatus = 128 + WTERMSIG(inStatus);
+   else
+      p->exitStatus = 0;
+   return p->exitStatus;
+}
+#endif
+
 /**
    process_exit : 'process -> int
    <doc>
@@ -674,6 +697,10 @@ void _hx_std_process_stdin_close( Dynamic handle )
 Dynamic _hx_std_process_exit( Dynamic handle, bool block )
 {
    vprocess *p = getOpenProcess(handle);
+   #ifndef NEKO_WINDOWS
+   if (p->reaped)
+      return p->exitStatus;
+   #endif
 
    hx::EnterGCFreeZone();
    #ifdef NEKO_WINDOWS
@@ -719,19 +746,17 @@ Dynamic _hx_std_process_exit( Dynamic handle, bool block )
       return 0;
    }
    hx::ExitGCFreeZone();
-   if( WIFEXITED(rval) )
-      return WEXITSTATUS(rval);
-   if( WIFSIGNALED(rval) )
-      // Shell convention - a crashed or killed child must not read as a
-      // clean exit 0
-      return 128 + WTERMSIG(rval);
-   return 0;
+   return reapStatus(p, rval);
    #endif
 }
 #else
 int _hx_std_process_exit( Dynamic handle )
 {
    vprocess *p = getOpenProcess(handle);
+   #ifndef NEKO_WINDOWS
+   if (p->reaped)
+      return p->exitStatus;
+   #endif
 
    hx::EnterGCFreeZone();
    #ifdef NEKO_WINDOWS
@@ -755,11 +780,7 @@ int _hx_std_process_exit( Dynamic handle )
       return 0;
    }
    hx::ExitGCFreeZone();
-   if( WIFEXITED(rval) )
-      return WEXITSTATUS(rval);
-   if( WIFSIGNALED(rval) )
-      return 128 + WTERMSIG(rval);
-   return 0;
+   return reapStatus(p, rval);
    #endif
 }
 #endif
@@ -790,7 +811,8 @@ void _hx_std_process_kill( Dynamic handle )
    #ifdef NEKO_WINDOWS
    TerminateProcess(p->pinf.hProcess, -1);
    #else
-   kill(p->pid, SIGTERM);
+   if (!p->reaped)
+      kill(p->pid, SIGTERM);
    #endif
 }
 
