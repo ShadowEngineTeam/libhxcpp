@@ -908,6 +908,23 @@ int __hxcpp_parse_substr_int(const String &inString,int start, int length)
 }
 
 
+// strtod also reads inf, nan and hex, which parseFloat does not. "Infinity"
+// is read, as JavaScript does, so Std.string of an infinity reads back.
+static double hxParseFloatChars(const char *str)
+{
+   while (isspace((unsigned char)*str)) ++str;
+   const char *digits = str;
+   bool neg = *digits=='-';
+   if (*digits=='+' || *digits=='-') ++digits;
+   if (!strncmp(digits,"Infinity",8))
+      return neg ? -Math_obj::POSITIVE_INFINITY : Math_obj::POSITIVE_INFINITY;
+   if (digits[0]=='0' && (digits[1]=='x' || digits[1]=='X'))
+      return neg ? -0.0 : 0.0;
+   if (!isdigit((unsigned char)*digits) && !(*digits=='.' && isdigit((unsigned char)digits[1])))
+      return Math_obj::NaN;
+   return hxStrtodC(str,0);
+}
+
 double __hxcpp_parse_substr_float(const String &inString,int start, int length)
 {
    if (start<0 || start>=inString.length || length<1 || length>inString.length-start)
@@ -915,13 +932,7 @@ double __hxcpp_parse_substr_float(const String &inString,int start, int length)
 
    hx::strbuf buf;
    const char *str = inString.ascii_substr(&buf,start,length);
-   char *end = (char *)str;
-   double result = str ? hxStrtodC(str,&end) : 0;
-
-   if (end==str)
-      return Math_obj::NaN;
-
-   return result;
+   return str ? hxParseFloatChars(str) : Math_obj::NaN;
 }
 
 
@@ -932,13 +943,7 @@ double __hxcpp_parse_float(const String &inString)
 
    hx::strbuf buf;
    const char *str = inString.utf8_str(&buf);
-   char *end = (char *)str;
-   double result = str ? hxStrtodC(str,&end) : 0;
-
-   if (end==str)
-      return Math_obj::NaN;
-
-   return result;
+   return str ? hxParseFloatChars(str) : Math_obj::NaN;
 }
 
 
