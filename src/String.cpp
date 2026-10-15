@@ -230,48 +230,60 @@ static const unsigned char *getUtf8LenArray()
 }
 #endif
 
-static inline int DecodeAdvanceUTF8(const unsigned char * &ioPtr)
-{
-   int c = *ioPtr++;
-   if( c < 0x80 )
-   {
-      return c;
-   }
-   else if( c < 0xE0 )
-   {
-      return ((c & 0x3F) << 6) | ((*ioPtr++) & 0x7F);
-   }
-   else if( c < 0xF0 )
-   {
-      int c2 = *ioPtr++;
-      return  ((c & 0x1F) << 12) | ((c2 & 0x7F) << 6) | ( (*ioPtr++) & 0x7F);
-   }
-
-   int c2 = *ioPtr++;
-   int c3 = *ioPtr++;
-   return ((c & 0x0F) << 18) | ((c2 & 0x7F) << 12) | ((c3 & 0x7F) << 6) | ((*ioPtr++) & 0x7F);
-}
-
+// Each maximal invalid subsequence (stray or missing continuation bytes,
+// overlong forms, surrogates, values above U+10FFFF) becomes one U+FFFD.
+// Without an end, decoding stops at the NUL terminator, which is never a
+// continuation byte.
 static inline int DecodeAdvanceUTF8(const unsigned char * &ioPtr,const unsigned char *end)
 {
-   int c = *ioPtr++;
-   if( c < 0x80 )
-   {
-      return c;
-   }
-   else if( c < 0xE0 )
-   {
-      return ((c & 0x3F) << 6) | (ioPtr < end ? (*ioPtr++) & 0x7F : 0);
-   }
-   else if( c < 0xF0 )
-   {
-      int c2 = ioPtr<end ? *ioPtr++ : 0;
-      return  ((c & 0x1F) << 12) | ((c2 & 0x7F) << 6) | ( ioPtr<end ? (*ioPtr++) & 0x7F : 0 );
-   }
+   int lead = *ioPtr++;
+   if( lead < 0x80 )
+      return lead;
 
-   int c2 = ioPtr<end ? *ioPtr++ : 0;
-   int c3 = ioPtr<end ? *ioPtr++ : 0;
-   return ((c & 0x0F) << 18) | ((c2 & 0x7F) << 12) | ((c3 & 0x7F) << 6) | ( ioPtr<end ? (*ioPtr++) & 0x7F : 0);
+   int code;
+   int more;
+   int lo = 0x80;
+   int hi = 0xBF;
+   if( lead >= 0xC2 && lead <= 0xDF )
+   {
+      code = lead & 0x1F;
+      more = 1;
+   }
+   else if( lead >= 0xE0 && lead <= 0xEF )
+   {
+      code = lead & 0x0F;
+      more = 2;
+      if (lead==0xE0) lo = 0xA0;
+      else if (lead==0xED) hi = 0x9F;
+   }
+   else if( lead >= 0xF0 && lead <= 0xF4 )
+   {
+      code = lead & 0x07;
+      more = 3;
+      if (lead==0xF0) lo = 0x90;
+      else if (lead==0xF4) hi = 0x8F;
+   }
+   else
+      return 0xFFFD;
+
+   while(more--)
+   {
+      if (end && ioPtr>=end)
+         return 0xFFFD;
+      int next = *ioPtr;
+      if (next<lo || next>hi)
+         return 0xFFFD;
+      ioPtr++;
+      code = (code<<6) | (next & 0x3F);
+      lo = 0x80;
+      hi = 0xBF;
+   }
+   return code;
+}
+
+static inline int DecodeAdvanceUTF8(const unsigned char * &ioPtr)
+{
+   return DecodeAdvanceUTF8(ioPtr, nullptr);
 }
 
 
