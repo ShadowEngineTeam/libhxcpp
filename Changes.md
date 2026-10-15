@@ -231,6 +231,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed the generational GC freeing a thread's slot and scratch arrays: a collection while the thread object was being constructed promoted it, and its arrays were then stored without the write barrier
 * Fixed a thread's scratch offset starting uninitialised, and a new thread being able to read its id before it was set
 * Fixed the critical error handler never being rooted, so a collection could free it before a critical error called it
+* Fixed more generational GC write-barrier gaps: dynamic iterators, enum parameters and strings, socket select results, file errors, MySQL field names, CFFI abstract toString, bound this pointers, and cppia dynamic members, call arguments, array conversion, JIT this-field updates and JIT enum construction
 * Added the libhxcpp define: a build that uses the library gets -D libhxcpp=<version>. Compare it with version("x.y.z"); a plain string comparison compares text
 * Added separate Linux ARMv7 and ARM64 build architectures (hxcpp #1355)
 * Fixed AndroidCompat.cpp closing its extern "C" section in the wrong place (hxcpp #1404)

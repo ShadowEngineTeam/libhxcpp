@@ -87,6 +87,14 @@ struct CppiaEnumConstructor
       return cpp::Variant::typeObject;
    }
 
+   #ifdef HXCPP_GC_GENERATIONAL
+   static hx::Object * SLJIT_CALL rememberIfPromoted(hx::Object *inEnum)
+   {
+      HX_OBJ_WB_NEW_MARKED_OBJECT(inEnum);
+      return inEnum;
+   }
+   #endif
+
    void genCode(CppiaCompiler *compiler, Expressions &inArgs, const JitVal &inDest, ExprType destType)
    {
       bool ok = args.size() && args.size()==inArgs.size();
@@ -122,6 +130,10 @@ struct CppiaEnumConstructor
 
          offset += sizeof(cpp::Variant);
       }
+
+      #ifdef HXCPP_GC_GENERATIONAL
+      compiler->callNative( (void *)rememberIfPromoted, result );
+      #endif
 
       if (destType==etObject)
          compiler->move(inDest, sJitReturnReg.as(jtPointer));
@@ -261,7 +273,7 @@ struct EnumField : public CppiaDynamicExpr
       Array<Dynamic> dynArgs = Array_obj<Dynamic>::__new(s,s);
       for(int a=0;a<s;a++)
       {
-         dynArgs[a] = args[a]->runObject(ctx);
+         dynArgs->__unsafe_set(a, Dynamic(args[a]->runObject(ctx)));
          BCR_CHECK;
       }
 

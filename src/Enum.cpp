@@ -44,7 +44,7 @@ DynamicArray EnumBase_obj::_hx_getParameters()
    Array<Dynamic> result = Array_obj<Dynamic>::__new(mFixedFields);
    cpp::Variant *fixed = _hx_getFixed();
    for(int i=0;i<mFixedFields;i++)
-      result[i] = fixed[i];
+      result->__unsafe_set(i, fixed[i]);
    return result;
 }
 
@@ -128,7 +128,7 @@ String EnumBase_obj::toString() {
    Array<String> args = Array_obj<String>::__new(mFixedFields);
    cpp::Variant *v = _hx_getFixed();
    for(int i=0;i<mFixedFields;i++)
-      args[i] = v[i].asString();
+      args->__unsafe_set(i, v[i].asString());
 
    return _hx_tag + HX_CSTRING("(") + args->join(HX_CSTRING(",")) + HX_CSTRING(")");
 }

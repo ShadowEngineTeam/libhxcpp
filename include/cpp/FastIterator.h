@@ -45,6 +45,7 @@ public:
    {
       mNext = inValue->__Field(HX_CSTRING("next"), HX_PROP_ALWAYS);
       mHasNext = inValue->__Field(HX_CSTRING("hasNext"), HX_PROP_ALWAYS);
+      HX_OBJ_WB_NEW_MARKED_OBJECT(this);
    }
 
    bool hasNext() { return mHasNext(); }

@@ -276,7 +276,7 @@ static hx::Object *convert(hx::Object *obj)
    int n = obj->__length();
    Array<T> result = Array_obj<T>::__new(n,n);
    for(int i=0;i<n;i++)
-      result[i] = obj->__GetItem(i);
+      result->__unsafe_set(i, obj->__GetItem(i));
    return result.mPtr;
 }
 
@@ -965,7 +965,7 @@ struct CallDynamicFunction : public CppiaExprWithValue
       Array<Dynamic> argVals = Array_obj<Dynamic>::__new(n, n);
       for (int a = 0; a < n; a++)
       {
-          argVals[a] = Dynamic(args[a]->runObject(ctx));
+          argVals->__unsafe_set(a, Dynamic(args[a]->runObject(ctx)));
           BCR_CHECK;
       }
       return value->__Run(argVals).mPtr;
@@ -1029,7 +1029,7 @@ struct CallDynamicFunction : public CppiaExprWithValue
       Array<Dynamic> argVals = Array_obj<Dynamic>::__new(n,n);
       for(int a=0;a<n;a++)
       {
-         argVals[a] = Dynamic( args[a]->runObject(ctx) );
+         argVals->__unsafe_set(a, Dynamic( args[a]->runObject(ctx) ));
          BCR_CHECK;
       }
       return value->__Run(argVals).mPtr;
@@ -1563,7 +1563,7 @@ struct NewExpr : public CppiaDynamicExpr
          int n = args.size();
          Array< Dynamic > argList = Array_obj<Dynamic>::__new(n,n);
          for(int a=0;a<n;a++)
-            argList[a].mPtr = args[a]->runObject(ctx);
+            argList->__unsafe_set(a, Dynamic(args[a]->runObject(ctx)));
 
           return constructor(argList).mPtr;
       }
@@ -3168,7 +3168,7 @@ struct Call : public CppiaDynamicExpr
       Array<Dynamic> argArray = Array_obj<Dynamic>::__new(size, size);
       for (int s = 0; s < size; s++)
       {
-          argArray[s] = args[s]->runObject(ctx);
+          argArray->__unsafe_set(s, Dynamic(args[s]->runObject(ctx)));
           BCR_CHECK;
       }
 
@@ -3236,7 +3236,7 @@ struct Call : public CppiaDynamicExpr
             Array<Dynamic> argArray = Array_obj<Dynamic>::__new(size,size);
             for(int s=0;s<size;s++)
             {
-               argArray[s] = args[s]->runObject(ctx);
+               argArray->__unsafe_set(s, Dynamic(args[s]->runObject(ctx)));
                BCR_CHECK;
             }
 
@@ -4062,6 +4062,12 @@ struct MemReferenceSetter : public CppiaExpr
                   JitTemp tmp(compiler, getType());
                   value->genCode(compiler, tmp, getType());
                   compiler->move(target,tmp);
+
+                  #ifdef HXCPP_GC_GENERATIONAL
+                  if (REFMODE==locThis && isPointerObject((T*)0))
+                     genWriteBarrier(compiler, sJitThis, targetType==jtString ? (target+StringOffset::Ptr).as(jtPointer) : target );
+                  #endif
+
                   compiler->convert( tmp,getType(),inDest, destType );
                }
                else
@@ -4082,6 +4088,12 @@ struct MemReferenceSetter : public CppiaExpr
                compiler->move(tmp,target);
                genSetter(compiler, tmp, getType(), op, value);
                compiler->move(target,tmp);
+
+               #ifdef HXCPP_GC_GENERATIONAL
+               if (REFMODE==locThis && isPointerObject((T*)0))
+                  genWriteBarrier(compiler, sJitThis, targetType==jtString ? (target+StringOffset::Ptr).as(jtPointer) : target );
+               #endif
+
                compiler->convert( tmp, getType(),inDest, destType );
             }
             break;

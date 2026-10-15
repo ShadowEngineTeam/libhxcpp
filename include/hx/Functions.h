@@ -17,7 +17,7 @@ namespace hx
    struct HXCPP_EXTERN_CLASS_ATTRIBUTES LocalThisFunc : public LocalFunc
    {
       Dynamic __this;
-      void __SetThis(Dynamic inThis) HXCPP_OVERRIDE { __this = inThis; }
+      void __SetThis(Dynamic inThis) HXCPP_OVERRIDE { __this = inThis; HX_OBJ_WB_GET(this, __this.mPtr); }
       inline void DoMarkThis(hx::MarkContext *__inCtx) { HX_MARK_MEMBER(__this); }
 #ifdef HXCPP_VISIT_ALLOCS
       inline void DoVisitThis(hx::VisitContext *__inCtx) { HX_VISIT_MEMBER(__this); }

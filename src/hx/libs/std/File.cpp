@@ -75,8 +75,8 @@ static void file_error(const char *msg, String inName)
 {
    hx::ExitGCFreeZone();
    Array<String> err = Array_obj<String>::__new(2,2);
-   err[0] = String(msg);
-   err[1] = inName;
+   err->__unsafe_set(0, String(msg));
+   err->__unsafe_set(1, inName);
    hx::Throw(err);
 }
 

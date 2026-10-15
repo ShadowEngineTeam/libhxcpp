@@ -857,9 +857,9 @@ Array<Dynamic> _hx_std_socket_select( Array<Dynamic> rs, Array<Dynamic> ws, Arra
    hx::ExitGCFreeZone();
 
    Array<Dynamic> r = Array_obj<Dynamic>::__new(3,3);
-   r[0] = make_array_result(rs,ra);
-   r[1] = make_array_result(ws,wa);
-   r[2] = make_array_result(es,ea);
+   r->__unsafe_set(0, make_array_result(rs,ra));
+   r->__unsafe_set(1, make_array_result(ws,wa));
+   r->__unsafe_set(2, make_array_result(es,ea));
    return r;
 }
 

@@ -2320,7 +2320,7 @@ Array<String> String::split(const String &inDelimiter) const
          const unsigned char *ptr = start;
          DecodeAdvanceUTF8(ptr);
          int len =  ptr - start;
-         result[idx++] = String::create( __s+i, len );
+         result->push( String::create( __s+i, len ) );
          i+=len;
       }
       #endif
@@ -2600,6 +2600,7 @@ String &String::operator+=(const String &inRHS)
                 void __SetThis(Dynamic inThis) override \
                 { \
                     mThis = inThis; \
+                    HX_OBJ_WB_GET(this, mThis.raw_ptr()); \
                 } \
                 void* __GetHandle() const override { return const_cast<char *>(mThis.raw_ptr()); } \
                 void __Mark(hx::MarkContext *__inCtx) override { HX_MARK_MEMBER(mThis); } \
@@ -2674,7 +2675,7 @@ String &String::operator+=(const String &inRHS)
           return mThis.func(arg_list); return Dynamic(); \
        } \
        STRING_VISIT_FUNC \
-       void  __SetThis(Dynamic inThis) HXCPP_OVERRIDE { mThis = inThis; } \
+       void  __SetThis(Dynamic inThis) HXCPP_OVERRIDE { mThis = inThis; HX_OBJ_WB_GET(this, mThis.raw_ptr()); } \
     }; \
     Dynamic String::func##_dyn()  { return new __String_##func(*this);  }
 

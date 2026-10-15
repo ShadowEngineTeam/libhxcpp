@@ -188,7 +188,9 @@ void CppiaVar::linkVarTypes(CppiaModule &cppia, int &ioOffset)
 
 void CppiaVar::createDynamic(hx::Object *inBase)
 {
-   *(hx::Object **)((char *)inBase+offset) = createMemberClosure(inBase,(ScriptCallable*)dynamicFunction->funExpr);
+   hx::Object **slot = (hx::Object **)((char *)inBase+offset);
+   *slot = createMemberClosure(inBase,(ScriptCallable*)dynamicFunction->funExpr);
+   HX_OBJ_WB_GET(inBase, *slot);
 }
 
 

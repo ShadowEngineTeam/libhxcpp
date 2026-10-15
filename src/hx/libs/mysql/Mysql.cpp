@@ -335,7 +335,7 @@ Array<String> _hx_mysql_result_get_fields_names(Dynamic handle)
    Array<String> output = Array_obj<String>::__new(count);
 
    for(int k=0;k<count;k++)
-      output[k] = String(fields[k].name);
+      output->__unsafe_set(k, String(fields[k].name));
 
    return output;
 }
@@ -547,7 +547,7 @@ static Result *alloc_result( Connection *c, MYSQL_RES *r )
       else
          name = String::createPermanent(own, -1);
 
-      res->field_names[i] = name;
+      res->field_names->__unsafe_set(i, name);
       res->fields_convs[i] = convert_type(fields[i].type,fields[i].flags,fields[i].length,fields[i].charset);
    }
 
