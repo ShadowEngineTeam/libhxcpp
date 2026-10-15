@@ -596,6 +596,7 @@ class Compiler
       addOptimTags(tags);
       for(flag in mFlags)
          flag.add(args,tags);
+      addStandard(Cxx, inGroup, args);
 
       return  args.concat( mCPPFlags );
    }
@@ -634,8 +635,6 @@ class Compiler
       }
 
       args = args.concat( mPCHFlags );
-
-		addStandard(Cxx, inGroup, args);
 
       //Log.info("", "Make pch dir " + dir );
       PathManager.mkdir(dir);

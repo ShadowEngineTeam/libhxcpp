@@ -251,6 +251,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed shrinking an array with unmanaged data to zero handing that memory to the GC
 * Fixed weak references and weak map keys to constant objects (small boxed Ints, Bools, one-character and permanent strings) being cleared while still held
 * Fixed a failure to start a thread terminating the process; Thread.create throws "Could not create thread" again
+* Fixed the compile cache reusing a precompiled header built for a different C++ standard
 * Added the libhxcpp define: a build that uses the library gets -D libhxcpp=<version>. Compare it with version("x.y.z"); a plain string comparison compares text
 * Added separate Linux ARMv7 and ARM64 build architectures (hxcpp #1355)
 * Fixed AndroidCompat.cpp closing its extern "C" section in the wrong place (hxcpp #1404)
