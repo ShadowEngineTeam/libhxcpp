@@ -239,6 +239,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * FileSystem.stat throws for a path that cannot be read, as HL, neko and eval do, instead of returning a FileStat of zeros
 * UTF-8 decoding replaces malformed input with U+FFFD instead of decoding it to unrelated characters: stray and missing continuation bytes, overlong forms (such as C0 AF for /), encoded surrogates and values above U+10FFFF
 * Fixed SSL read and write crashing on TLS errors such as a corrupted record from the peer or writing after close: mbedTLS error codes were used as byte counts; they throw the mbedTLS error now
+* The GC returns fully empty block groups to the system without HXCPP_GC_MOVING too, after a full collection that leaves much more memory than it needs and on Gc.compact
 * Added the libhxcpp define: a build that uses the library gets -D libhxcpp=<version>. Compare it with version("x.y.z"); a plain string comparison compares text
 * Added separate Linux ARMv7 and ARM64 build architectures (hxcpp #1355)
 * Fixed AndroidCompat.cpp closing its extern "C" section in the wrong place (hxcpp #1404)

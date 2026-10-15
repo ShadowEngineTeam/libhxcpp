@@ -5232,6 +5232,31 @@ public:
       }
       #endif
 
+      // Without the moving collector, only groups whose blocks are all empty can
+      // go back to the system; every allocator dropped its block when it was marked
+      #if !defined(HXCPP_GC_MOVING) && defined(HXCPP_VISIT_ALLOCS)
+      if (full)
+      {
+         size_t mem = mRowsInUse<<IMMIX_LINE_BITS;
+         size_t targetFree = std::max(hx::sgMinimumFreeSpace, mem / 100 * hx::sgTargetFreeSpacePercentage );
+         targetFree = std::min(targetFree, sgMaximumFreeSpace );
+         size_t targetMem = std::max( mem + targetFree, hx::sgMinimumWorkingMemory) +
+                               (2<<(IMMIX_BLOCK_GROUP_BITS+IMMIX_BLOCK_BITS));
+         size_t allowExtra = std::max(size_t{ 8 } * 1024 * 1024, targetMem / 4);
+         if (inForceCompact)
+         {
+            targetMem = 0;
+            allowExtra = 0;
+         }
+         size_t have = GetWorkingMemory();
+         if (have > targetMem + allowExtra)
+         {
+            calcMoveOrder();
+            releaseEmptyGroups(stats, have - targetMem);
+         }
+      }
+      #endif
+
 
       STAMP(t5)
 
