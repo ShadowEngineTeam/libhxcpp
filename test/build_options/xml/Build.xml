@@ -1,0 +1,9 @@
+<xml>
+  <files id="main">
+    <compilerflag value="-DVALUE=${VALUE}" if="VALUE"/>
+    <file name="xml/main.cpp"/>
+  </files>
+  <target id="default" output="value" tool="linker" toolid="exe">
+    <files id="main"/>
+  </target>
+</xml>

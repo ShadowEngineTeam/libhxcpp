@@ -298,6 +298,12 @@ jobs:
             haxelib run hxcpp $xml
             haxelib run hxcpp $xml clean
           done
+      - name: test -options relative to the working directory
+        working-directory: test/build_options
+        shell: bash
+        run: |
+          haxelib run hxcpp xml/Build.xml -options options.txt
+          test "$(./value | tr -d '\r')" = 42
 
   regression:
     runs-on: ${{ inputs.os }}

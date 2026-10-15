@@ -1601,6 +1601,7 @@ class BuildTool
       var include_path = new Array<String>();
       var makefile:String="";
       var optionsTxt = "Options.txt";
+      var optionsGiven = false;
 
       Profile.start();
 
@@ -1781,6 +1782,7 @@ class BuildTool
             optionsTxt = args[a];
             if (optionsTxt==null)
                optionsTxt = "";
+            optionsGiven = true;
          }
          else if (arg=="-dirty")
          {
@@ -1812,7 +1814,11 @@ class BuildTool
 
       if ( optionsTxt!="" && makefile!="")
       {
-         var path = PathManager.combine(haxe.io.Path.directory(makefile), optionsTxt);
+         // Haxe writes Options.txt next to Build.xml; one passed with -options is the caller's path
+         var path = !optionsGiven ? PathManager.combine(haxe.io.Path.directory(makefile), optionsTxt) :
+                    PathManager.isAbsolute(optionsTxt) ? optionsTxt : PathManager.combine(startDir, optionsTxt);
+         if (optionsGiven && !FileSystem.exists(path))
+            Log.warn('Options file $path does not exist');
          if (FileSystem.exists(path))
             try
             {
