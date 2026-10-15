@@ -7002,6 +7002,8 @@ struct OpMult : public BinOp
    }
    Float runFloat(CppiaCtx *ctx) HXCPP_OVERRIDE
    {
+      if (type==etInt)
+         return runInt(ctx);
       Float lval = left->runFloat(ctx);
       BCR_CHECK;
       return lval * right->runFloat(ctx);
@@ -7060,6 +7062,8 @@ struct OpSub : public BinOp
    }
    Float runFloat(CppiaCtx *ctx) HXCPP_OVERRIDE
    {
+      if (type==etInt)
+         return runInt(ctx);
       Float lval = left->runFloat(ctx);
       BCR_CHECK;
       return lval - right->runFloat(ctx);
@@ -7816,6 +7820,8 @@ struct OpAdd : public BinOp
    }
    Float runFloat(CppiaCtx *ctx) HXCPP_OVERRIDE
    {
+      if (type==etInt)
+         return runInt(ctx);
       Float lval = left->runFloat(ctx);
       BCR_CHECK;
       return lval + right->runFloat(ctx);
@@ -7828,19 +7834,19 @@ struct OpAdd : public BinOp
          left->genCode(compiler,JitVal(),etVoid);
          right->genCode(compiler,JitVal(),etVoid);
       }
-      else if (destType==etInt || (left->getType()==etInt && right->getType()==etInt && destType==etObject) )
+      else if (destType==etInt || (left->getType()==etInt && right->getType()==etInt) )
       {
          JitTemp temp(compiler,jtInt);
          left->genCode(compiler,temp,etInt);
          right->genCode(compiler,sJitTemp0,etInt);
-         if (destType==etObject)
+         if (destType==etInt)
          {
-            compiler->add( sJitTemp0.as(jtInt), temp, sJitTemp0.as(jtInt) );
-            compiler->convert(sJitTemp0, etInt, inDest, destType);
+            compiler->add( inDest, temp, sJitTemp0.as(jtInt) );
          }
          else
          {
-            compiler->add( inDest, temp, sJitTemp0.as(jtInt) );
+            compiler->add( sJitTemp0.as(jtInt), temp, sJitTemp0.as(jtInt) );
+            compiler->convert(sJitTemp0, etInt, inDest, destType);
          }
       }
       else
