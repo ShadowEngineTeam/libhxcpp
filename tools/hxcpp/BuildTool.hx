@@ -1642,8 +1642,7 @@ class BuildTool
       }
 
 
-      if (defines.exists("HXCPP_NO_COLOUR") || defines.exists("HXCPP_NO_COLOR"))
-         Log.colorSupported = false;
+      Log.setColor(defines);
       Log.verbose = defines.exists("HXCPP_VERBOSE");
       Log.showSetup = defines.exists("HXCPP_LOG_SETUP");
       exitOnThreadError = defines.exists("HXCPP_EXIT_ON_ERROR");
@@ -1814,8 +1813,7 @@ class BuildTool
       if (defines.exists("HXCPP_TIMES"))
          Profile.enable();
 
-      if (defines.exists("HXCPP_NO_COLOUR") || defines.exists("HXCPP_NO_COLOR"))
-         Log.colorSupported = false;
+      Log.setColor(defines);
       Log.verbose = Log.verbose || defines.exists("HXCPP_VERBOSE");
       Log.quiet = defines.exists("HXCPP_QUIET") && !Log.verbose;
       Log.mute = defines.exists("HXCPP_SILENT") && !Log.quiet && !Log.verbose;

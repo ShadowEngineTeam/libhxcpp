@@ -131,38 +131,40 @@ class Log
          printMutex.release();
    }
 
+   // The defines include the environment. -nocolor and HXCPP_NO_COLOR turn colour off,
+   // then HXCPP_COLOR turns it on, then NO_COLOR (no-color.org) turns it off, and
+   // otherwise the terminal decides.
+   public static function setColor(defines:haxe.ds.StringMap<String>)
+   {
+      if (colorSupported == false || defines.exists("HXCPP_NO_COLOR") || defines.exists("HXCPP_NO_COLOUR"))
+         colorSupported = false;
+      else if (defines.exists("HXCPP_COLOR") || defines.exists("HXCPP_COLOUR"))
+         colorSupported = true;
+      else if (defines.exists("NO_COLOR") && defines.get("NO_COLOR") != "")
+         colorSupported = false;
+   }
+
+   static function terminalHasColor():Bool
+   {
+      var term = Sys.getEnv("TERM");
+      if (term == "dumb")
+         return false;
+      if (term != null && ~/(?i)^(xterm|screen|tmux|vt100|vt220|rxvt|linux|cygwin)|color|ansi/.match(term))
+         return true;
+      for (name in ["COLORTERM", "WT_SESSION", "ConEmuANSI", "ANSICON", "TERM_PROGRAM", "GITHUB_ACTIONS"])
+         if (Sys.getEnv(name) != null)
+            return true;
+      return false;
+   }
+
    private static function stripColor(output:String):String
    {
       if (colorSupported == null)
-      {
-         if (!BuildTool.isWindows)
-         {
-            var result = -1;
-            try
-            {
-               var process = new Process ("tput", [ "colors" ]);
-               result = process.exitCode ();
-               process.close ();
-            }
-            catch (e:Dynamic) {};
-
-            colorSupported = (result == 0);
-         }
-         else
-         {
-            colorSupported = (Sys.getEnv("TERM") == "xterm" || Sys.getEnv("ANSICON") != null);
-         }
-      }
+         colorSupported = terminalHasColor();
 
       if (colorSupported)
-      {
          return output;
-      }
-      else
-      {
-         var colorCodes:EReg = ~/\x1b\[[^m]+m/g;
-         return colorCodes.replace(output, "");
-      }
+      return ~/\x1b\[[0-9;]*m/g.replace(output, "");
    }
 
    public static function warn(message:String, verboseMessage:String = "", allowRepeat:Bool = false):Void
