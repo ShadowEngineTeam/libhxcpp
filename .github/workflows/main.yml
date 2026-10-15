@@ -48,6 +48,17 @@ jobs:
     - run: bash test/gc-defines/check.sh
       name: Compile the GC under each define
 
+  check-mac-arm64-capture:
+    name: Check GC register capture for macOS arm64
+    runs-on: macos-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@v4
+
+    # an Xcode arm64 build that defines HXCPP_M64 but not HXCPP_ARM64
+    - run: clang++ -arch arm64 -std=c++11 -c -DHX_MACOS -DHXCPP_M64 -Iinclude src/hx/gc/GcRegCapture.cpp -o capture.o
+      name: Compile the register capture
+
   check-haxelib:
     name: Check installing with haxelib
     strategy:
