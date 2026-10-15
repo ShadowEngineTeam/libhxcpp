@@ -6340,7 +6340,7 @@ public:
                return buffer;
             }
             // spaceOversize might have been set to zero for quick-termination of alloc.
-            unsigned char* s{ spaceOversize };
+            unsigned char* s{ *static_cast<unsigned char * volatile *>(&spaceOversize) };
             if (s>spaceFirst && mFraggedRows)
                *mFraggedRows += static_cast<uint16_t>((s - spaceFirst) >> IMMIX_LINE_BITS);
          #else
@@ -6377,9 +6377,11 @@ public:
 
                return buffer;
             }
-            if (mFraggedRows && spaceEnd > spaceStart)
+            // Read once: the collecting thread zeroes spaceEnd in WaitForSafe
+            size_t holeEnd{ *static_cast<volatile size_t *>(&spaceEnd) };
+            if (mFraggedRows && holeEnd > spaceStart)
             {
-               *mFraggedRows += static_cast<uint16_t>((spaceEnd - spaceStart) >> IMMIX_LINE_BITS);
+               *mFraggedRows += static_cast<uint16_t>((holeEnd - spaceStart) >> IMMIX_LINE_BITS);
             }
          #endif
 
