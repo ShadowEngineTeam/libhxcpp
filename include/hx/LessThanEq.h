@@ -10,6 +10,8 @@ enum {
    CompareAsDouble,
    CompareAsString,
    CompareAsDynamic,
+   // A Bool known only at run time; it equals only another Bool
+   CompareAsBool,
 };
 
 
@@ -29,7 +31,8 @@ struct CompareTraits
          return CompareAsDynamic;
       switch(inValue->__GetType())
       {
-         case vtInt: case vtBool: return CompareAsInt;
+         case vtInt: return CompareAsInt;
+         case vtBool: return CompareAsBool;
          case vtInt64: return CompareAsInt64;
          case vtFloat: return CompareAsDouble;
          case vtString: return CompareAsString;
@@ -184,7 +187,8 @@ struct CompareTraits< cpp::Variant >
    {
       switch(inValue.type)
       {
-         case cpp::Variant::typeInt: case cpp::Variant::typeBool: return CompareAsInt;
+         case cpp::Variant::typeInt: return CompareAsInt;
+         case cpp::Variant::typeBool: return CompareAsBool;
          case cpp::Variant::typeInt64: return CompareAsInt64;
          case cpp::Variant::typeDouble: return CompareAsDouble;
          case cpp::Variant::typeString: return CompareAsString;
@@ -195,7 +199,8 @@ struct CompareTraits< cpp::Variant >
                   return CompareAsDynamic;
                switch(inValue.valObject->__GetType())
                {
-                  case vtInt: case vtBool: return CompareAsInt;
+                  case vtInt: return CompareAsInt;
+                  case vtBool: return CompareAsBool;
                   case vtInt64: return CompareAsInt64;
                   case vtFloat: return CompareAsDouble;
                   case vtString: return CompareAsString;
@@ -369,6 +374,13 @@ inline bool TestLessEq(const T1 &v1, const T2 &v2)
 
       int t1 = traits1::getDynamicCompareType(v1);
       int t2 = traits2::getDynamicCompareType(v2);
+
+      if (t1==(int)CompareAsBool || t2==(int)CompareAsBool)
+      {
+         if (t1!=t2)
+            return !LESS && !EQ;
+         t1 = t2 = (int)CompareAsInt;
+      }
 
       if (t1==(int)CompareAsInt && t2==(int)CompareAsInt)
       {
