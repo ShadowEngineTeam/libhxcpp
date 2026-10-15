@@ -20,8 +20,9 @@ runs:
         haxelib run libhxcpp setup
         haxelib list
 
+    # The 32-bit Linux build's libraries, which arm64 runners do not have
     - name: install native libraries
-      if: runner.os == 'Linux'
+      if: runner.os == 'Linux' && runner.arch == 'X64'
       shell: pwsh
       run: |
         sudo apt-get update -qqy
