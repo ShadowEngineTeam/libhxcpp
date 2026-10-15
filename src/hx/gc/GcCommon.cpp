@@ -97,11 +97,11 @@ void __hxcpp_collect(bool inMajor)
 
 void __hxcpp_gc_compact()
 {
-   int mem = hx::InternalCollect(true,true);
+   size_t mem = hx::InternalCollectBytes(true,true);
    while(true)
    {
-      int compact = hx::InternalCollect(true,true);
-      if (compact>=mem-16384)
+      size_t compact = hx::InternalCollectBytes(true,true);
+      if (compact+16384>=mem)
          break;
       mem = compact;
    }

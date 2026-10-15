@@ -6767,7 +6767,7 @@ void *InternalNew(size_t inSize,bool inIsObject)
 
 
 // Force global collection - should only be called from 1 thread.
-int InternalCollect(bool inMajor,bool inCompact)
+size_t InternalCollectBytes(bool inMajor,bool inCompact)
 {
    if (!sgAllocInit)
        return 0;
@@ -6775,6 +6775,11 @@ int InternalCollect(bool inMajor,bool inCompact)
    GetLocalAlloc()->SetupStackAndCollect(inMajor, inCompact);
 
    return sGlobalAlloc->MemUsage();
+}
+
+int InternalCollect(bool inMajor,bool inCompact)
+{
+   return (int)std::min(InternalCollectBytes(inMajor, inCompact), (size_t)0x7fffffff);
 }
 
 inline unsigned int ObjectSize(void *inData)

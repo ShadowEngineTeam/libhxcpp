@@ -204,6 +204,8 @@ HXCPP_EXTERN_CLASS_ATTRIBUTES void *NewGCPrivate(void *inData,size_t inSize);
 // Force a collect from the calling thread
 // Only one thread should call this at a time
 int InternalCollect(bool inMajor,bool inCompact);
+// The same, returning the bytes in use without truncating them to int
+size_t InternalCollectBytes(bool inMajor,bool inCompact);
 
 
 // Disable the garbage collector.  It will try to increase its internal buffers to honour extra requests.
