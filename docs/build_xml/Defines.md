@@ -37,6 +37,7 @@ Defines affecting how the code is compiled.  These can be on the command line wh
 | *HXCPP_CHECK_POINTER*   | Add null-pointer checks,even in release mode. |
 | *HXCPP_PROFILER*        | Add profiler support |
 | *HXCPP_TELEMETRY*       | Add telemetry support |
+| *HXCPP_SQLITE_FTS5*     | Build SQLite with the FTS5 full-text search extension. The JSON functions are always built in |
 | *HXCPP_C_STANDARD*      | Set default C standard |
 | *HXCPP_CXX_STANDARD*    | Set default C++ standard |
 | *HXCPP_OBJC_STANDARD*   | Set default Objective-C standard |
