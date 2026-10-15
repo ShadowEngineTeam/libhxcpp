@@ -4679,6 +4679,16 @@ public:
          ClearBlockMarks();
       }
 
+      #ifdef HXCPP_GC_MOVING
+      for(int i=0;i<hx::sFinalizableList.size();i++)
+      {
+         hx::Finalizable &f = hx::sFinalizableList[i];
+         uintptr_t base = reinterpret_cast<uintptr_t>(f.base);
+         if (f.pin && GetMemType(base)==memBlock)
+            (*gBlockInfo)[reinterpret_cast<BlockData*>(base & IMMIX_BLOCK_BASE_MASK)->mId]->pin();
+      }
+      #endif
+
       MEM_STAMP(tMarkInit);
 
       #ifdef PROFILE_THREAD_USAGE
