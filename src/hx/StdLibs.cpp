@@ -843,13 +843,8 @@ static double hxStrtodC(const char *inStr, char **outEnd)
 }
 #endif
 
-Dynamic __hxcpp_parse_int(const String &inString)
+static bool hxParseIntChars(const char *str, int &outResult)
 {
-   if (!inString.raw_ptr())
-      return null();
-   hx::strbuf buf;
-   const char *str = inString.utf8_str(&buf);
-
    // On the first non space char check to see if we've got a hex string.
    // isspace requires an unsigned char value - a negative char (any
    // non-ASCII utf8 byte) is undefined behaviour
@@ -881,8 +876,35 @@ Dynamic __hxcpp_parse_int(const String &inString)
    #else
    if (str==end)
    #endif
+      return false;
+   outResult = (int)result;
+   return true;
+}
+
+Dynamic __hxcpp_parse_int(const String &inString)
+{
+   if (!inString.raw_ptr())
       return null();
-   return (int)result;
+   hx::strbuf buf;
+   int result;
+   if (!hxParseIntChars(inString.utf8_str(&buf), result))
+      return null();
+   return result;
+}
+
+int __hxcpp_parse_substr_int(const String &inString,int start, int length)
+{
+   if (length<0)
+      length = inString.length - start;
+   if (start<0 || start>=inString.length || length<1 || length>inString.length-start)
+      return 0;
+
+   hx::strbuf buf;
+   const char *str = inString.ascii_substr(&buf,start,length);
+   int result = 0;
+   if (!str || !hxParseIntChars(str, result))
+      return 0;
+   return result;
 }
 
 

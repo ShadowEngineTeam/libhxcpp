@@ -145,6 +145,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed haxe.Utf8.charCodeAt with a negative index and NativeString.parseSubstrFloat with a negative start or huge length reading outside the string
 * Fixed string headers and memoized hashes being read and written through misaligned pointers
 * Fixed cpp::Variant's <= with a String acting as <, so equal strings compared false (native code and externs; generated code was not affected)
+* Fixed cpp.NativeString.parseInt and parseSubstrInt failing to link, as the runtime never defined __hxcpp_parse_substr_int. They give 0 for text that is not a number
 
 ### Arrays and Bytes
 
