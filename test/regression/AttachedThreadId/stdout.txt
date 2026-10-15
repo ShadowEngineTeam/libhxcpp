@@ -1,0 +1,2 @@
+main 0
+attached thread has its own id: true

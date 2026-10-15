@@ -36,7 +36,20 @@ namespace
 
 	thread_local ThreadInfoHolder tls;
 
-	std::atomic_int nextThreadnumber(0);
+	// 0 is the main thread's: static initialisation runs on it
+	std::atomic_int nextThreadnumber(1);
+	const std::thread::id mainThreadId = std::this_thread::get_id();
+	thread_local int attachedId = -1;
+
+	// For a thread without a ThreadImpl, which current() would allocate
+	int unregisteredId()
+	{
+		if (std::this_thread::get_id() == mainThreadId)
+			return 0;
+		if (attachedId < 0)
+			attachedId = nextThreadnumber++;
+		return attachedId;
+	}
 
 	void run(hx::thread::ThreadImpl thread, hx::thread::Thread_obj::CreateFunction job, hx::thread::CountingSemaphore semaphore)
 	{
@@ -121,7 +134,7 @@ hx::thread::Thread hx::thread::Thread_obj::current()
 		// 
 		// The C++ std has no way of getting the native handle of the current thread, so we need to use OS specific
 		// apis to get that so we can get and set thread names.
-		info = new ThreadImpl_obj(nextThreadnumber++);
+		info = new ThreadImpl_obj(unregisteredId());
 
 		auto root = new hx::Object* { info };
 
@@ -140,7 +153,7 @@ int hx::thread::Thread_obj::id()
 
 	if (nullptr == info)
 	{
-		return 0;
+		return unregisteredId();
 	}
 	else
 	{
