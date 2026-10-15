@@ -461,6 +461,8 @@ int _hx_ssl_send( Dynamic hssl, Array<unsigned char> buf, int p, int l ) {
 		HANDLE_EINTR(send_again);
 		hx::Throw(HX_CSTRING("ssl network error"));
 	}
+	if( dlen < 0 )
+		ssl_error( dlen );
 	return dlen;
 }
 
@@ -483,6 +485,8 @@ void _hx_ssl_write( Dynamic hssl, Array<unsigned char> buf ) {
 			HANDLE_EINTR( write_again );
 			hx::Throw(HX_CSTRING("ssl network error"));
 		}
+		if( slen <= 0 )
+			ssl_error( slen );
 		pos += slen;
 		len -= slen;
 	}
@@ -560,6 +564,8 @@ Array<unsigned char> _hx_ssl_read( Dynamic hssl ) {
                 }
 		if( len == 0 )
 			break;
+		if( len < 0 )
+			ssl_error( len );
 		result->memcpy(result->length, buf, len);
 	}
 	return result;
