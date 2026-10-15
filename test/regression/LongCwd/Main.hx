@@ -1,8 +1,8 @@
 import sys.FileSystem;
 
-// Windows only allows a current directory over MAX_PATH with a long-path manifest
+// Only Linux allows a current directory longer than 1024 characters without opting in
 function main() {
-	if (Sys.systemName() == "Windows") {
+	if (Sys.systemName() != "Linux") {
 		Sys.println(Sys.getCwd() != null ? "long cwd ok" : "no cwd");
 		return;
 	}
