@@ -166,6 +166,34 @@ class TestWeakHash extends Test
       Assert.notNull(map.get(retained[0]));
    }
 
+   public function testLiveKeyValueIsNotZombie()
+   {
+      var map:WeakMap<WeakObjectData,WeakValueData> = null;
+      var value:cpp.vm.WeakRef<WeakValueData> = null;
+
+      final sema = new sys.thread.Semaphore(0);
+      sys.thread.Thread.create(() -> {
+         map = new WeakMap<WeakObjectData,WeakValueData>();
+         var key = new WeakObjectData(6);
+         var mapValue = new WeakValueData(key);
+         retained = [key];
+         map.set(key,mapValue);
+         cpp.vm.Gc.doNotKill(mapValue);
+         value = new cpp.vm.WeakRef(mapValue);
+         sema.release();
+      });
+      sema.acquire();
+
+      Sys.sleep(1);
+      cpp.vm.Gc.run(true);
+
+      var zombie:Dynamic;
+      while ((zombie = cpp.vm.Gc.getNextZombie()) != null)
+         if (zombie == value.get())
+            Assert.fail("Made a zombie of a value whose key is alive");
+      Assert.notNull(map.get(retained[0]));
+   }
+
    public function testEphemeronsReachFixedPoint()
    {
       var maps:{

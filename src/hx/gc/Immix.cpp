@@ -4935,33 +4935,11 @@ public:
 
       MEM_STAMP(tMarked);
 
+      // An object that only a weak hash value keeps is not a zombie while its key lives,
+      // and a zombie can keep more keys alive
+      MarkWeakHashValues();
       hx::FindZombies(mMarker);
-
-      // Weak-key hashes are ephemerons: a value is reachable only when both
-      // the hash and its key are reachable. Values marked here may in turn
-      // make keys in other weak hashes reachable, so iterate to a fixed point.
-      bool markedWeakValue;
-      do
-      {
-         markedWeakValue = false;
-         mMarker.init();
-         for(int i=0;i<hx::sWeakHashList.size();i++)
-         {
-            hx::HashRoot *hash = hx::sWeakHashList[i];
-            if (hx::IsWeakRefValid(hash))
-               markedWeakValue = hash->markWeakValues(&mMarker) || markedWeakValue;
-         }
-         if (markedWeakValue)
-         {
-            #ifdef HX_MULTI_THREAD_MARKING
-            mMarker.releaseJobs();
-            StartThreadJobs(tpjMark, MAX_GC_THREADS, true);
-            #else
-            mMarker.processMarkStack();
-            #endif
-         }
-      }
-      while(markedWeakValue);
+      MarkWeakHashValues();
 
       hx::RunFinalizers();
 
@@ -4981,6 +4959,35 @@ public:
 
 
    
+   // Weak-key hashes are ephemerons: a value is reachable only while the hash and its
+   // key are. A value can make keys in other weak hashes reachable, so this repeats
+   // until nothing more is marked.
+   void MarkWeakHashValues()
+   {
+      bool marked;
+      do
+      {
+         marked = false;
+         mMarker.init();
+         for(int i=0;i<hx::sWeakHashList.size();i++)
+         {
+            hx::HashRoot *hash = hx::sWeakHashList[i];
+            if (hx::IsWeakRefValid(hash))
+               marked = hash->markWeakValues(&mMarker) || marked;
+         }
+         if (marked)
+         {
+            #ifdef HX_MULTI_THREAD_MARKING
+            mMarker.releaseJobs();
+            StartThreadJobs(tpjMark, MAX_GC_THREADS, true);
+            #else
+            mMarker.processMarkStack();
+            #endif
+         }
+      }
+      while(marked);
+   }
+
    #ifdef HX_GC_VERIFY_ALLOC_START
    void verifyAllocStart()
    {
