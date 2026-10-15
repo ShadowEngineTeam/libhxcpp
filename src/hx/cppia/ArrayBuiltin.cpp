@@ -729,7 +729,9 @@ struct ArrayBuiltin : public ArrayBuiltinBase
          return thisVal->toString();
       }
 
-      if (FUNC==afPush || FUNC==afContains || FUNC==afRemove || FUNC==afIndexOf || FUNC==afLastIndexOf)
+      if (FUNC==afContains || FUNC==afRemove)
+         return Dynamic(runInt(ctx)!=0)->toString();
+      if (FUNC==afPush || FUNC==afIndexOf || FUNC==afLastIndexOf)
          return Dynamic(runInt(ctx))->toString();
 
       return runObject(ctx)->toString();
@@ -871,7 +873,9 @@ struct ArrayBuiltin : public ArrayBuiltinBase
          return thisVal->keyValueIterator().mPtr;
       }
 
-      if (FUNC==afPush || FUNC==afContains || FUNC==afRemove || FUNC==afIndexOf || FUNC==afLastIndexOf)
+      if (FUNC==afContains || FUNC==afRemove)
+         return Dynamic(runInt(ctx)!=0).mPtr;
+      if (FUNC==afPush || FUNC==afIndexOf || FUNC==afLastIndexOf)
          return Dynamic(runInt(ctx)).mPtr;
 
       if (FUNC==afJoin || FUNC==afToString)
@@ -1666,7 +1670,7 @@ struct ArrayBuiltin : public ArrayBuiltinBase
                      compiler->move( sJitTemp2.as(regType), sJitTemp1.atReg(sJitTemp0,shift).as(jt) );
                      // zero out value...
                      compiler->move( sJitTemp1.atReg(sJitTemp0,shift).as(jt), zero );
-                     compiler->convert(sJitTemp2.as(regType), elemType, inDest, destType);
+                     compiler->convert(sJitTemp2.as(regType), elemType, inDest, destType, isBoolElem());
                   }
                }
                else if (sizeof(ELEM)==4 && elemType==etFloat)

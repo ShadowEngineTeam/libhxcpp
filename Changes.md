@@ -300,6 +300,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed malformed .cppia files crashing the host; bad counts, lengths, type ids and string ids throw a load error
 * Fixed cppia functions with an untyped return reading an uninitialised return type
 * Fixed the cppia interpreter giving charCodeAt's character instead of its code in a string or Float context: "c" + s.charCodeAt(1) was "ce" and var f:Float = s.charCodeAt(1) was 0
+* Fixed cppia giving some Bool results as Int: the interpreter's typed-array contains and remove, and the JIT's Array<Bool>.pop(), so trace([1].contains(1)) printed 1
 
 ### CFFI, ndlls, the debugger and telemetry
 
