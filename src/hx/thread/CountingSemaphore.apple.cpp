@@ -18,7 +18,16 @@ struct hx::thread::CountingSemaphore_obj::Impl
 
 hx::thread::CountingSemaphore_obj::CountingSemaphore_obj(int value) : impl(new Impl())
 {
-	impl->semaphore = dispatch_semaphore_create(value);
+	// libdispatch aborts when a semaphore is released below its initial value
+	if (value < 0 || nullptr == (impl->semaphore = dispatch_semaphore_create(0)))
+	{
+		hx::Throw(HX_CSTRING("Failed to create semaphore"));
+	}
+
+	for (int i = 0; i < value; i++)
+	{
+		dispatch_semaphore_signal(impl->semaphore);
+	}
 
 	hx::GCSetFinalizer(this, Impl::finalise);
 }
