@@ -1,0 +1,4 @@
+mutex ok
+condition ok
+semaphore ok
+lock ok

@@ -405,6 +405,8 @@ public:
 	}
 	bool Wait(double inTimeout)
 	{
+		if (hx::gPauseForCollect)
+			__hxcpp_gc_safe_point();
 		double stop = 0;
 		if (inTimeout>=0)
 			stop = Now() + inTimeout;

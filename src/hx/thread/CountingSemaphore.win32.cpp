@@ -52,6 +52,8 @@ void hx::thread::CountingSemaphore_obj::release()
 
 bool hx::thread::CountingSemaphore_obj::tryAcquire(Null<double> timeout)
 {
+	if (hx::gPauseForCollect)
+		__hxcpp_gc_safe_point();
 	// Zero-timeout poll cannot block - no free zone needed.  Also try a
 	// non-blocking grab first for the timed case.
 	switch (WaitForSingleObject(impl->semaphore, 0))

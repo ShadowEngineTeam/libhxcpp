@@ -68,6 +68,8 @@ void hx::thread::CountingSemaphore_obj::release()
 
 bool hx::thread::CountingSemaphore_obj::tryAcquire(Null<double> timeout)
 {
+	if (hx::gPauseForCollect)
+		__hxcpp_gc_safe_point();
 	if (0 == timeout.Default(0))
 	{
 		return 0 == sem_trywait(&impl->semaphore);

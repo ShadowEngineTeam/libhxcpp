@@ -42,5 +42,8 @@ void hx::thread::RecursiveMutex_obj::release()
 
 bool hx::thread::RecursiveMutex_obj::tryAcquire()
 {
+	// A thread polling without allocating must still reach a safe point
+	if (hx::gPauseForCollect)
+		__hxcpp_gc_safe_point();
 	return impl->mutex.try_lock();
 }

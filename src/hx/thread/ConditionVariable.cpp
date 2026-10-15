@@ -39,6 +39,8 @@ void hx::thread::ConditionVariable_obj::acquire()
 
 bool hx::thread::ConditionVariable_obj::tryAcquire()
 {
+	if (hx::gPauseForCollect)
+		__hxcpp_gc_safe_point();
 	return impl->mutex.try_lock();
 }
 
