@@ -256,27 +256,30 @@ String _hx_std_get_cwd()
    return String();
    #else
 #ifdef NEKO_WINDOWS
-   wchar_t buf[261];
-   int l;
-   if( !GetCurrentDirectoryW(260,buf) )
-      return String();
-   l = (int)wcslen(buf);
-   if( buf[l-1] != '/' && buf[l-1] != '\\' ) {
-      buf[l] = '/';
-      buf[l+1] = 0;
-   }
+   std::vector<wchar_t> buf;
+   DWORD l = 0;
+   do
+   {
+      buf.resize(l + 2);
+      l = GetCurrentDirectoryW((DWORD)buf.size() - 1, buf.data());
+      if( !l )
+         return String();
+   } while( l >= buf.size() - 1 );
 #else
-   char buf[1025];
-   int l;
-   if( getcwd(buf,1024) == NULL )
-      return String();
-   l = (int)strlen(buf);
+   std::vector<char> buf(1024);
+   while( getcwd(buf.data(), buf.size() - 1) == NULL )
+   {
+      if( errno != ERANGE )
+         return String();
+      buf.resize(buf.size() * 2);
+   }
+   size_t l = strlen(buf.data());
+#endif
    if( buf[l-1] != '/' && buf[l-1] != '\\' ) {
       buf[l] = '/';
       buf[l+1] = 0;
    }
-#endif
-   return String::create(buf);
+   return String::create(buf.data());
    #endif
 }
 
@@ -884,7 +887,7 @@ String _hx_std_sys_exe_path()
 #else
    {
       char path[PATH_MAX];
-      int length = readlink("/proc/self/exe", path, sizeof(path));
+      int length = readlink("/proc/self/exe", path, sizeof(path) - 1);
       if( length < 0 )
       {
          const char *p = getenv("_");

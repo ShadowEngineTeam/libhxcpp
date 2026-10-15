@@ -257,6 +257,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed malformed .cppia files crashing the host; bad counts, lengths, type ids and string ids throw a load error
 * Fixed haxe.Utf8.charCodeAt with a negative index and NativeString.parseSubstrFloat with a negative start or huge length reading outside the string
 * Fixed the SSL SNI callback reading the server name past its length
+* Fixed Sys.getCwd returning null for long paths, reading an unfilled buffer for long paths on Windows, and Sys.programPath writing past its buffer on Linux
 * Added the libhxcpp define: a build that uses the library gets -D libhxcpp=<version>. Compare it with version("x.y.z"); a plain string comparison compares text
 * Added separate Linux ARMv7 and ARM64 build architectures (hxcpp #1355)
 * Fixed AndroidCompat.cpp closing its extern "C" section in the wrong place (hxcpp #1404)
