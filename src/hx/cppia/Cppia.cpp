@@ -8283,7 +8283,7 @@ void TypeData::link(CppiaModule &inModule)
                arrayType = arrInt;
             else if (t==HX_CSTRING("bool"))
                arrayType = arrBool;
-            else if (t==HX_CSTRING("Float"))
+            else if (t==HX_CSTRING("Float") || t==HX_CSTRING("double"))
                arrayType = arrFloat;
             else if (t==HX_CSTRING("float"))
                arrayType = arrFloat32;
