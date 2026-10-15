@@ -1,0 +1,3 @@
+-m Stress
+-cp .
+--cpp bin

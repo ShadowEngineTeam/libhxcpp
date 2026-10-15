@@ -65,6 +65,52 @@ jobs:
       - name: run
         run: bin${{ inputs.sep }}${{ matrix.bin }}
 
+  gc_stress:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: default
+            flags: ''
+            bin: Stress
+          - variant: generational
+            flags: -D HXCPP_GC_GENERATIONAL
+            bin: Stress
+          - variant: moving
+            flags: -D HXCPP_GC_MOVING
+            bin: Stress
+          - variant: always move
+            flags: --debug -D HXCPP_GC_DEBUG_ALWAYS_MOVE
+            bin: Stress-debug
+          - variant: verify
+            flags: -D HXCPP_GC_VERIFY
+            bin: Stress
+          - variant: generational verify
+            flags: -D HXCPP_GC_GENERATIONAL -D HXCPP_GC_VERIFY
+            bin: Stress
+          - variant: big blocks
+            flags: -D HXCPP_GC_BIG_BLOCKS
+            bin: Stress
+          - variant: check pointer
+            flags: --debug
+            bin: Stress-debug
+    runs-on: ${{ inputs.os }}
+    name: '${{ inputs.label }}: gc stress (${{ matrix.variant }})'
+    defaults:
+      run:
+        working-directory: test/gc_stress
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+      - name: setup
+        uses: ./.github/workflows/setup
+        with:
+          haxe: ${{ inputs.haxe }}
+      - name: build
+        run: haxe compile.hxml ${{ matrix.flags }} -D ${{ env.HXCPP_ARCH_FLAG }}
+      - name: run
+        run: bin${{ inputs.sep }}${{ matrix.bin }} 30
+
   cffi:
     runs-on: ${{ inputs.os }}
     name: '${{ inputs.label }}: cffi'
