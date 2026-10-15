@@ -75,7 +75,33 @@ struct sslconf_shared
 	mbedtls_ssl_ticket_context *ticket;
 #endif
 	std::atomic<int> refs;
+	// The objects whose native data the configuration points at, and the SNI
+	// callback it calls. The handle and every context set up on the
+	// configuration mark them, so they live, and follow a moving collection,
+	// for as long as the configuration is in use.
+	Dynamic cert;
+	Dynamic key;
+	Dynamic ca;
+	Dynamic sni;
 };
+
+static void sslconf_shared_mark( sslconf_shared *shared, hx::MarkContext *__inCtx )
+{
+	HX_MARK_MEMBER( shared->cert );
+	HX_MARK_MEMBER( shared->key );
+	HX_MARK_MEMBER( shared->ca );
+	HX_MARK_MEMBER( shared->sni );
+}
+
+#ifdef HXCPP_VISIT_ALLOCS
+static void sslconf_shared_visit( sslconf_shared *shared, hx::VisitContext *__inCtx )
+{
+	HX_VISIT_MEMBER( shared->cert );
+	HX_VISIT_MEMBER( shared->key );
+	HX_VISIT_MEMBER( shared->ca );
+	HX_VISIT_MEMBER( shared->sni );
+}
+#endif
 
 static sslconf_shared *sslconf_shared_retain( sslconf_shared *shared )
 {
@@ -137,6 +163,19 @@ struct sslctx : public hx::Object
 		((sslctx *)(obj.mPtr))->destroy();
 	}
 
+	void __Mark(hx::MarkContext *__inCtx) HXCPP_OVERRIDE
+	{
+		if( conf )
+			sslconf_shared_mark( conf, __inCtx );
+	}
+#ifdef HXCPP_VISIT_ALLOCS
+	void __Visit(hx::VisitContext *__inCtx) HXCPP_OVERRIDE
+	{
+		if( conf )
+			sslconf_shared_visit( conf, __inCtx );
+	}
+#endif
+
 	String toString() HXCPP_OVERRIDE { return HX_CSTRING("sslctx"); }
 };
 
@@ -177,6 +216,19 @@ struct sslconf : public hx::Object
 	{
 		((sslconf *)(obj.mPtr))->destroy();
 	}
+
+	void __Mark(hx::MarkContext *__inCtx) HXCPP_OVERRIDE
+	{
+		if( shared )
+			sslconf_shared_mark( shared, __inCtx );
+	}
+#ifdef HXCPP_VISIT_ALLOCS
+	void __Visit(hx::VisitContext *__inCtx) HXCPP_OVERRIDE
+	{
+		if( shared )
+			sslconf_shared_visit( shared, __inCtx );
+	}
+#endif
 
 	String toString() HXCPP_OVERRIDE { return HX_CSTRING("sslconfig"); }
 };
@@ -687,6 +739,8 @@ void _hx_ssl_conf_set_ca( Dynamic hconf, Dynamic hcert ) {
 	}else{
 		mbedtls_ssl_conf_ca_chain( conf->c, NULL, NULL );
 	}
+	conf->shared->ca = hcert;
+	HX_OBJ_WB_GET( conf, hcert.mPtr );
 }
 
 void _hx_ssl_conf_set_verify( Dynamic hconf, int mode ) {
@@ -707,24 +761,29 @@ void _hx_ssl_conf_set_cert( Dynamic hconf, Dynamic hcert, Dynamic hpkey ) {
 
 	if( (r = mbedtls_ssl_conf_own_cert(conf->c, cert->c, pkey->k)) != 0 )
 		ssl_error(r);
+	conf->shared->cert = hcert;
+	conf->shared->key = hpkey;
+	HX_OBJ_WB_GET( conf, hcert.mPtr );
+	HX_OBJ_WB_GET( conf, hpkey.mPtr );
 }
 
 static int sni_callback( void *arg, mbedtls_ssl_context *ctx, const unsigned char *name, size_t len ){
-	if( name && arg ){
+	sslconf_shared *shared = (sslconf_shared *)arg;
+	if( name && shared->sni.mPtr ){
 #if (HXCPP_API_LEVEL>=500)
-		auto cb  = hx::Callable<::Dynamic(::String)>(Dynamic(static_cast<hx::Object*>(arg)));
+		auto cb  = hx::Callable<::Dynamic(::String)>(shared->sni);
 		auto n   = reinterpret_cast<const char*>(name);
 		auto ret = cb(String(n, strlen(n)));
 #else
-		Dynamic cb = new Dynamic();
-		cb.mPtr = (hx::Object*)arg;
 		const char *n = (const char *)name;
-		Dynamic ret = cb->__run( String(n,strlen(n)) );
+		Dynamic ret = shared->sni->__run( String(n,strlen(n)) );
 #endif
 		if( ret != null() ){
 			// TODO authmode and ca
 			Dynamic hcert = ret->__Field(HX_CSTRING("cert"), hx::paccDynamic);
 			Dynamic hpkey = ret->__Field(HX_CSTRING("key"), hx::paccDynamic);
+			if( !hcert.mPtr || !hpkey.mPtr )
+				return -1;
 			sslcert *cert = val_cert(hcert);
 			sslpkey *pk = val_pkey(hpkey);
 
@@ -740,7 +799,9 @@ void _hx_ssl_conf_set_servername_callback(Dynamic hconf, ::hx::Callable<::Dynami
 void _hx_ssl_conf_set_servername_callback( Dynamic hconf, Dynamic cb ){
 #endif
 	sslconf *conf = val_conf(hconf);
-	mbedtls_ssl_conf_sni( conf->c, sni_callback, (void *)cb.mPtr );
+	conf->shared->sni = Dynamic( cb.mPtr );
+	HX_OBJ_WB_GET( conf, cb.mPtr );
+	mbedtls_ssl_conf_sni( conf->c, sni_callback, conf->shared );
 }
 
 Dynamic _hx_ssl_cert_load_defaults(){
