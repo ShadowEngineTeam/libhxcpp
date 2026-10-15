@@ -3228,6 +3228,12 @@ public:
       // Until we add ourselves, the collector will not wait
       //  on us - ie, we are assumed ot be in a GC free zone.
       std::lock_guard<std::recursive_mutex> lock(*gThreadStateChangeLock);
+      #ifdef HXCPP_GC_GENERATIONAL
+      // Under the lock, so a collection cannot switch modes between the
+      //  check and the push
+      ((hx::StackContext *)inAlloc)->mOldReferrers =
+         sGcMode==gcmGenerational ? hx::sGlobalChunks.alloc() : 0;
+      #endif
       mLocalAllocs.push(inAlloc);
    }
 
@@ -5905,11 +5911,6 @@ public:
       {
          GCLOG("Uncleaned referrers\n");
       }
-
-      if (sGcMode==gcmGenerational)
-         mOldReferrers = hx::sGlobalChunks.alloc();
-      else
-         mOldReferrers = 0;
       #endif
 
 
