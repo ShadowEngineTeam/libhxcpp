@@ -3,6 +3,7 @@
 #include <array>
 #include <atomic>
 #include <cstdio>
+#include <system_error>
 #include <hx/thread/CountingSemaphore.hpp>
 #include "ThreadImpl.hpp"
 
@@ -86,7 +87,15 @@ hx::thread::Thread hx::thread::Thread_obj::create(CreateFunction job)
 #else
 
 	auto semaphore = new hx::thread::CountingSemaphore_obj(0);
-	auto obj       = new ThreadImpl_obj(nextThreadnumber++, job, semaphore);
+	ThreadImpl_obj* obj;
+	try
+	{
+		obj = new ThreadImpl_obj(nextThreadnumber++, job, semaphore);
+	}
+	catch (const std::system_error&)
+	{
+		return hx::Throw(HX_CSTRING("Could not create thread"));
+	}
 
 	hx::GCSetFinalizer(obj, ThreadImpl_obj::finalise);
 	hx::GCPrepareMultiThreaded();
