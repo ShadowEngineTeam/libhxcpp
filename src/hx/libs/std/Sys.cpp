@@ -919,7 +919,32 @@ extern char **environ;
 Array<String> _hx_std_sys_env()
 {
    Array<String> result = Array_obj<String>::__new();
-   #ifndef HX_WINRT
+   #if defined(NEKO_WINDOWS) && defined(HX_SMART_STRINGS) && !defined(HX_WINRT)
+   // The narrow environ is in the ANSI code page, so read the wide block
+   std::vector<std::wstring> entries;
+   {
+      AutoLock lock(hxEnvMutex());
+      wchar_t *block = GetEnvironmentStringsW();
+      if (block)
+      {
+         for(const wchar_t *e = block; *e; e += wcslen(e)+1)
+            entries.push_back(e);
+         FreeEnvironmentStringsW(block);
+      }
+   }
+   for(size_t i=0;i<entries.size();i++)
+   {
+      const std::wstring &entry = entries[i];
+      // Entries like "=C:=C:\dir" are the per-drive directories, not variables
+      if (entry.empty() || entry[0]==L'=')
+         continue;
+      size_t x = entry.find(L'=');
+      if (x == std::wstring::npos)
+         continue;
+      result->push(String::create(entry.c_str(),(int)x));
+      result->push(String::create(entry.c_str()+x+1,(int)(entry.size()-x-1)));
+   }
+   #elif !defined(HX_WINRT)
    // Copy the entries under the lock, build the GC strings after releasing
    // it (see _hx_std_get_env)
    std::vector<std::string> entries;
