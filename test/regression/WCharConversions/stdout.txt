@@ -1,0 +1,3 @@
+out of range ok
+surrogates ok
+four byte ok

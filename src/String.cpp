@@ -594,6 +594,8 @@ inline String TCopyString(const T *inString,int inLength)
             unsigned int c = *s;
             if (c<0x10000)
                result[c16len++] = c;
+            else if (c>=0x110000)
+               result[c16len++] = 0xFFFD;
             else
             {
                int over = (c-0x10000);
@@ -2036,7 +2038,7 @@ wchar_t *ConvertToWChar(const char *inStr, int *ioLen)
       {
         int c2 = b[i++];
         int c3 = b[i++];
-        result[l++] = ( ((c & 0x0F) << 18) | ((c2 & 0x7F) << 12) | ((c3 << 6) & 0x7F) | (b[i++] & 0x7F) );
+        result[l++] = ( ((c & 0x0F) << 18) | ((c2 & 0x7F) << 12) | ((c3 & 0x7F) << 6) | (b[i++] & 0x7F) );
       }
    }
    result[l] = '\0';
@@ -2239,13 +2241,19 @@ const wchar_t * String::wchar_str(hx::IStringAlloc *inBuffer) const
    {
       result = (wchar_t *)NewGCPrivate(0,sizeof(wchar_t)*(length+1) );
    }
+   int n = 0;
    if (isUTF16Encoded())
       for(int i=0;i<length;i++)
-         result[i] = __w[i];
+      {
+         int c = __w[i];
+         if (IsUtf16HighSurrogate(c) && i+1<length && IsUtf16LowSurrogate(__w[i+1]))
+            c = 0x10000 + ((c-0xd800)<<10) + (__w[++i]-0xdc00);
+         result[n++] = c;
+      }
    else
       for(int i=0;i<length;i++)
-         result[i] = __s[i];
-   result[length] = 0;
+         result[n++] = __s[i];
+   result[n] = 0;
    return result;
    #else
 
