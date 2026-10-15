@@ -768,6 +768,17 @@ public:
       if (inDest==inSrc || !inDest.valid())
          return;
 
+      if (inDest.type==jtFloat32 && inSrc.type==jtFloat)
+      {
+         emit_fop1(SLJIT_CONV_F32_FROM_F64, inDest, inSrc);
+         return;
+      }
+      if (inDest.type==jtFloat && inSrc.type==jtFloat32)
+      {
+         emit_fop1(SLJIT_CONV_F64_FROM_F32, inDest, inSrc);
+         return;
+      }
+
       switch(getCommonType(inDest,inSrc))
       {
          case jtInt:

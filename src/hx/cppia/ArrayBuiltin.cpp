@@ -88,6 +88,11 @@ CppiaExpr *ArrayBuiltinBase::link(CppiaModule &inData)
 
 
 #ifdef CPPIA_JIT
+// The memory type of a 4-byte element. The JIT holds floats as doubles, so a
+// Float32 element is converted on the way in and out.
+template<typename ELEM>
+inline JitType elem4JitType() { return ExprTypeOf<ELEM>::value==etFloat ? jtFloat32 : jtAny; }
+
 static ArrayBase * SLJIT_CALL array_expand_size(ArrayBase *inArray, int inSize)
 {
    inArray->Realloc(inSize+1);
@@ -322,7 +327,7 @@ struct ArraySetter : public ArrayBuiltinBase
          }
          else if (sizeof(ELEM)==4)
          {
-            compiler->move( sJitTemp0.atReg(sJitTemp1,2), value );
+            compiler->move( sJitTemp0.atReg(sJitTemp1,2,elem4JitType<ELEM>()), value );
             #ifdef HXCPP_GC_GENERATIONAL
             if (hx::ContainsPointers<ELEM>())
                genWriteBarrier(compiler, sJitTemp2, value );
@@ -382,7 +387,13 @@ struct ArraySetter : public ArrayBuiltinBase
                 ptrType = jtByte;
             else if (sizeof(ELEM)==2)
                 ptrType = jtShort;
-            compiler->convert( sJitReturnReg.star(ptrType), elemType, inDest, destType );
+            if (sizeof(ELEM)==4 && elemType==etFloat)
+            {
+               compiler->move( sJitTempF0, sJitReturnReg.star(jtFloat32) );
+               compiler->convert( sJitTempF0, elemType, inDest, destType );
+            }
+            else
+               compiler->convert( sJitReturnReg.star(ptrType), elemType, inDest, destType );
          }
       }
    }
@@ -1286,7 +1297,7 @@ struct ArrayBuiltin : public ArrayBuiltinBase
                }
                else if (sizeof(ELEM)==4)
                {
-                  compiler->move( sJitTemp1.atReg(sJitTemp0,2), tempVal );
+                  compiler->move( sJitTemp1.atReg(sJitTemp0,2,elem4JitType<ELEM>()), tempVal );
                   #ifdef HXCPP_GC_GENERATIONAL
                   if (hx::ContainsPointers<ELEM>())
                      genWriteBarrier(compiler, sJitTemp2, tempVal );
@@ -1386,7 +1397,7 @@ struct ArrayBuiltin : public ArrayBuiltinBase
                }
                else if (sizeof(ELEM)==4)
                {
-                  compiler->move( sJitTemp0.atReg(sJitTemp1,2), tempVal );
+                  compiler->move( sJitTemp0.atReg(sJitTemp1,2,elem4JitType<ELEM>()), tempVal );
                   #ifdef HXCPP_GC_GENERATIONAL
                   if (hx::ContainsPointers<ELEM>())
                      genWriteBarrier(compiler, sJitTemp2, tempVal );
@@ -1490,9 +1501,13 @@ struct ArrayBuiltin : public ArrayBuiltinBase
                   else
                      compiler->move( inDest.as(jtInt),  sJitTemp1.atReg(sJitTemp0).as(jtShort) );
                }
+               else if (sizeof(ELEM)==4 && elemType==etFloat)
+               {
+                  compiler->move(sJitTempF0, sJitTemp1.atReg(sJitTemp0,2,jtFloat32) );
+                  compiler->convert( sJitTempF0, elemType, inDest, destType );
+               }
                else if (sizeof(ELEM)==4)
                {
-                  // todo - float?
                   if (destType!=elemType || isMemoryVal(inDest))
                   {
                      compiler->move(sJitTemp0.as(elemType==etObject ? jtPointer : jtInt), sJitTemp1.atReg(sJitTemp0,2) );
@@ -1596,6 +1611,14 @@ struct ArrayBuiltin : public ArrayBuiltinBase
                      compiler->move( sJitTemp1.atReg(sJitTemp0,shift).as(jt), zero );
                      compiler->convert(sJitTemp2.as(regType), elemType, inDest, destType);
                   }
+               }
+               else if (sizeof(ELEM)==4 && elemType==etFloat)
+               {
+                  if (destType!=etNull && destType!=etVoid)
+                     compiler->move( sJitTempF0, sJitTemp1.atReg(sJitTemp0,2,jtFloat32) );
+                  compiler->move( sJitTemp1.atReg(sJitTemp0,2,jtInt), 0 );
+                  if (destType!=etNull && destType!=etVoid)
+                     compiler->convert( sJitTempF0, elemType, inDest, destType );
                }
                else if (elemType==etString)
                {

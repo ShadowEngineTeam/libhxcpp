@@ -962,6 +962,7 @@ template<> struct ExprTypeOf<int> { enum { value = etInt }; };
 template<> struct ExprTypeOf<unsigned char> { enum { value = etInt }; };
 template<> struct ExprTypeOf<bool> { enum { value = etInt }; };
 template<> struct ExprTypeOf<Float> { enum { value = etFloat }; };
+template<> struct ExprTypeOf<float> { enum { value = etFloat }; };
 template<> struct ExprTypeOf<String> { enum { value = etString }; };
 
 
