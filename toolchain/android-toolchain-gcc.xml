@@ -132,7 +132,6 @@
   <flag value="-DHX_ANDROID"/>
   <flag value="-DHXCPP_ANDROID_PLATFORM=${HXCPP_ANDROID_PLATFORM}"/>
   <flag value="-DHXCPP_ANDROID_COMPAT_BSD_SIGNAL" unless="NDKV13+"/>
-  <!-- todo <flag value="-Werror"/> -->
   <flag value="-Wa,--noexecstack"/>
   <flag value="-O2" unless="debug || HXCPP_OPTIMIZE_FOR_SIZE || HXCPP_OPTIMIZE_FOR_FAST"/>
   <section if="HXCPP_OPTIMIZE_FOR_SIZE" unless="debug || HXCPP_OPTIMIZE_FOR_FAST">

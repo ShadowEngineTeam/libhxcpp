@@ -801,10 +801,8 @@ public:
          return null();
       }
       //printf("Not compiled %d!\n", function->captureVars.size());
-      //todo - compiled?
       #endif
 
-      // TODO - stack var space added twice?
       function->runFunctionClosure(ctx);
       ctx->breakContReturn = 0;
 

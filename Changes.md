@@ -227,6 +227,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed CallStack.exceptionStack() for cppia: script throws are recorded, and a catch under the JIT stops adding frames to the stack
 * Fixed cpp.encoding.Ascii without smart strings taking any string as ASCII: isEncoded checks the bytes and encode rejects non-ASCII text
 * Stated Haxe 4.2 as the minimum Haxe version. Haxe 4.0 and 4.1 send thread messages through runtime calls that hxcpp 4.3 already dropped; they now fail with a message that says so
+* Fixed the debugger's breakpoint updates having no memory barriers, and made building with MSVC older than Visual Studio 2015 stop with a clear message
 * Added the libhxcpp define: a build that uses the library gets -D libhxcpp=<version>. Compare it with version("x.y.z"); a plain string comparison compares text
 * Added separate Linux ARMv7 and ARM64 build architectures (hxcpp #1355)
 * Fixed AndroidCompat.cpp closing its extern "C" section in the wrong place (hxcpp #1404)

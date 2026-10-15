@@ -207,8 +207,8 @@ typedef char HX_CHAR;
 #pragma warning(disable:4251)
 #pragma warning(disable:4800)
 
-#if defined(_MSC_VER) && _MSC_VER < 1201
-#error MSVC 7.1 does not support template specialization and is not supported by HXCPP
+#if defined(_MSC_VER) && _MSC_VER < 1900
+#error libhxcpp needs Visual Studio 2015 or later
 #endif
 
 
@@ -236,7 +236,6 @@ namespace cpp
    #ifdef _WIN32
    typedef __int64 Int64;
    typedef unsigned __int64 UInt64;
-   // TODO - EMSCRIPTEN?
    #else
    typedef int64_t Int64;
    typedef uint64_t UInt64;

@@ -42,7 +42,6 @@ enum JitPosition
    jposFrame,
    jposLocal,
    jposThis,
-   jposArray,
    jposRegister,
    jposStar,
    jposStarReg,

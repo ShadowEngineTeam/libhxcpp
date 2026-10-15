@@ -2470,7 +2470,6 @@ class BuildTool
             return;
 
          pushFile(full_name, "include", inSection);
-         // TODO - use mFileStack?
          var oldInclude = mCurrentIncludeFile;
          mCurrentIncludeFile = full_name;
 

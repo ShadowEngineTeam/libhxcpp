@@ -770,7 +770,6 @@ static String sArrayFields[] = {
 
 
 
-// TODO;
 hx::Class ArrayBase::__mClass;
 
 Dynamic ArrayCreateEmpty() { return new Array<Dynamic>(0,0); }

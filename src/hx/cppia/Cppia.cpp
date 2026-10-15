@@ -814,7 +814,6 @@ struct CallFunExpr : public CppiaExpr
    #ifdef CPPIA_JIT
    static void SLJIT_CALL callScriptable(CppiaCtx *inCtx, ScriptCallable *inScriptable)
    {
-      // compiled?
       CPPIALOG("callScriptable %p(%p) -> %p\n", inCtx, CppiaCtx::getCurrent(), inScriptable );
       CPPIALOG(" name = %s\n", inScriptable->getName());
       inScriptable->runFunction(inCtx);
@@ -1662,7 +1661,6 @@ struct NewExpr : public CppiaDynamicExpr
 
                // sJitReturnReg = buffer
 
-               // TODO - IMMIX_ALLOC_IS_CONTAINER from classInfo
                // buffer[-1] = size | container
 
                if (info->containsPointers)
@@ -3300,8 +3298,6 @@ struct CallMember : public CppiaExpr
    CppiaExpr *linkSuperCall(CppiaModule &inModule)
    {
       TypeData *type = inModule.types[classId];
-
-      // TODO - callSuperNew
 
       if (type->cppiaClass)
       {
@@ -6023,7 +6019,6 @@ struct VarDecl : public CppiaVoidExpr
    {
       if (init)
       {
-         // TODO  - store type
          switch(var.expressionType)
          {
             case etInt: *(int *)(ctx->frame+var.stackPos) = init->runInt(ctx); break;

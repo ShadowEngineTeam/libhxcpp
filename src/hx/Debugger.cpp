@@ -8,6 +8,7 @@
 #include <hx/OS.h>
 #include <hx/QuickVec.h>
 #include <hx/thread/Thread.hpp>
+#include <atomic>
 #include <mutex>
 #include <atomic>
 
@@ -70,16 +71,14 @@ static unsigned int g_debugThreadNumber = -1;
 ExecutionTrace sExecutionTrace = exeTraceOff;
 
 
-// These should implement write and read memory barrier, but since there are
-// no obvious portable implementations, they are currently left unimplemented
 static void write_memory_barrier()
 {
-    // currently unimplemented
+    std::atomic_thread_fence(std::memory_order_release);
 }
 
 static void read_memory_barrier()
 {
-    // currently unimplemented
+    std::atomic_thread_fence(std::memory_order_acquire);
 }
 
 

@@ -492,7 +492,6 @@ public:
    {
       sljit_sw t0 = getTarget(v0);
       sljit_sw t1 = getTarget(v1);
-      // TODO - multiple JumpId...
       if (compiler)
       {
          bool jumpOnNan = condition==cmpD_NOT_EQUAL;
@@ -660,10 +659,6 @@ public:
          case jposLocal:
             return SLJIT_MEM1(SLJIT_SP);
 
-         case jposArray:
-            setError("TODO");
-            break;
-
          case jposStar:
             if (inVal.reg0<=3 && inVal.reg0>=maxTempCount)
                maxTempCount = inVal.reg0;
@@ -764,7 +759,6 @@ public:
    // May required indirect offsets
    void move(const JitVal &inDest, const JitVal &inSrc) HXCPP_OVERRIDE
    {
-      // TODO - better equality test
       if (inDest==inSrc || !inDest.valid())
          return;
 

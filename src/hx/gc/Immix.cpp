@@ -409,7 +409,6 @@ static ProfileCollectSummary profileCollectSummary;
 
 
 
-// TODO: Telemetry.h ?
 #ifdef HXCPP_TELEMETRY
 extern void __hxt_gc_realloc(void* old_obj, void* new_obj, int new_size);
 extern void __hxt_gc_start();
@@ -3229,7 +3228,6 @@ public:
       //  on us - ie, we are assumed ot be in a GC free zone.
       std::lock_guard<std::recursive_mutex> lock(*gThreadStateChangeLock);
       mLocalAllocs.push(inAlloc);
-      // TODO Attach debugger
    }
 
    bool ReturnToPoolLocked(LocalAllocator *inAlloc)
@@ -4031,183 +4029,6 @@ public:
    }
 
 
-   #ifdef HXCPP_GC_GENERATIONAL
-   BlockDataInfo *getNextBlockWithoutSurvivors(int &ioPosition)
-   {
-      while(ioPosition<mAllBlocks.size())
-      {
-         BlockDataInfo *b = mAllBlocks[ioPosition++];
-         if (b->mHoles>0 && !b->mHasSurvivor)
-            return b;
-      }
-      return 0;
-   }
-
- 
-
-   int MoveSurvivors(hx::QuickVec<hx::Object *> *inRemembered)
-   {
-      int sourceScan = 0;
-      int destScan = 0;
-      int moveObjs = 0;
-      int clearedBlocks = 0;
-
-      BlockDataInfo *destInfo = 0;
-      BlockData *dest = 0;
-      int destHole = 0;
-      int destPos = 0;
-      int destLen = 0;
-      unsigned int *destStarts = 0;
-
-      BlockDataInfo *from = 0;
-
-      int tested = 0;
-
-      int all = mAllBlocks.size();
-      for(int srcBlock=0; srcBlock<all; srcBlock++)
-      {
-         from = mAllBlocks[srcBlock];
-         if (from->mPinned || !from->mHasSurvivor)
-         {
-            from = 0;
-            continue;
-         }
-         tested++;
-         unsigned int *srcStart = from->allocStart;
-
-         // Scan nursery for survivors
-         for (uint8_t hole{ 0 }; hole < from->mHoles; hole++)
-         {
-            int start = from->mRanges[hole].start;
-            int len = from->mRanges[hole].length;
-            int startRow = start >> IMMIX_LINE_BITS;
-            int end = startRow + (len >> IMMIX_LINE_BITS);
-            for(int r = startRow; r<end;r++)
-            {
-               unsigned int &startFlags = srcStart[r];
-               if (startFlags)
-               {
-                  for(int loc=0;loc<32;loc++)
-                     if (startFlags & (1<<loc))
-                     {
-                        unsigned int* row{ reinterpret_cast<unsigned int*>(from->mPtr->row(static_cast<size_t>(r))) };
-                        unsigned int &header{ row[loc] };
-
-                        if ((header&IMMIX_ALLOC_MARK_ID) == hx::gMarkID)
-                        {
-                           int size = ((header & IMMIX_ALLOC_SIZE_MASK) >> IMMIX_ALLOC_SIZE_SHIFT);
-                           int allocSize = size + sizeof(int);
-
-                           // Find dest reqion ...
-                           while(destHole==0 || destLen < ALIGN_PADDING(destPos) + allocSize)
-                           {
-                              if (destHole==0)
-                              {
-                                 if (destInfo)
-                                    destInfo->makeFull();
-                                 destInfo = getNextBlockWithoutSurvivors(destScan);
-                                 if (!destInfo)
-                                    goto no_more_moves;
-
-                                 destHole = -1;
-                                 destLen = 0;
-                              }
-                              if (destLen + ALIGN_PADDING(0)<allocSize)
-                              {
-                                 destHole++;
-                                 if (destHole>=destInfo->mHoles)
-                                    destHole = 0;
-                                 else
-                                 {
-                                    dest = destInfo->mPtr;
-                                    destPos = destInfo->mRanges[destHole].start;
-                                    destLen = destInfo->mRanges[destHole].length;
-                                    destStarts = destInfo->allocStart;
-                                 }
-                              }
-                           }
-
-                           // TODO - not copy + paste
-
-                           #ifdef HXCPP_ALIGN_ALLOC
-                           // Charge the alignment padding against destLen too (see
-                           // the matching fix in MoveBlocks) so destLen cannot
-                           // over-count free space and overflow the block.
-                           {
-                              int alignPad = ALIGN_PADDING(destPos);
-                              destPos += alignPad;
-                              destLen -= alignPad;
-                           }
-                           #endif
-
-                           int startRow = destPos>>IMMIX_LINE_BITS;
-
-                           destStarts[ startRow ] |= hx::gImmixStartFlag[destPos&127];
-
-                           unsigned int *buffer = (unsigned int *)((char *)dest + destPos);
-
-                           unsigned int headerPreserve = header & IMMIX_HEADER_PRESERVE;
-
-                           int end = destPos + allocSize;
-
-                           *buffer++ =  (( (end+(IMMIX_LINE_LEN-1))>>IMMIX_LINE_BITS) -startRow) |
-                                           (size<<IMMIX_ALLOC_SIZE_SHIFT) |
-                                           headerPreserve |
-                                           hx::gMarkID;
-                           destPos = end;
-                           destLen -= allocSize;
-
-                           unsigned int *src = row + loc + 1;
-
-                           MoveSpecial((hx::Object *)buffer,(hx::Object *)src, size);
-
-                           // Result has moved - store movement in original position...
-                           memcpy(buffer, src, size);
-                           //GCLOG("   move %p -> %p %d (%08x %08x )\n", src, buffer, size, buffer[-1], buffer[1] );
-
-                           *(unsigned int **)src = buffer;
-                           header = IMMIX_OBJECT_HAS_MOVED;
-                           moveObjs++;
-
-                           startFlags &= ~(1<<loc);
-                           if (!startFlags)
-                              break;
-                        }
-                     }
-               }
-            }
-         }
-
-         no_more_moves:
-            if (destInfo)
-            {
-               destInfo->makeFull();
-               clearedBlocks++;
-            }
-            else
-            {
-               // Partialy cleared, then ran out of to blocks - remove from allocation this round
-               if (from && moveObjs)
-               {
-                  // Could maybe be a bit smarter here
-                  //ioStats.rowsInUse += from->mUsedRows;
-                  from->makeFull();
-               }
-            }
-      }
-
-      #ifdef SHOW_FRAGMENTATION
-      //GCLOG("Compacted nursery %d objects (%d/%d blocks)\n", moveObjs, clearedBlocks, mAllBlocks.size());
-      #endif
-
-      if (moveObjs)
-      {
-         AdjustPointers(inRemembered);
-      }
-
-      return moveObjs;
-   }
-   #endif
 
    int releaseEmptyGroups(BlockDataStats &outStats, size_t releaseSize)
    {
@@ -5093,8 +4914,6 @@ public:
       bool generational = false; 
 
       #ifdef HXCPP_GC_GENERATIONAL
-      bool compactSurviors = false;
-
       if (sGcMode==gcmGenerational)
       {
          for(int i=0;i<mLocalAllocs.size();i++)
@@ -5199,14 +5018,6 @@ public:
       }
 
 
-      #ifdef HXCPP_GC_GENERATIONAL
-      if (compactSurviors)
-      {
-         MoveSurvivors(&rememberedSet);
-      }
-      #endif
-
-
       #ifdef HXCPP_GC_MOVING
       if (!full)
       {
@@ -5265,7 +5076,7 @@ public:
 
 
       #ifdef HXCPP_TELEMETRY
-      // Detect deallocations - TODO: add STAMP() ?
+      // Detect deallocations
       __hxt_gc_after_mark(gByteMarkID, HX_ENDIAN_MARK_ID_BYTE);
       #endif
 

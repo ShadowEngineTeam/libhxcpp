@@ -379,24 +379,10 @@ inline RESULT Dynamic::StaticCast() const
    }
 }
 
-namespace hx
-{
-inline bool IsInterfacePtr(...) { return false; }
-inline bool IsInterfacePtr(const hx::Interface *) { return true; }
-}
-  
 template<typename VALUE>
 inline void __hxcpp_unsafe_set(hx::ObjectPtr<VALUE> &outForced, const Dynamic &inD)
 {
-   if (hx::IsInterfacePtr(outForced.mPtr))
-   {
-      hx::Throw(HX_CSTRING("unsafe set of interfaces not supported yet."));
-      outForced.mPtr = (VALUE *)(inD.mPtr);
-   }
-   else
-   {
-      outForced.mPtr = (VALUE *)(inD.mPtr);
-   }
+   outForced.mPtr = (VALUE *)(inD.mPtr);
 }
 
 namespace hx

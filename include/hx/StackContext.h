@@ -407,10 +407,6 @@ struct StackContext : public hx::ImmixAllocator
       // Updated only when a thrown exception unwinds the stack
       bool mIsUnwindingException;
 
-      #ifdef HXCPP_STACK_SCRIPTABLE
-         // TODO - combine CppaCtx and StackContext
-      #endif
-
       #ifdef HXCPP_DEBUGGER
          DebuggerContext  *mDebugger;
       #endif

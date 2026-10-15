@@ -1368,7 +1368,6 @@ void CppiaClassInfo::init(CppiaCtx *ctx, int inPhase)
          staticVars[i]->runInit(ctx);
          if (staticVars[i]->name==HX_CSTRING("__meta__"))
          {
-            // Todo - delete/clean value
             mClass->__meta__ = staticVars[i]->objVal;
             staticVars.erase( staticVars.begin() + i );
             i--;
