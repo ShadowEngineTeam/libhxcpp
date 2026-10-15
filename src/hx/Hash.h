@@ -20,8 +20,9 @@ inline unsigned int HashMixInt(unsigned int h)
    // Fold high bits down so strided keys (zero low bits) spread across buckets.
    // This is the identity for keys < 2^16, preserving cache locality for the
    // common small/dense key case (ids 0..N) while breaking power-of-two
-   // clustering for large/strided keys.
-   h ^= h >> 16;
+   // clustering for large/strided keys. The multiply keeps keys packed as
+   // (x << 16) | y from folding to x ^ y.
+   h ^= (h >> 16) * 0x9E3779B1u;
    return h;
 }
 
