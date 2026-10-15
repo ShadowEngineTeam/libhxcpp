@@ -177,6 +177,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed Sys.print and Sys.println of a null value printing (null), or crashing where the compiler turns the printf into puts(NULL); they print null (hxcpp #964)
 * Fixed HXCPP_GC_VERIFY reporting an unmarked row with the generational collector: its verification mark advanced the mark id a second time each collection, so dead objects' stale entries could match the current mark before they were cleared (hxcpp #1415)
 * Fixed a Dynamic or Any Bool comparing equal to the number 1 (or 0): a Bool known only at run time now equals only another Bool, as on the other targets (hxcpp #1009)
+* Fixed small Int64 values (-1 to 255) boxing as Int: they came from the boxed Int cache, so Type.typeof and the Int64 type checks saw an Int. They have a cache of their own (hxcpp #1278)
 * Added the libhxcpp define: a build that uses the library gets -D libhxcpp=<version>. Compare it with version("x.y.z"); a plain string comparison compares text
 * Added separate Linux ARMv7 and ARM64 build architectures (hxcpp #1355)
 * Fixed AndroidCompat.cpp closing its extern "C" section in the wrong place (hxcpp #1404)

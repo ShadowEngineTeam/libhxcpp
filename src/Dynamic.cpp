@@ -339,6 +339,16 @@ Dynamic CreateDynamicStruct(const void *inValue, int inSize, DynamicHandlerFunc 
 // --- Dynamic -------------------------------------------------
 
 Dynamic sConstDynamicInts[256+1];
+Dynamic sConstDynamicInt64s[256+1];
+
+static hx::Object *fromSmallInt64(int inVal)
+{
+   int idx = inVal+1;
+   hx::Object *result = sConstDynamicInt64s[idx].mPtr;
+   if (!result)
+      result = sConstDynamicInt64s[idx].mPtr = new (hx::NewObjConst)Int64Data(inVal);
+   return result;
+}
 
 static hx::Object *fromInt(int inVal)
 {
@@ -427,12 +437,7 @@ Dynamic::Dynamic(cpp::Int64 inVal)
 {
    int ival = (int)inVal;
    if ( ival==inVal && ival>=-1 && ival<256 )
-   {
-      int idx = ival+1;
-      mPtr = sConstDynamicInts[idx].mPtr;
-      if (!mPtr)
-         mPtr = sConstDynamicInts[idx].mPtr = new (hx::NewObjConst)IntData(ival);
-   }
+      mPtr = fromSmallInt64(ival);
    else
       mPtr = (hx::Object *)new Int64Data(inVal);
 }
@@ -440,13 +445,8 @@ Dynamic::Dynamic(cpp::Int64 inVal)
 
 Dynamic::Dynamic(cpp::UInt64 inVal)
 {
-   if ( (int)inVal==inVal && inVal<256 )
-   {
-      int idx = inVal+1;
-      mPtr = sConstDynamicInts[idx].mPtr;
-      if (!mPtr)
-         mPtr = sConstDynamicInts[idx].mPtr = new (hx::NewObjConst)IntData(inVal);
-   }
+   if ( inVal<256 )
+      mPtr = fromSmallInt64((int)inVal);
    else
       mPtr = (hx::Object *)new Int64Data(inVal);
 }
