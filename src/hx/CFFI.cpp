@@ -977,7 +977,7 @@ void  val_gc(hx::Object * arg1,hx::finalizer arg2) THROWS
 
 void  val_gc_ptr(void * arg1,hxPtrFinalizer arg2) THROWS
 {
-   hx::Throw(HX_CSTRING("Finalizer not supported here"));
+   __hxcpp_add_alloc_finalizer(arg1,arg2,true);
 }
 
 void  val_gc_add_root(hx::Object **inRoot)

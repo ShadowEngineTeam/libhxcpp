@@ -221,6 +221,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed running a .cppia file on a BSD host stopping with Cppia is not supported on this host: it uses the host in bin/BSD64 or bin/BSDArm64 (hxcpp #1089)
 * Fixed cpp.encoding.Utf16 without smart strings (-D disable_unicode_strings): decode works instead of throwing, and encode and the byte and char counts read the string as UTF-8 instead of one character per byte
 * Fixed Tracy builds (-D HXCPP_TRACY) throwing "Not implemented" from the hxtelemetry API: starting telemetry is a no-op and dumping returns no frame
+* Fixed the CFFI val_gc_ptr always throwing "Finalizer not supported here": it attaches the finalizer to the allocation
 * Added the libhxcpp define: a build that uses the library gets -D libhxcpp=<version>. Compare it with version("x.y.z"); a plain string comparison compares text
 * Added separate Linux ARMv7 and ARM64 build architectures (hxcpp #1355)
 * Fixed AndroidCompat.cpp closing its extern "C" section in the wrong place (hxcpp #1404)

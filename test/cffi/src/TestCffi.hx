@@ -33,6 +33,8 @@ class TestCffi extends Test
    static var getAbstract:Dynamic->Int = Lib.load("prime", "getAbstract", 1);
    static var freeAbstract:Dynamic->Void = Lib.load("prime", "freeAbstract", 1);
    static var getAbstractFreeCount:Void->Int = Lib.load("prime", "getAbstractFreeCount", 0);
+   static var allocFinalizedPtrs:Int->Void = Lib.load("prime", "allocFinalizedPtrs", 1);
+   static var getPtrFreeCount:Void->Int = Lib.load("prime", "getPtrFreeCount", 0);
    static var createAnon:Void->Dynamic = Lib.load("prime", "createAnon", 0);
   
 
@@ -171,7 +173,17 @@ class TestCffi extends Test
       Assert.equals( 2, getAbstractFreeCount() );
    }
 
-   function clearStack(count:Int, ?_:Dynamic, ?_:Dynamic, ?_:Dynamic, ?_:Dynamic, ?_:Dynamic):Dynamic
+   #if !neko
+   public function testValGcPtr()
+   {
+      allocFinalizedPtrs(100);
+      clearStack(12);
+      Gc.run(true);
+      Assert.isTrue( getPtrFreeCount() > 0 );
+   }
+   #end
+
+   function clearStack(count:Int,?_:Dynamic, ?_:Dynamic, ?_:Dynamic, ?_:Dynamic, ?_:Dynamic):Dynamic
    {
       if (count==0)
          return 0;

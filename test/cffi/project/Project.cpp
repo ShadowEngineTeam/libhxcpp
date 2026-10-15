@@ -359,6 +359,28 @@ value freeAbstract(value inAbstract)
 DEFINE_PRIM(freeAbstract, 1);
 
 
+int myPtrFreeCount = 0;
+
+void freeMyPtr(void *)
+{
+   myPtrFreeCount++;
+}
+
+value allocFinalizedPtrs(value inCount)
+{
+   for(int i=0;i<val_int(inCount);i++)
+      val_gc_ptr(alloc_private(16), freeMyPtr);
+   return alloc_null();
+}
+DEFINE_PRIM(allocFinalizedPtrs, 1);
+
+value getPtrFreeCount()
+{
+   return alloc_int(myPtrFreeCount);
+}
+DEFINE_PRIM(getPtrFreeCount, 0);
+
+
 value createAnon()
 {
    value v = alloc_empty_object();
