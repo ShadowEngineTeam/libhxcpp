@@ -3,6 +3,18 @@
 
 #include <stddef.h>
 
+// For code that reads whole stack ranges, including AddressSanitizer's redzones
+#if defined(__SANITIZE_ADDRESS__)
+   #define HX_NO_SANITIZE_ADDRESS __attribute__((no_sanitize_address))
+#elif defined(__has_feature)
+   #if __has_feature(address_sanitizer)
+      #define HX_NO_SANITIZE_ADDRESS __attribute__((no_sanitize_address))
+   #endif
+#endif
+#ifndef HX_NO_SANITIZE_ADDRESS
+   #define HX_NO_SANITIZE_ADDRESS
+#endif
+
 // By what the compiler targets: an Xcode arm64 build may define HXCPP_M64 and not HXCPP_ARM64
 #if defined(HXCPP_ARM64) || defined(__aarch64__) || defined(__arm64__) || defined(_M_ARM64)
 #define HXCPP_CAPTURE_SETJMP

@@ -48,6 +48,8 @@
   <flag value="-fPIC"/>
   <flag value="-Wno-overflow" />
   <cppflag value="-Wno-invalid-offsetof" />
+  <flag value="-fsanitize=${HXCPP_SANITIZE}" if="HXCPP_SANITIZE"/>
+  <flag value="-fno-omit-frame-pointer" if="HXCPP_SANITIZE"/>
   <flag value="-DHX_LINUX"/>
   <flag value="-DRASPBERRYPI=RASPBERRYPI" if="rpi"/>
   <flag value="-DHXCPP_BIG_ENDIAN" if="HXCPP_BIG_ENDIAN"/>
@@ -71,6 +73,7 @@
   <flag value="-Xlinker"/>
   <flag value="--no-undefined" unless="HXCPP_ALLOW_UNDEFINED" />
   <flag value="-debug" if="HXCPP_DEBUG_LINK" />
+  <flag value="-fsanitize=${HXCPP_SANITIZE}" if="HXCPP_SANITIZE"/>
   <lib name="-ldl" unless="bsd"/>
   <ext value=".dso"/>
   <outflag value="-o "/>
@@ -81,6 +84,7 @@
   <fromfile value="" if="GCC_OLD" />
   <flag value="-debug" if="HXCPP_DEBUG_LINK" />
   <flag value="-rdynamic"/>
+  <flag value="-fsanitize=${HXCPP_SANITIZE}" if="HXCPP_SANITIZE"/>
   <flag value="-m32" unless="noM32"/>
   <flag value="-m64" if="HXCPP_M64" unless="noM64" />
   <lib name="-ldl" unless="bsd"/>

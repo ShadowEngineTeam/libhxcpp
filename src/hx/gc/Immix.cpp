@@ -5667,6 +5667,7 @@ MarkChunk *MarkChunk::swapForNew()
 
 
 
+HX_NO_SANITIZE_ADDRESS
 void MarkConservative(int *inBottom, int *inTop,hx::MarkContext *__inCtx)
 {
    #ifdef VERIFY_STACK_READ
@@ -5710,7 +5711,9 @@ void MarkConservative(int *inBottom, int *inTop,hx::MarkContext *__inCtx)
 
    for(int *ptr = inBottom ; ptr<inTop; ptr++)
    {
-      uintptr_t potentialObject{ reinterpret_cast<uintptr_t>(*reinterpret_cast<void**>(ptr)) };
+      void *word;
+      memcpy(&word, ptr, sizeof(word));
+      uintptr_t potentialObject{ reinterpret_cast<uintptr_t>(word) };
 
       #ifdef HXCPP_ALIGN_ALLOC
       const size_t validObjectMask{ 0x07 };
