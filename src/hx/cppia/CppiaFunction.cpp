@@ -872,7 +872,7 @@ public:
 
       int haveArgs = !inArgs.mPtr ? 0 : inArgs->length;
       if (haveArgs>function->argCount)
-         throw sInvalidArgCount;
+         hx::Throw(sInvalidArgCount);
 
       for(int a=0; a<haveArgs; a++)
          pushArgDynamic(ctx,a,inArgs[a]);
