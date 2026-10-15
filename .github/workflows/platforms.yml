@@ -7,6 +7,12 @@ on:
       haxe:
         required: true
         type: string
+      # macOS Intel runners are the scarcest: every change runs the core suites
+      # there, and the nightly run passes full for everything
+      intel_scope:
+        required: false
+        type: string
+        default: smoke
 
 jobs:
   Windows32:
@@ -30,6 +36,7 @@ jobs:
       sep: \
       ext: .dll
       os: windows-latest
+      stress: '["default generational verify", "generational-verify moving big-blocks", "always-move check-pointer"]'
 
   MacOS64:
     uses: ./.github/workflows/test.yml
@@ -41,6 +48,8 @@ jobs:
       sep: /
       ext: .dylib
       os: macos-15-intel
+      scope: ${{ inputs.intel_scope }}
+      bindir: Mac64
 
   MacOSArm:
     uses: ./.github/workflows/test.yml
@@ -52,6 +61,7 @@ jobs:
       sep: /
       ext: .dylib
       os: macos-latest
+      bindir: MacArm64
 
   Linux32:
     uses: ./.github/workflows/test.yml
@@ -74,6 +84,8 @@ jobs:
       sep: /
       ext: .dso
       os: ubuntu-latest
+      stress: '["default generational verify", "generational-verify moving big-blocks", "always-move check-pointer"]'
+      bindir: Linux64
 
   # Haxe 4.3.7 has no Linux arm64 build, so this runs with the nightly
   LinuxArm64:
@@ -87,3 +99,4 @@ jobs:
       sep: /
       ext: .dso
       os: ubuntu-24.04-arm
+      bindir: LinuxArm64

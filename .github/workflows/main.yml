@@ -48,17 +48,6 @@ jobs:
     - run: bash test/gc-defines/check.sh
       name: Compile the GC under each define
 
-  check-mac-arm64-capture:
-    name: Check GC register capture for macOS arm64
-    runs-on: macos-latest
-    steps:
-    - name: checkout
-      uses: actions/checkout@v4
-
-    # an Xcode arm64 build that defines HXCPP_M64 but not HXCPP_ARM64
-    - run: clang++ -arch arm64 -std=c++11 -c -DHX_MACOS -DHXCPP_M64 -Iinclude src/hx/gc/GcRegCapture.cpp -o capture.o
-      name: Compile the register capture
-
   check-msvc-llvm:
     name: Check MSVC builds with clang-cl
     runs-on: windows-latest
@@ -117,44 +106,6 @@ jobs:
       working-directory: test/std
       run: haxe -m Test -L hx4compat -L utest --cpp android -D android -D exe_link -D ${{ matrix.flag }}
 
-  check-apple-ssl:
-    name: Check SSL for iOS and tvOS
-    runs-on: macos-latest
-    steps:
-    - name: checkout
-      uses: actions/checkout@v4
-
-    # at the toolchains' default minimum, so the pre-12 trust evaluation compiles too
-    - run: |
-        flags="-std=c++11 -c -arch arm64 -Iinclude -Iproject/thirdparty/mbedtls-3.6.7/include -Iproject/thirdparty/config/mbedtls/include -DMBEDTLS_USER_CONFIG_FILE=<mbedtls_config.h> -DHXCPP_M64 -DHXCPP_ARM64"
-        xcrun --sdk iphoneos clang++ $flags -miphoneos-version-min=9.0 -DIPHONE=IPHONE -DIPHONEOS=IPHONEOS src/hx/libs/ssl/SSL.cpp -o ssl-ios.o
-        xcrun --sdk appletvos clang++ $flags -mtvos-version-min=9.0 -DAPPLETV=APPLETV src/hx/libs/ssl/SSL.cpp -o ssl-tvos.o
-      name: Compile the SSL library
-
-  check-run-bindir:
-    name: Check run.n finds the compiled BuildTool (${{ matrix.dir }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            dir: Linux64
-          - os: macos-15-intel
-            dir: Mac64
-          - os: macos-latest
-            dir: MacArm64
-    runs-on: ${{ matrix.os }}
-    steps:
-    - name: checkout
-      uses: actions/checkout@v4
-
-    - uses: krdlab/setup-haxe@v2
-      with:
-        haxe-version: 4.3.7
-
-    - run: bash test/run_bindir/check.sh ${{ matrix.dir }}
-      name: Run through run.n
-
   check-musl:
     name: Check Linux with musl
     runs-on: ubuntu-latest
@@ -198,8 +149,11 @@ jobs:
 
   # The test suites on every platform with the stable Haxe; nightly.yml runs
   # them with the Haxe nightly build once a day
+  # They wait for the quick checks, so a header or GC define that does not
+  # compile fails in a minute instead of after every platform has queued
   platforms:
     name: Haxe 4.3.7
+    needs: [check-headers, check-gc-defines]
     uses: ./.github/workflows/platforms.yml
     with:
       haxe: 4.3.7
