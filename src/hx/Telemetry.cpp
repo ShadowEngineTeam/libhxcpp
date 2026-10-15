@@ -76,6 +76,19 @@ public:
 
     ~Telemetry()
     {
+        // Restarting telemetry, or a thread exiting, deletes a Telemetry
+        // whose recorded objects are still to be collected
+        {
+            std::lock_guard<std::recursive_mutex> lock(alloc_mutex);
+            for (std::map<void*, Telemetry*>::iterator iter = alloc_map.begin(); iter != alloc_map.end(); )
+            {
+                if (iter->second == this)
+                    alloc_map.erase(iter++);
+                else
+                    ++iter;
+            }
+        }
+
         std::lock_guard<std::recursive_mutex> lock(gThreadMutex);
 
         gThreadRefCount -= 1;
@@ -491,9 +504,8 @@ void hx::Telemetry::HXTAllocation(void* obj, size_t inSize, const char* type)
     std::map<void*, hx::Telemetry*>::iterator exist = alloc_map.find(obj);
     if (exist != alloc_map.end()) {
       printf("HXT ERR: Object id collision! at on %016lx, id=%016lx\n", obj, obj_id);
+      alloc_mutex.unlock();
       throw "uh oh";
-      alloc_mutex.Unlock();
-      return;
     }
 #endif
 

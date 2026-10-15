@@ -31,6 +31,39 @@ class TestAllocations extends Test
     Assert.isTrue(stashed.wait(10.0));
   }
 
+  // Restarting telemetry deletes the Telemetry that recorded these objects,
+  // which collecting them must not reach
+  function testCollectAfterRestart()
+  {
+    untyped __global__.__hxcpp_hxt_start_telemetry(true, true);
+    var garbage = [for (i in 0...1000) [i]];
+    garbage = null;
+    untyped __global__.__hxcpp_hxt_start_telemetry(true, true);
+    for (_ in 0...3)
+      cpp.vm.Gc.run(true);
+    Assert.pass();
+  }
+
+  // An exiting thread can delete its Telemetry, with what it recorded still
+  // to be collected
+  function testCollectAfterThreadsExit()
+  {
+    var done = new Lock();
+    for (t in 0...6)
+      Thread.create(function() {
+        untyped __global__.__hxcpp_hxt_start_telemetry(true, true);
+        var garbage = [for (i in 0...1000) [i, t]];
+        garbage = null;
+        done.release();
+      });
+    for (t in 0...6)
+      Assert.isTrue(done.wait(10.0));
+    Sys.sleep(0.5);
+    for (_ in 0...3)
+      cpp.vm.Gc.run(true);
+    Assert.pass();
+  }
+
   // Primitives loaded with cpp.Lib.load run inside a frame like this one
   // (see ExternalPrimitive in src/hx/Lib.cpp), so what they allocate takes
   // the extern path in HXTAllocation
