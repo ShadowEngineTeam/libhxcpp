@@ -8,7 +8,7 @@
 
 	<include name="${this_dir}/mbedtls-flags.xml" />
 
-	<compilerflag value="-std=c99" unless="MSVC_VER" />
+	<compilerflag value="-std=c99" unless="isMsvc" />
 
 	<!-- mbedTLS's symbols stay inside the binary that links them. hxcpp links
 	     Linux executables with -rdynamic, which exports every symbol of
