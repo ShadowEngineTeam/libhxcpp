@@ -384,6 +384,9 @@ typedef PropertyAccessMode PropertyAccess;
 #include <hx/Boot.h>
 #include <hx/Undefine.h>
 #include <hx/LessThanEq.h>
+#ifdef HXCPP_SCRIPTABLE
+#include <hx/Scriptable.h>
+#endif
 
 #endif
 
