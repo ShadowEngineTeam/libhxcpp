@@ -31,7 +31,17 @@ Defines affecting how the code is compiled.  These can be on the command line wh
 | *HXCPP_GC_DYNAMIC_SIZE* | Monitor GC times and expand memory working space if required |
 | *HXCPP_GC_BIG_BLOCKS*   | Allow working memory greater than 1 Gig |
 | *HXCPP_GC_DEBUG_LEVEL*  | Number 1-4 indicating additional debugging in GC |
+| *HXCPP_GC_VERIFY*       | Check the heap's consistency around every collection and stop on the first error. Slow; for debugging the GC |
+| *HXCPP_GC_DEBUG_ALWAYS_MOVE* | Implies HXCPP_GC_MOVING and moves every movable object at each collection, to flush out native code that keeps raw pointers. Slow; for debugging |
+| *HXCPP_CATCH_SEGV*      | Turn a segmentation fault into a Haxe exception (a signal handler, or an SEH translator with MSVC), set up on each thread |
+| *HXCPP_SIGNAL_THROW*    | Convert memory errors to Haxe exceptions without extra code |
+| *HXCPP_STRICT_CASTS*    | Throw on a failed cast instead of producing null |
+| *HXCPP_PCRE_JIT*        | Use PCRE2's JIT for EReg, 3-5x faster. A match that runs out of JIT stack is retried on the interpreter. Ignored on iOS, tvOS, watchOS and Emscripten |
+| *HXCPP_SSL_NO_TICKETS*  | Build TLS servers without RFC 5077 session tickets |
+| *HXCPP_TRACY*           | Build with the Tracy profiler. Add HXCPP_TRACY_MEMORY to record allocations, HXCPP_TRACY_INCLUDE_CALLSTACKS for call stacks, HXCPP_TRACY_ON_DEMAND to profile only while a viewer is connected, HXCPP_TRACY_NO_EXIT to wait for the viewer before exiting, and HXCPP_TRACY_TIMER_FALLBACK where the CPU has no invariant TSC (some virtual machines) |
 | *HXCPP_DEBUG_LINK*      | Add symbols to final binary, even in release mode. |
+| *HXCPP_DEBUG_LINK_AND_STRIP* | Build with symbols as HXCPP_DEBUG_LINK does, then strip the final binary (for Android release builds) |
+| *HXCPP_OPTIMIZE_FOR_SIZE* | Optimise for code size rather than speed |
 | *HXCPP_STACK_TRACE*     | Have valid function-level stack traces, even in release mode. |
 | *HXCPP_STACK_LINE*      | Include line information in stack traces, even in release mode. |
 | *HXCPP_CHECK_POINTER*   | Add null-pointer checks,even in release mode. |
@@ -41,6 +51,7 @@ Defines affecting how the code is compiled.  These can be on the command line wh
 | *HXCPP_SQLITE_FTS5*     | Build SQLite with the FTS5 full-text search extension. The JSON functions are always built in |
 | *HXCPP_C_STANDARD*      | Set default C standard |
 | *HXCPP_CXX_STANDARD*    | Set default C++ standard |
+| *HXCPP_CPP17*           | Use C++17, as HXCPP_CXX_STANDARD=17 does |
 | *HXCPP_OBJC_STANDARD*   | Set default Objective-C standard |
 | *HXCPP_OBJCXX_STANDARD* | Set default Objective-C++ standard |
 | *exe_link*              | Generate executable file (rather than dynamic library on android) |
@@ -52,8 +63,13 @@ Other defines:
 | Define                  | Meaning            |
 |-------------------------|--------------------|
 | *HXCPP_VERBOSE*         | Print extra output from build tool. |
+| *HXCPP_QUIET*           | Print less output from the build tool |
+| *HXCPP_SILENT*          | Print only errors from the build tool |
+| *HXCPP_COMPILE_THREADS* | Number of files to compile at once (also read from the environment) |
+| *HXCPP_COMPILE_CACHE*   | Directory for the compile cache, usually set in the environment. See [CompileCache.md](../CompileCache.md) |
 | *HXCPP_TIMES*           | Show some basic profiling information |
 | *HXCPP_NEKO_BUILDTOOL*  | Force use of hxcpp.n, rather than compiled BuildTool.exe
+| *HXCPP_NO_COLOUR*       | Same as HXCPP_NO_COLOR |
 | *HXCPP_NO_COLOR*        | Do not add colour-codes to tool output |
 | *HXCPP_COLOR*           | Add colour-codes to tool output, even where the terminal is not recognised or NO_COLOR is set |
 | *HXCPP_KEEP_TEMP*       | Does not delete the files created for file 'embedName' option |
@@ -65,6 +81,7 @@ Defines affecting target architecture.
 |-------------------------|--------------------|
 | *HXCPP_M32*             | Force 32-bit compile for current desktop |
 | *HXCPP_M64*             | Force 64-bit compile for current desktop |
+| *HXCPP_NO_M32*          | Do not pass -m32 on Linux, for compilers that are 32-bit already |
 | *HXCPP_ARMV6*           | Compile arm-based devices for armv6 |
 | *HXCPP_ARM64*           | Compile arm-based devices for 64 bits |
 | *HXCPP_ARMV7*           | Compile arm-based devices for armv7 |
