@@ -18,8 +18,10 @@ struct hx::thread::CountingSemaphore_obj::Impl
 
 hx::thread::CountingSemaphore_obj::CountingSemaphore_obj(int value) : impl(new Impl())
 {
-	if (nullptr == (impl->semaphore = CreateSemaphoreW(nullptr, value, 0x7FFFFFF, nullptr)))
+	if (nullptr == (impl->semaphore = CreateSemaphoreW(nullptr, value, 0x7FFFFFFF, nullptr)))
 	{
+		delete impl;
+		impl = nullptr;
 		hx::Throw(HX_CSTRING("Failed to create semaphore"));
 	}
 

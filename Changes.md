@@ -271,6 +271,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed thread wait timeouts that were negative, NaN, huge or under a millisecond failing, spinning or not waiting
 * Applied PCRE2's security backports for 10.42, including a heap overflow in pcre2_match with (*LIMIT_HEAP=n)
 * Fixed Process.exitCode returning 0 when called again on POSIX, and kill and close acting on a pid that was already reaped
+* Fixed Windows semaphores refusing more than 134 million permits, and failed semaphore construction leaking its native part
 * Added the libhxcpp define: a build that uses the library gets -D libhxcpp=<version>. Compare it with version("x.y.z"); a plain string comparison compares text
 * Added separate Linux ARMv7 and ARM64 build architectures (hxcpp #1355)
 * Fixed AndroidCompat.cpp closing its extern "C" section in the wrong place (hxcpp #1404)

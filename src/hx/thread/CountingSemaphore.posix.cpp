@@ -27,6 +27,8 @@ hx::thread::CountingSemaphore_obj::CountingSemaphore_obj(int value) : impl(new I
 {
 	if (0 != (sem_init(&impl->semaphore, false, value)))
 	{
+		delete impl;
+		impl = nullptr;
 		hx::Throw(HX_CSTRING("Failed to create semaphore"));
 	}
 

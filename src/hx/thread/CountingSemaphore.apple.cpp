@@ -22,6 +22,8 @@ hx::thread::CountingSemaphore_obj::CountingSemaphore_obj(int value) : impl(new I
 	// libdispatch aborts when a semaphore is released below its initial value
 	if (value < 0 || nullptr == (impl->semaphore = dispatch_semaphore_create(0)))
 	{
+		delete impl;
+		impl = nullptr;
 		hx::Throw(HX_CSTRING("Failed to create semaphore"));
 	}
 
