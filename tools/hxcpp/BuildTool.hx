@@ -1679,7 +1679,7 @@ class BuildTool
 
       if (args.length>0 && args[0].endsWith(".cppia"))
       {
-         var hostName = isWindows ? "Windows" : isMac ? "Mac" : isLinux ? "Linux" : null;
+         var hostName = isWindows ? "Windows" : isMac ? "Mac" : isLinux ? "Linux" : isBSD ? "BSD" : null;
          if (hostName==null)
             Log.error("Cppia is not supported on this host.");
          var archSuffix = switch getArch() {

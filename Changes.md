@@ -218,6 +218,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed cppia indexing of a host ArrayAccess class: compound assignment and increments failed to load, and under the JIT any index read or write crashed
 * Fixed HXCPP_TELEMETRY crashing when objects recorded by a Telemetry deleted on a restart or a thread exit were collected, and the HXCPP_TELEMETRY_DEBUG build failing to compile
 * Fixed copyFile treating overwrite="false", or any unknown value, as always: true and false mean always and never, and an unknown value warns
+* Fixed running a .cppia file on a BSD host stopping with Cppia is not supported on this host: it uses the host in bin/BSD64 or bin/BSDArm64 (hxcpp #1089)
 * Added the libhxcpp define: a build that uses the library gets -D libhxcpp=<version>. Compare it with version("x.y.z"); a plain string comparison compares text
 * Added separate Linux ARMv7 and ARM64 build architectures (hxcpp #1355)
 * Fixed AndroidCompat.cpp closing its extern "C" section in the wrong place (hxcpp #1404)
