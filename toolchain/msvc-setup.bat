@@ -1,4 +1,4 @@
-setlocal enabledelayedexpansion
+setlocal
 @if exist "%HXCPP_MSVC%\vcvars32.bat" (
 	@call "%HXCPP_MSVC%\vcvars32.bat"
 	@echo HXCPP_VARS
@@ -10,12 +10,12 @@ setlocal enabledelayedexpansion
 	@set
 	exit
 )
-if exist "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" (
-	for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do (
-		@set InstallDir=%%i
-	)
-	@if exist "!InstallDir!\Common7\Tools\VsDevCmd.bat" (
-		@call "!InstallDir!\Common7\Tools\VsDevCmd.bat" -arch=x86 -app_platform=Desktop -no_logo
+@set "vswhere=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
+@set InstallDir=
+@if exist "%vswhere%" for /f "usebackq tokens=*" %%i in (`"%vswhere%" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do @set "InstallDir=%%i"
+@if exist "%vswhere%" (
+	@if exist "%InstallDir%\Common7\Tools\VsDevCmd.bat" (
+		@call "%InstallDir%\Common7\Tools\VsDevCmd.bat" -arch=x86 -app_platform=Desktop -no_logo
 		@echo HXCPP_VARS
 		@set
 		exit
@@ -30,6 +30,7 @@ if exist "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" (
 ) else if exist "%VS140COMNTOOLS%\vsvars32.bat" (
 	@call "%VS140COMNTOOLS%\vsvars32.bat"
 	@if defined HXCPP_WINXP_COMPAT (
+		@setlocal enabledelayedexpansion
 		@set "INCLUDE=%ProgramFiles(x86)%\Microsoft SDKs\Windows\7.1A\Include;!INCLUDE!"
 		@set "PATH=%ProgramFiles(x86)%\Microsoft SDKs\Windows\7.1A\Bin;!PATH!"
 		@set "LIB=%ProgramFiles(x86)%\Microsoft SDKs\Windows\7.1A\Lib;!LIB!"
@@ -40,6 +41,7 @@ if exist "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" (
 ) else if exist "%VS120COMNTOOLS%\vsvars32.bat" (
 	@call "%VS120COMNTOOLS%\vsvars32.bat"
 	@if defined HXCPP_WINXP_COMPAT (
+		@setlocal enabledelayedexpansion
 		@if exist "%ProgramFiles(x86)%\Microsoft SDKs\Windows\v7.1A\" (
 			@set "INCLUDE=%ProgramFiles(x86)%\Microsoft SDKs\Windows\v7.1A\Include;!INCLUDE!"
 			@set "PATH=%ProgramFiles(x86)%\Microsoft SDKs\Windows\v7.1A\Bin;!PATH!"
@@ -57,6 +59,7 @@ if exist "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" (
 ) else if exist "%VS110COMNTOOLS%\vsvars32.bat" (
 	@call "%VS110COMNTOOLS%\vsvars32.bat"
 	@if defined HXCPP_WINXP_COMPAT (
+		@setlocal enabledelayedexpansion
 		@set "INCLUDE=%ProgramFiles(x86)%\Microsoft SDKs\Windows\7.1A\Include;!INCLUDE!"
 		@set "PATH=%ProgramFiles(x86)%\Microsoft SDKs\Windows\7.1A\Bin;!PATH!"
 		@set "LIB=%ProgramFiles(x86)%\Microsoft SDKs\Windows\7.1A\Lib;!LIB!"

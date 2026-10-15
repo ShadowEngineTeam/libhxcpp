@@ -304,6 +304,10 @@ jobs:
         run: |
           haxelib run hxcpp xml/Build.xml -options options.txt
           test "$(./value | tr -d '\r')" = 42
+      - name: test the MSVC setup scripts with ! in the Visual Studio path
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: powershell -NoProfile -File test/msvc_setup/check.ps1
 
   regression:
     runs-on: ${{ inputs.os }}

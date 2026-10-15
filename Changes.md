@@ -186,6 +186,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed a relative path given with -options being read next to Build.xml instead of in the working directory; a missing options file now warns (hxcpp #1178)
 * Fixed haxelib run hxcpp ignoring a compiled BuildTool on Apple Silicon, ARM64 Linux and Windows on ARM: it looked only in the x86-64 bin folder, so the slower neko tool ran (hxcpp #1029)
 * Fixed Lock and Semaphore timeouts and haxe.Timer.stamp on Linux, Android and Apple following the wall clock: changing the system time cut a wait short or stretched it by the change. They use the monotonic clock (hxcpp #887)
+* Fixed the MSVC setup scripts failing to find Visual Studio installed under a path containing !: delayed expansion dropped the ! from the path vswhere reported (hxcpp #1034)
 * Added the libhxcpp define: a build that uses the library gets -D libhxcpp=<version>. Compare it with version("x.y.z"); a plain string comparison compares text
 * Added separate Linux ARMv7 and ARM64 build architectures (hxcpp #1355)
 * Fixed AndroidCompat.cpp closing its extern "C" section in the wrong place (hxcpp #1404)

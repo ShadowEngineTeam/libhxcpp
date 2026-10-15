@@ -1,4 +1,7 @@
-setlocal enabledelayedexpansion
+setlocal
+@set "vswhere=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
+@set InstallDir=
+@if exist "%vswhere%" for /f "usebackq tokens=*" %%i in (`"%vswhere%" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.arm64 -property installationPath`) do @set "InstallDir=%%i"
 @if exist "%HXCPP_MSVC%\..\..\VC\" (
 	@if not exist "%hxcpp_msvc%\..\..\VC\Auxiliary\Build\vcvars%msvc_host_arch%_arm64.bat" (
 		@echo Error: the specified MSVC version does not have vcvars%msvc_host_arch%_arm64.bat setup script
@@ -8,12 +11,9 @@ setlocal enabledelayedexpansion
 		@echo HXCPP_VARS
 		@set
 	)
-) else if exist "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" (
-	for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.arm64 -property installationPath`) do (
-		@set InstallDir=%%i
-	)
-	@if exist "!InstallDir!\Common7\Tools\VsDevCmd.bat" (
-		@call "!InstallDir!\Common7\Tools\VsDevCmd.bat" -host_arch=%msvc_host_arch% -arch=arm64 -app_platform=Desktop -no_logo
+) else if exist "%vswhere%" (
+	@if exist "%InstallDir%\Common7\Tools\VsDevCmd.bat" (
+		@call "%InstallDir%\Common7\Tools\VsDevCmd.bat" -host_arch=%msvc_host_arch% -arch=arm64 -app_platform=Desktop -no_logo
 		@echo HXCPP_VARS
 		@set
 	) else (
