@@ -181,6 +181,7 @@ int _hx_std_file_write( Dynamic handle, Array<unsigned char> s, int p, int n )
          }
          DWORD written = 0;
          if(!WriteConsoleW(win_handle, buf, result, &written, NULL)) {
+            zone.locked = false;
             file_error("file_write", f->name);
          }
          if ((int)written == result) {
@@ -225,6 +226,7 @@ int _hx_std_file_write( Dynamic handle, Array<unsigned char> s, int p, int n )
       if( d <= 0 )
       {
          HANDLE_FINTR(f->io,file_write_again);
+         zone.locked = false;
          file_error("file_write",f->name);
       }
       p += d;
