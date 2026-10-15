@@ -105,6 +105,12 @@ jobs:
           cd project
           haxe compile-cppia.hxml -D HXCPP_M64
 
+      - name: Build Cppia for arm64
+        if: startsWith(matrix.os,'macos')
+        run: |
+          cd project
+          haxe compile-cppia.hxml -D HXCPP_ARM64
+
       - name: Clean Project
         if: startsWith(matrix.os,'ubuntu')
         run: |
@@ -150,6 +156,7 @@ jobs:
           name: mac-64
           path: |
             bin/Mac64/Cppia
+            bin/MacArm64/Cppia
 
   Release:
     needs: [Check, Package]
@@ -175,11 +182,12 @@ jobs:
           name: linux-64
           path: package
 
+      # The artifact holds Mac64/ and MacArm64/
       - name: Download Mac
         uses: actions/download-artifact@v4
         with:
           name: mac-64
-          path: package/bin/Mac64/
+          path: package/bin/
 
       - name: Download Windows
         uses: actions/download-artifact@v4

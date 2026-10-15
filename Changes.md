@@ -206,6 +206,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed FileStat.ctime on Linux, macOS, FreeBSD and NetBSD reporting when the file's status last changed: it is the creation time, as on Windows, wherever the file system records one (hxcpp #1063)
 * Fixed C++20 builds: VirtualArray's comparison with Dynamic recursed under the reversed operators, and Sys.putEnv mixed String and const char* in a conditional (hxcpp #1232)
 * Fixed TLS certificate verification failing on iOS and tvOS, which have no root store to load: a chain mbedTLS cannot trust is judged by the system's trust, and a wrong hostname, an expired certificate or a bad signature is still an error (hxcpp #1331, #570)
+* Added the arm64 macOS Cppia host to releases, in bin/MacArm64, and project/compile-cppia.hxml builds the host's own architecture unless one is given (hxcpp #1149)
 * Added the libhxcpp define: a build that uses the library gets -D libhxcpp=<version>. Compare it with version("x.y.z"); a plain string comparison compares text
 * Added separate Linux ARMv7 and ARM64 build architectures (hxcpp #1355)
 * Fixed AndroidCompat.cpp closing its extern "C" section in the wrong place (hxcpp #1404)
