@@ -345,22 +345,13 @@ inline bool TestLessEq(const T1 &v1, const T2 &v2)
       // not-equal operator is satisfied
       return !LESS && !EQ;
    }
-   else if (traits1::type==(int)CompareAsString || traits2::type==(int)CompareAsString)
-   {
-      // String with a object...
-      return LESS ? ( EQ ? traits1::toString(v1) <= traits2::toString(v2) :
-                           traits1::toString(v1) <  traits2::toString(v2)  ) :
-                    ( EQ ? traits1::toString(v1) == traits2::toString(v2) :
-                           traits1::toString(v1) != traits2::toString(v2)  );
-   }
-   // Note: there used to be a branch here for "statically numeric vs
-   // dynamic" that converted both sides with toDouble without checking the
-   // dynamic side's runtime type - so 5 == ("5":Dynamic) was true (the
-   // string was strtod-parsed) and 0 compared equal to any non-numeric
-   // object.  The dynamic dispatch below handles the numeric cases with the
-   // same result and gives string/object operands their correct semantics;
-   // for the statically-typed side getDynamicCompareType is a compile-time
-   // constant, so the cost is unchanged.
+   // Note: there used to be branches here for a statically numeric or
+   // String operand against a dynamic one, which converted the dynamic side
+   // without checking its runtime type - so 5 == ("5":Dynamic) and
+   // ("5":String) == (5:Dynamic) were true.  The dynamic dispatch below gives
+   // the same results where those were right; for the statically-typed side
+   // getDynamicCompareType is a compile-time constant, so the cost is
+   // unchanged.
    else
    {
       // Dynamic compare.
