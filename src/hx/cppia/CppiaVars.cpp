@@ -76,8 +76,8 @@ void CppiaVar::load(CppiaStream &stream)
    readAccess = getAccess(stream);
    writeAccess = getAccess(stream);
    isVirtual = stream.getBool();
-   nameId = stream.getInt();
-   typeId = stream.getInt();
+   nameId = stream.getStringId();
+   typeId = stream.getTypeId();
    if (stream.getInt())
       init = createCppiaExpr(stream);
 }
@@ -389,10 +389,10 @@ CppiaStackVar::CppiaStackVar(CppiaStackVar *inVar,int &ioSize, int &ioCaptureSiz
 
 void CppiaStackVar::fromStream(CppiaStream &stream)
 {
-   nameId = stream.getInt();
+   nameId = stream.getStringId();
    id = stream.getInt();
    capture = stream.getBool();
-   typeId = stream.getInt();
+   typeId = stream.getTypeId();
 }
 
 void CppiaStackVar::setInFrame(unsigned char *inFrame,Dynamic inValue)

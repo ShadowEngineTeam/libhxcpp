@@ -28,7 +28,7 @@ ScriptCallable::ScriptCallable(CppiaStream &stream)
    body = 0;
    stackSize = 0;
    data = 0;
-   returnTypeId = stream.getInt();
+   returnTypeId = stream.getTypeId();
    returnType = etVoid;
    isBoolReturn = false;
    argCount = stream.getInt();
@@ -1002,19 +1002,19 @@ CppiaFunction::CppiaFunction(CppiaModule *inCppia,bool inIsStatic,bool inIsDynam
 
 void CppiaFunction::load(CppiaStream &stream,bool inExpectBody)
 {
-   nameId = stream.getInt();
+   nameId = stream.getStringId();
    name = cppia.strings[ nameId ].utf8_str();
    stream.module->creatingFunction = name.c_str();
-   returnType = stream.getInt();
+   returnType = stream.getTypeId();
    argCount = stream.getInt();
    DBGLOG("  Function %s(%d) : %s %s%s\n", name.c_str(), argCount, cppia.typeStr(returnType), isStatic?"static":"instance", isDynamic ? " DYNAMIC": "");
    args.resize(argCount);
    for(int a=0;a<argCount;a++)
    {
       ArgInfo &arg = args[a];
-      arg.nameId = stream.getInt();
+      arg.nameId = stream.getStringId();
       arg.optional = stream.getBool();
-      arg.typeId = stream.getInt();
+      arg.typeId = stream.getTypeId();
       DBGLOG("    arg %c%s:%s\n", arg.optional?'?':' ', cppia.identStr(arg.nameId), cppia.typeStr(arg.typeId) );
    }
    if (inExpectBody)

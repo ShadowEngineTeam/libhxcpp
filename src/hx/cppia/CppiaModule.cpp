@@ -246,7 +246,7 @@ void CppiaConst::fromStream(CppiaStream &stream)
    else if (tok[0]=='f')
    {
       type = cFloat;
-      int strIndex = stream.getInt();
+      int strIndex = stream.getStringId();
       String val = stream.module->strings[strIndex];
       dval = atof(val.out_str());
       ival = dval;
@@ -390,6 +390,22 @@ void scriptVisitModules(hx::VisitContext *__inCtx)
 #endif
 
 
+int CppiaStream::getTypeId()
+{
+   int id = getInt();
+   if (id<0 || id>=(int)module->types.size())
+      throw "Bad type id";
+   return id;
+}
+
+int CppiaStream::getStringId()
+{
+   int id = getInt();
+   if (id<0 || id>=module->strings->length)
+      throw "Bad string id";
+   return id;
+}
+
 CppiaLoadedModule LoadCppia(const unsigned char *inData, int inDataLength)
 {
    if (!gAllCppiaModules.mPtr)
@@ -415,17 +431,17 @@ CppiaLoadedModule LoadCppia(const unsigned char *inData, int inDataLength)
 
       stream.setBinary(tok=="CPPIB");
 
-      int stringCount = stream.getAsciiInt();
+      int stringCount = stream.checkCount(stream.getAsciiInt());
       for(int s=0;s<stringCount;s++)
          cppia.strings[s] = stream.readString();
 
-      int typeCount = stream.getAsciiInt();
+      int typeCount = stream.checkCount(stream.getAsciiInt());
       cppia.types.resize(typeCount);
       DBGLOG("Type count : %d\n", typeCount);
       for(int t=0;t<typeCount;t++)
          cppia.types[t] = new TypeData(stream.readString());
 
-      int classCount = stream.getAsciiInt();
+      int classCount = stream.checkCount(stream.getAsciiInt());
       DBGLOG("Class count : %d\n", classCount);
 
       if (stream.binary)
@@ -457,7 +473,7 @@ CppiaLoadedModule LoadCppia(const unsigned char *inData, int inDataLength)
       tok = stream.getToken();
       if (tok=="RESOURCES")
       {
-         int count = stream.getInt( );
+         int count = stream.checkCount(stream.getInt());
          scriptResources.resize(count+1);
          for(int r=0;r<count;r++)
          {
@@ -465,8 +481,8 @@ CppiaLoadedModule LoadCppia(const unsigned char *inData, int inDataLength)
             if (tok!="RESO")
                throw "no reso tag";
 
-            scriptResources[r].mName = cppia.strings[stream.getInt()];
-            scriptResources[r].mDataLength = stream.getInt();
+            scriptResources[r].mName = cppia.strings[stream.getStringId()];
+            scriptResources[r].mDataLength = stream.checkCount(stream.getInt());
          }
          if (!stream.binary)
             stream.skipChar();
@@ -506,6 +522,10 @@ CppiaLoadedModule LoadCppia(const unsigned char *inData, int inDataLength)
       error = HX_CSTRING("Error reading file ") + String(errorString) + 
                 HX_CSTRING(", line ") + String(stream.line) + HX_CSTRING(", char ") + 
                    String(stream.pos);
+   }
+   catch(const std::exception &e)
+   {
+      error = HX_CSTRING("Error reading file ") + String(e.what());
    }
 
    if (!error.raw_ptr())

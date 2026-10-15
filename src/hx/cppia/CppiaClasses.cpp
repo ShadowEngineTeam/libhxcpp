@@ -39,14 +39,14 @@ struct CppiaEnumConstructor
    CppiaEnumConstructor(CppiaModule &inModule, CppiaStream &inStream, CppiaClassInfo *inClassInfo)
    {
       classInfo = inClassInfo;
-      nameId = inStream.getInt();
+      nameId = inStream.getStringId();
       index = -1;
       name = String();
       int argCount = inStream.getInt();
       for(int a=0;a<argCount;a++)
       {
-         int nameId = inStream.getInt();
-         int typeId = inStream.getInt();
+         int nameId = inStream.getStringId();
+         int typeId = inStream.getTypeId();
          args.push_back( Arg(nameId,typeId) );
       }
          
@@ -211,8 +211,8 @@ struct EnumField : public CppiaDynamicExpr
 
    EnumField(CppiaStream &stream,bool inWithArgs)
    {
-      enumId = stream.getInt();
-      fieldId = stream.getInt();
+      enumId = stream.getTypeId();
+      fieldId = stream.getStringId();
       value= 0;
       if (inWithArgs)
       {
@@ -721,14 +721,14 @@ bool CppiaClassInfo::load(CppiaStream &inStream)
 
    std::string tok;
 
-    typeId = inStream.getInt();
+    typeId = inStream.getTypeId();
     mClass.mPtr = createCppiaClass(this);
 
-    superId = isEnum ? 0 : inStream.getInt();
+    superId = isEnum ? 0 : inStream.getTypeId();
     int implementCount = isEnum ? 0 : inStream.getInt();
     implements.resize(implementCount);
     for(int i=0;i<implementCount;i++)
-       implements[i] = inStream.getInt();
+       implements[i] = inStream.getTypeId();
 
     name = cppia.typeStr(typeId);
     DBGLOG("Class %s %s\n", name.c_str(), isEnum ? "enum" : isInterface ? "interface" : "class" );

@@ -1156,7 +1156,7 @@ struct CastExpr : public CppiaDynamicExpr
       typeId = 0;
       typeData = 0;
       if (op==castDataArray || op==castInstance)
-         typeId = stream.getInt();
+         typeId = stream.getTypeId();
 
       value = createCppiaExpr(stream);
    }
@@ -1507,7 +1507,7 @@ struct NewExpr : public CppiaDynamicExpr
 
    NewExpr(CppiaStream &stream)
    {
-      classId = stream.getInt();
+      classId = stream.getTypeId();
       constructor = 0;
       ReadExpressions(args,stream);
    }
@@ -1928,8 +1928,8 @@ struct CallStatic : public CppiaExpr
 
    CallStatic(CppiaStream &stream)
    {
-      classId = stream.getInt();
-      fieldId = stream.getInt();
+      classId = stream.getTypeId();
+      fieldId = stream.getStringId();
       ReadExpressions(args,stream);
    }
 
@@ -2352,7 +2352,7 @@ struct ClassOfExpr : public CppiaExprWithValue
 
    ClassOfExpr(CppiaStream &stream)
    {
-      typeId = stream.getInt();
+      typeId = stream.getTypeId();
    }
    const char *getName() HXCPP_OVERRIDE { return "ClassOfExpr"; }
    CppiaExpr *link(CppiaModule &inModule) HXCPP_OVERRIDE
@@ -2375,7 +2375,7 @@ struct CallGlobal : public CppiaExpr
 
    CallGlobal(CppiaStream &stream)
    {
-      fieldId = stream.getInt();
+      fieldId = stream.getStringId();
       int n = stream.getInt();
       ReadExpressions(args,stream,n);
    }
@@ -2942,8 +2942,8 @@ struct GetFieldByName : public CppiaDynamicExpr
 
    GetFieldByName(CppiaStream &stream,bool isThisObject,bool inIsStatic=false)
    {
-      classId = stream.getInt();
-      nameId = stream.getInt();
+      classId = stream.getTypeId();
+      nameId = stream.getStringId();
       isStatic = inIsStatic;
       object = (isThisObject||isStatic) ? 0 : createCppiaExpr(stream);
       name.raw_ref() = 0;
@@ -3286,8 +3286,8 @@ struct CallMember : public CppiaExpr
 
    CallMember(CppiaStream &stream,MemberCallType inCall)
    {
-      classId = stream.getInt();
-      fieldId = inCall==callSuperNew ? 0 : stream.getInt();
+      classId = stream.getTypeId();
+      fieldId = inCall==callSuperNew ? 0 : stream.getStringId();
       //CPPIALOG("fieldId = %d (%s)\n",fieldId,stream.module->strings[ fieldId ].out_str());
       int n = stream.getInt();
       thisExpr = inCall==callObject ? createCppiaExpr(stream) : 0;
@@ -4652,8 +4652,8 @@ struct GetFieldByLinkage : public CppiaExpr
 
    GetFieldByLinkage(CppiaStream &stream,bool inThisObject)
    {
-      typeId = stream.getInt();
-      fieldId = stream.getInt();
+      typeId = stream.getTypeId();
+      fieldId = stream.getStringId();
       object = inThisObject ? 0 : createCppiaExpr(stream);
    }
 
@@ -4953,10 +4953,10 @@ struct PosInfo : public CppiaExprWithValue
 
    PosInfo(CppiaStream &stream)
    {
-      fileId = stream.getInt();
+      fileId = stream.getStringId();
       line = stream.getInt();
-      classId = stream.getInt();
-      methodId = stream.getInt();
+      classId = stream.getStringId();
+      methodId = stream.getStringId();
    }
    const char *getName() HXCPP_OVERRIDE { return "PosInfo"; }
    CppiaExpr *link(CppiaModule &inModule) HXCPP_OVERRIDE
@@ -4993,7 +4993,7 @@ struct ObjectDef : public CppiaDynamicExpr
       data = 0;
       stringIds.resize(fieldCount);
       for(int i=0;i<fieldCount;i++)
-         stringIds[i] = stream.getInt();
+         stringIds[i] = stream.getStringId();
       ReadExpressions(values,stream,fieldCount);
    }
 
@@ -5050,7 +5050,7 @@ struct ArrayDef : public CppiaDynamicExpr
 
    ArrayDef(CppiaStream &stream)
    {
-      classId = stream.getInt();
+      classId = stream.getTypeId();
       ReadExpressions(items,stream);
    }
 
@@ -5926,7 +5926,7 @@ struct ArrayIExpr : public CppiaExpr
 
    ArrayIExpr(CppiaStream &stream)
    {
-      classId = stream.getInt();
+      classId = stream.getTypeId();
       thisExpr = createCppiaExpr(stream);
       iExpr = createCppiaExpr(stream);
       value = 0;
@@ -8157,11 +8157,11 @@ CppiaExpr *createCppiaExpr(CppiaStream &stream)
    else if (tok=="false")
       result = new DataVal<bool>(false);
    else if (tok=="s")
-      result = new StringVal(stream.getInt());
+      result = new StringVal(stream.getStringId());
    else if (tok=="f")
       // Locale-independent - a host setlocale must not change how cppia
       // float constants parse
-      result = new DataVal<Float>(_hx_strtod_c_locale( stream.module->strings[stream.getInt()].out_str() ));
+      result = new DataVal<Float>(_hx_strtod_c_locale( stream.module->strings[stream.getStringId()].out_str() ));
    else if (tok=="i")
       result = new DataVal<int>(stream.getInt());
    else if (tok=="POSINFO")

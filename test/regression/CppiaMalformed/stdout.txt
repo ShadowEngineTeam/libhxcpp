@@ -1,0 +1,5 @@
+negative type count threw
+huge class count threw
+bad type id threw
+negative resource length threw
+valid loaded

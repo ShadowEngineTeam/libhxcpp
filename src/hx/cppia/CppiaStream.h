@@ -179,6 +179,17 @@ struct CppiaStream
       return result;
    }
 
+   int getTypeId();
+   int getStringId();
+
+   // Every item takes at least one byte
+   int checkCount(int inCount)
+   {
+      if (inCount<0 || inCount>max-data)
+         throw "Bad count";
+      return inCount;
+   }
+
    bool getBool()
    {
       int ival = getInt();
@@ -206,7 +217,7 @@ struct CppiaStream
 
    void readBytes(unsigned char *outBytes, int inLen)
    {
-      if (data+inLen>max)
+      if (inLen<0 || inLen>max-data)
          throw "EOF";
       memcpy(outBytes, data, inLen);
       data+=inLen;
