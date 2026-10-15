@@ -40,15 +40,11 @@ namespace hx
 
 int __hxcpp_hxt_start_telemetry(bool profiler, bool allocations)
 {
-	hx::Throw(HX_CSTRING("Not implemented"));
-
-	return 0;
+	return hx::StackContext::getCurrent()->mThreadId;
 }
 
 TelemetryFrame* __hxcpp_hxt_dump_telemetry(int)
 {
-	hx::Throw(HX_CSTRING("Not implemented"));
-
 	return 0;
 }
 
