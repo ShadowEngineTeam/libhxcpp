@@ -150,6 +150,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed anonymous objects not finding fields with non-ASCII names: Reflect.field read null, hasField was false, and setField added a second field of the same name
 * Fixed Bytes.ofString, StringTools.urlEncode and utf8_str() throwing Invalid UTF16 on a string holding a lone surrogate; it is encoded as U+FFFD, as trace and Sys.print already did
 * Fixed comparing a String with a Dynamic depending on the static types: ("5":String) == (5:Dynamic) and ("true":String) == (true:Dynamic) were true; a Dynamic operand now goes through the runtime type check
+* Fixed -0.0 losing its sign when boxed: it came from the small Int cache, so 1/(d:Float) was Infinity and Type.typeof(d) was TInt
 
 ### Arrays and Bytes
 

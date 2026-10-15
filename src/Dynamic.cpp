@@ -422,7 +422,7 @@ Dynamic::Dynamic(char32_t inVal)
 
 Dynamic::Dynamic(double inVal)
 {
-   if ( inVal>=-1 && inVal<256 && (int)inVal==inVal )
+   if ( inVal>=-1 && inVal<256 && (int)inVal==inVal && !(inVal==0 && signbit(inVal)) )
    {
       int idx = inVal+1;
       mPtr = sConstDynamicInts[idx].mPtr;
