@@ -51,11 +51,7 @@ typedef size_t socket_int;
 #define val_cert(o) ((sslcert*)o.mPtr)
 #define val_pkey(o) ((sslpkey*)o.mPtr)
 
-struct SocketWrapper : public hx::Object
-{
-   HX_IS_INSTANCE_OF enum { _hx_ClassId = hx::clsIdSocket };
-   SOCKET socket;
-};
+size_t _hx_std_socket_handle(Dynamic inSocket);
 
 // A configuration's mbedTLS state, owned jointly by its handle and by every
 // context set up on it. mbedTLS keeps a pointer to the configuration in each
@@ -388,8 +384,7 @@ int net_write( void *fd, const unsigned char *buf, size_t len ){
 
 void _hx_ssl_set_socket( Dynamic hssl, Dynamic hsocket ) {
 	sslctx *ssl = val_ssl(hssl);
-	SocketWrapper *socket = (SocketWrapper *)hsocket.mPtr;
-	mbedtls_ssl_set_bio( ssl->s, (void *)(socket_int)socket->socket, net_write, net_read, NULL );
+	mbedtls_ssl_set_bio( ssl->s, (void *)(socket_int)_hx_std_socket_handle(hsocket), net_write, net_read, NULL );
 }
 
 void _hx_ssl_set_hostname( Dynamic hssl, String hostname ){

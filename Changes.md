@@ -265,6 +265,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed the collector on ARM64 possibly missing a thread entering or leaving a GC-free zone
 * Fixed a thread attaching while the GC switched to generational mode getting no remembered set, which crashed the next generational collection
 * Added HXCPP_SANITIZE to build with gcc and clang sanitizers on Linux and macOS, with the GC's stack scanning excluded from AddressSanitizer
+* Fixed the SSL socket binding accepting any value as a socket handle; it throws "Invalid socket handle" like the other socket functions
 * Added the libhxcpp define: a build that uses the library gets -D libhxcpp=<version>. Compare it with version("x.y.z"); a plain string comparison compares text
 * Added separate Linux ARMv7 and ARM64 build architectures (hxcpp #1355)
 * Fixed AndroidCompat.cpp closing its extern "C" section in the wrong place (hxcpp #1404)

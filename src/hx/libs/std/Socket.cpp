@@ -161,6 +161,12 @@ static void block_error()
 
 }
 
+// For SSL.cpp: the native socket in a handle, or a throw if it is not one
+size_t _hx_std_socket_handle(Dynamic inSocket)
+{
+   return (size_t)val_sock(inSocket);
+}
+
 /**
    socket_init : void -> void
    <doc>
