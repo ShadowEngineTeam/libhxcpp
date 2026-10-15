@@ -8342,6 +8342,7 @@ TypeData::TypeData(String inModule)
    haxeBase = 0;
    linked = false;
    arrayType = arrNotArray;
+   expressionType = etObject;
    interfaceBase = 0;
    isInterface = false;
    isDynamic = name == HX_CSTRING("Dynamic");
@@ -8503,6 +8504,7 @@ void TypeData::link(CppiaModule &inModule)
    {
       haxeBase = HaxeNativeClass::hxObject();
       haxeClass = hx::Class_obj::Resolve(HX_CSTRING("Dynamic"));
+      expressionType = etObject;
    }
 }
 
