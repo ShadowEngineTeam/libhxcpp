@@ -616,6 +616,11 @@ inline String TCopyString(const T *inString,int inLength)
 }
 
 
+static inline int hxValidCodePoint(int c)
+{
+   return c<0 || c>0x10FFFF || IsUtf16Surrogate(c) ? 0xFFFD : c;
+}
+
 String __hxcpp_char_array_to_utf8_string(Array<int> &inChars,int inFirst, int inLen)
 {
    int len = inChars->length;
@@ -631,7 +636,7 @@ String __hxcpp_char_array_to_utf8_string(Array<int> &inChars,int inFirst, int in
    #ifdef HX_SMART_STRINGS
    bool hasBig = false;
    for(int i=0;i<inLen;i++)
-      if (base[i+inFirst]>127)
+      if (base[i+inFirst]>127 || base[i+inFirst]<0)
       {
          hasBig = true;
          break;
@@ -639,14 +644,24 @@ String __hxcpp_char_array_to_utf8_string(Array<int> &inChars,int inFirst, int in
 
    if (hasBig)
    {
-      char16_t *ptr = String::allocChar16Ptr(inLen);
+      int units = 0;
       for(int i=0;i<inLen;i++)
-         ptr[i] = base[i+inFirst];
-      return String(ptr, inLen);
+         units += UTF16BytesCheck(base[i+inFirst]);
+      char16_t *ptr = String::allocChar16Ptr(units);
+      char16_t *p = ptr;
+      for(int i=0;i<inLen;i++)
+         Char16AdvanceSet(p, hxValidCodePoint(base[i+inFirst]));
+      return String(ptr, units);
    }
    #endif
-   char *result = TConvertToUTF8(base+inFirst,&len,0,true);
-   return String(result,len);
+   int bytes = 0;
+   for(int i=0;i<inLen;i++)
+      bytes += UTF8Bytes(hxValidCodePoint(base[i+inFirst]));
+   char *result = hx::NewString(bytes);
+   char *p = result;
+   for(int i=0;i<inLen;i++)
+      UTF8EncodeAdvance(p, hxValidCodePoint(base[i+inFirst]));
+   return String(result,bytes);
 }
 
 Array<int> __hxcpp_utf8_string_to_char_array(String &inString)

@@ -152,6 +152,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed comparing a String with a Dynamic depending on the static types: ("5":String) == (5:Dynamic) and ("true":String) == (true:Dynamic) were true; a Dynamic operand now goes through the runtime type check
 * Fixed -0.0 losing its sign when boxed: it came from the small Int cache, so 1/(d:Float) was Infinity and Type.typeof(d) was TInt
 * Fixed Std.parseFloat reading words and hex as numbers through strtod: "info" and "inferior" gave Infinity and "0x10" gave 16. They give NaN, NaN and 0, as the Haxe spec says; "Infinity" is still read, as JavaScript reads it
+* Fixed haxe.Utf8 keeping only the low 16 bits of characters above U+FFFF, and writing invalid code points as they were; they become U+FFFD. Without smart strings it also read past the requested range
 
 ### Arrays and Bytes
 
