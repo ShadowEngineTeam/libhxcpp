@@ -762,6 +762,8 @@ void _hx_utf8_iter(String inString, Dynamic inIter)
 
 int _hx_utf8_char_code_at(String inString, int inIndex)
 {
+   if (inIndex<0)
+      return 0;
    #ifdef HX_SMART_STRINGS
    if (!inString.raw_ptr() || inIndex>=inString.length)
       return 0;

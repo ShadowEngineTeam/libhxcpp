@@ -888,7 +888,7 @@ Dynamic __hxcpp_parse_int(const String &inString)
 
 double __hxcpp_parse_substr_float(const String &inString,int start, int length)
 {
-   if (start>=inString.length || length<1 || (start+length)>inString.length )
+   if (start<0 || start>=inString.length || length<1 || length>inString.length-start)
       return Math_obj::NaN;
 
    hx::strbuf buf;
