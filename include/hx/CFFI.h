@@ -50,9 +50,12 @@ int __reg_##func = hx_register_prim(lib "_" #func "__" #nargs,(void *)(&func)); 
 
 #elif defined(HXCPP_JS_PRIME)
 
-//#define DEFINE_PRIM_MULT(func) EMSCRIPTEN_BINDINGS(func) { function(#func, &func); }
-//TODO
-#define DEFINE_PRIM_MULT(func)
+#define DEFINE_PRIM_MULT(func) EMSCRIPTEN_BINDINGS(func) { \
+   function(#func, +[](value inArgs) -> value { \
+      std::vector<value> args = vecFromJSArray<value>(inArgs); \
+      return func(args.empty() ? 0 : &args[0], (int)args.size()); \
+   }); \
+}
 
 #define DEFINE_PRIM(func,nargs) EMSCRIPTEN_BINDINGS(func) { function(#func, &func); }
 
