@@ -1252,6 +1252,20 @@ String String::__URLEncode() const
    return String(result,l);
 }
 
+#ifdef HX_SMART_STRINGS
+// An ASCII result must be narrow to equal the same text
+static String hxNarrowIfAscii(char16_t *inWide, int inLength)
+{
+   for(int i=0;i<inLength;i++)
+      if (inWide[i]>127)
+         return String(inWide,inLength);
+   char *narrow = hx::NewString(inLength);
+   for(int i=0;i<inLength;i++)
+      narrow[i] = (char)inWide[i];
+   return String(narrow,inLength);
+}
+#endif
+
 String String::toUpperCase() const
 {
    #ifdef HX_SMART_STRINGS
@@ -1263,7 +1277,7 @@ String String::toUpperCase() const
          // Surrogates should already may to themselves - no need to check
          result[i] = unicase_toupper( __w[i] );
       }
-      return String(result,length);
+      return hxNarrowIfAscii(result,length);
    }
    // Byte strings are ASCII in smart-strings mode: a branchless transform is
    // correct and vectorizable, avoiding the per-char locale-dependent toupper.
@@ -1292,7 +1306,7 @@ String String::toLowerCase() const
       {
          result[i] = unicase_tolower( __w[i] );
       }
-      return String(result,length);
+      return hxNarrowIfAscii(result,length);
    }
    // Byte strings are ASCII in smart-strings mode: branchless, vectorizable.
    char *result = hx::NewString(length);

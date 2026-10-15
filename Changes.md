@@ -153,6 +153,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed -0.0 losing its sign when boxed: it came from the small Int cache, so 1/(d:Float) was Infinity and Type.typeof(d) was TInt
 * Fixed Std.parseFloat reading words and hex as numbers through strtod: "info" and "inferior" gave Infinity and "0x10" gave 16. They give NaN, NaN and 0, as the Haxe spec says; "Infinity" is still read, as JavaScript reads it
 * Fixed haxe.Utf8 keeping only the low 16 bits of characters above U+FFFF, and writing invalid code points as they were; they become U+FFFD. Without smart strings it also read past the requested range
+* Fixed toUpperCase and toLowerCase on a non-ASCII string returning a string that did not equal the same ASCII text: "\u0131".toUpperCase() == "I" was false, so map lookups and switches on it missed
 
 ### Arrays and Bytes
 
