@@ -637,6 +637,15 @@ public:
    }
 
 
+   // The prologue only loads the frame and this registers when something uses them
+   void noteSavedReg(int inReg)
+   {
+      if (inReg==sFrameReg)
+         usesFrame = true;
+      else if (inReg==sThisReg)
+         usesThis = true;
+   }
+
    sljit_s32 getTarget(const JitVal &inVal)
    {
       switch(inVal.position)
@@ -662,6 +671,7 @@ public:
          case jposStar:
             if (inVal.reg0<=3 && inVal.reg0>=maxTempCount)
                maxTempCount = inVal.reg0;
+            noteSavedReg(inVal.reg0);
             return SLJIT_MEM1(inVal.reg0);
 
          case jposStarReg:
@@ -669,6 +679,8 @@ public:
                maxTempCount = inVal.reg0;
             if (inVal.reg1<=3 && inVal.reg1>=maxTempCount)
                maxTempCount = inVal.reg1;
+            noteSavedReg(inVal.reg0);
+            noteSavedReg(inVal.reg1);
             return SLJIT_MEM2(inVal.reg0,inVal.reg1);
 
 

@@ -3840,8 +3840,8 @@ void genSetter(CppiaCompiler *compiler, const JitVal &ioValue, ExprType exprType
       case aoDiv:
          if (exprType==etFloat)
          {
-            compiler->fdiv(ioValue, ioValue, sJitTempF0);
             inExpr->genCode(compiler, sJitTempF0, etFloat);
+            compiler->fdiv(ioValue, ioValue, sJitTempF0);
          }
          else
          {
