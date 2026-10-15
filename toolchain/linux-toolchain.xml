@@ -2,6 +2,9 @@
 
 <!-- LINUX TOOLS -->
 
+<!-- The BSDs ship clang, not gcc -->
+<set name="CXX" value="c++" if="bsd" unless="CXX" />
+
 
 <section if="xcompile" >
    <section if="HXCPP_M64">
@@ -68,7 +71,7 @@
   <flag value="-Xlinker"/>
   <flag value="--no-undefined" unless="HXCPP_ALLOW_UNDEFINED" />
   <flag value="-debug" if="HXCPP_DEBUG_LINK" />
-  <lib name="-ldl"/>
+  <lib name="-ldl" unless="bsd"/>
   <ext value=".dso"/>
   <outflag value="-o "/>
 </linker>
@@ -80,7 +83,7 @@
   <flag value="-rdynamic"/>
   <flag value="-m32" unless="noM32"/>
   <flag value="-m64" if="HXCPP_M64" unless="noM64" />
-  <lib name="-ldl"/>
+  <lib name="-ldl" unless="bsd"/>
   <ext value=""/>
   <outflag value="-o "/>
 </linker>

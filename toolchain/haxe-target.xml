@@ -290,7 +290,7 @@
   <files id="tracy" if="HXCPP_TRACY" />
   <files id="rc" unless="static_link" />
   <lib name="-lpthread" if="linux" unless="static_link" />
-  <lib name="-ldl" if="linux" unless="static_link" />
+  <lib name="-ldl" if="linux" unless="static_link||bsd" />
 </target>
 
 

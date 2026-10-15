@@ -84,6 +84,7 @@ class BuildTool
    public static var isWindows = false;
    public static var isWindowsArm = false;
    public static var isLinux = false;
+   public static var isBSD = false;
    public static var isRPi = false;
    public static var isMac = false;
    public static var targetKey:String;
@@ -1503,6 +1504,10 @@ class BuildTool
             }
          }
       }
+      else if (isBSD)
+      {
+         result = ProcessManager.runProcessLine("", "sysctl", [ "-n", "hw.ncpu" ], true, false, true, true);
+      }
       else if (isMac)
       {
          var cores = ~/Total Number of Cores: (\d+)/;
@@ -1662,6 +1667,9 @@ class BuildTool
       isLinux = (new EReg("linux","i")).match(os);
       if (isLinux)
          defines.set("linux_host", "1");
+      isBSD = (new EReg("bsd","i")).match(os);
+      if (isBSD)
+         defines.set("bsd_host", "1");
 
 
       if (args.length>0 && args[0].endsWith(".cppia"))
@@ -2150,7 +2158,8 @@ class BuildTool
          defines.set("hardfp","1");
          defines.set("BINDIR", "RPi");
       }
-      else if ( (new EReg("linux","i")).match(os) )
+      // The BSDs build with the Linux toolchain
+      else if ( (new EReg("linux|bsd","i")).match(os) )
       {
          set64(defines,m64,arm64);
          // Cross-compile?
@@ -2165,6 +2174,8 @@ class BuildTool
          {
             defines.set("toolchain","linux");
             defines.set("linux","linux");
+            if (isBSD)
+               defines.set("bsd","bsd");
 
             if (armv7 || defines.exists("HXCPP_LINUX_ARMV7"))
             {
@@ -2180,7 +2191,8 @@ class BuildTool
                defines.set("HXCPP_ARM64","1");
                m64 = true;
             }
-            defines.set("BINDIR", arm64 ? "LinuxArm64" : armv7 ? "LinuxArm" : m64 ? "Linux64" : "Linux");
+            var platform = isBSD ? "BSD" : "Linux";
+            defines.set("BINDIR", platform + (arm64 ? "Arm64" : armv7 ? "Arm" : m64 ? "64" : ""));
          }
       }
       else if ( (new EReg("mac","i")).match(os) )

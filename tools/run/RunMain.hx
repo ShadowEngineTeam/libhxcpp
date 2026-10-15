@@ -95,7 +95,8 @@ class RunMain
          return proc!=null && (new EReg("\\barm","i")).match(proc) ? "WindowsArm64" : "Windows64";
       }
 
-      var platform = (new EReg("mac","i")).match(os) ? "Mac" : (new EReg("linux","i")).match(os) ? "Linux" : null;
+      var platform = (new EReg("mac","i")).match(os) ? "Mac" : (new EReg("linux","i")).match(os) ? "Linux" :
+         (new EReg("bsd","i")).match(os) ? "BSD" : null;
       if (platform==null)
          return null;
 
