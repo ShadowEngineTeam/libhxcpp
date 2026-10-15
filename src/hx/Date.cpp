@@ -292,7 +292,7 @@ void __internal_localtime(double inSeconds, struct tm* time)
       *time = sLastTm;
       return;
    }
-   time_t t = (time_t) inSeconds;
+   time_t t = (time_t) floor(inSeconds);
    #ifdef USE_TIME_R
    if (hx_time_t_holds(inSeconds))
       localtime_r(&t, time);
@@ -325,7 +325,7 @@ void __internal_gmtime(double inSeconds, struct tm* time)
       *time = sLastTm;
       return;
    }
-   time_t t = (time_t) inSeconds;
+   time_t t = (time_t) floor(inSeconds);
    #ifdef USE_TIME_R
    if (hx_time_t_holds(inSeconds))
       gmtime_r(&t, time);
