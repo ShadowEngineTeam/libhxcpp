@@ -719,8 +719,9 @@ static bool hxStdoutIsConsole(HANDLE &outHandle)
 }
 #endif
 
-void __hxcpp_print_string(const String &inV)
+void __hxcpp_print_string(const String &inString)
 {
+   const String &inV = inString.raw_ptr() ? inString : HX_CSTRING("null");
 #ifdef HX_WINDOWS
    HANDLE handle;
    if (hxStdoutIsConsole(handle) && inV.isUTF16Encoded())
@@ -734,8 +735,9 @@ void __hxcpp_print_string(const String &inV)
    PRINTF("%s", inV.out_str(&convertBuf) );
 }
 
-void __hxcpp_println_string(const String &inV)
+void __hxcpp_println_string(const String &inString)
 {
+   const String &inV = inString.raw_ptr() ? inString : HX_CSTRING("null");
 #ifdef HX_WINDOWS
    HANDLE handle;
    bool isConsole = hxStdoutIsConsole(handle);

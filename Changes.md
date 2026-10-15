@@ -172,6 +172,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed the cppia JIT calling into the runtime with the stack off the 16-byte alignment the ABI requires, on 32-bit x86 outside Windows: frames were aligned on macOS only, and a call with three arguments pushed the third. Native code relying on the alignment could crash; Haxe's own unit suite did, in sys.ssl.Digest.sign
 * Fixed Date where time_t is 32 bits (32-bit Linux and Android): new Date(...) after 2038 or before 1902 gave 1969-12-31 23:59:59, and such a time read back wrapped round. Those dates are converted by calendar arithmetic, with the zone's offset taken 28 years closer, where the calendar repeats
 
+* Fixed Sys.print and Sys.println of a null value printing (null), or crashing where the compiler turns the printf into puts(NULL); they print null (hxcpp #964)
 * Added the libhxcpp define: a build that uses the library gets -D libhxcpp=<version>. Compare it with version("x.y.z"); a plain string comparison compares text
 * Added separate Linux ARMv7 and ARM64 build architectures (hxcpp #1355)
 * Fixed AndroidCompat.cpp closing its extern "C" section in the wrong place (hxcpp #1404)
