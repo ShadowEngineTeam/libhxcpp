@@ -140,6 +140,8 @@ jobs:
           sanitize: address
     runs-on: ubuntu-latest
     env:
+      # Each test would otherwise recompile the whole runtime
+      HXCPP_COMPILE_CACHE: ${{ github.workspace }}/.hxcpp-cache
       UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1:suppressions=${{ github.workspace }}/test/sanitizers/ubsan.supp:log_path=/tmp/sanitizer/report
       # The conservative GC cannot see locals moved to a fake stack
       ASAN_OPTIONS: detect_leaks=0:detect_stack_use_after_return=0:log_path=/tmp/sanitizer/report
