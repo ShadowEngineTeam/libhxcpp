@@ -290,7 +290,7 @@ int _hx_std_socket_send( Dynamic o, Array<unsigned char> buf, int p, int l )
 
    // volatile: the allocation start must stay visible in this frame so the
    // conservative scan pins buf while send() reads it from inside the zone
-   const char * volatile base = (const char *)&buf[0];
+   const char * volatile base = (const char *)buf->GetBase();
    hx::EnterGCFreeZone();
    POSIX_LABEL(send_again);
    dlen = send(sock, base + p , l, MSG_NOSIGNAL);
@@ -315,7 +315,7 @@ int _hx_std_socket_recv( Dynamic o, Array<unsigned char> buf, int p, int l )
    if( p < 0 || l < 0 || p > dlen || l > dlen - p )
       return 0;
 
-   char * volatile base = (char *)&buf[0];
+   char * volatile base = (char *)buf->GetBase();
    hx::EnterGCFreeZone();
    POSIX_LABEL(recv_again);
    dlen = recv(sock, base + p, l, MSG_NOSIGNAL);
@@ -370,7 +370,7 @@ void _hx_std_socket_write( Dynamic o, Array<unsigned char> buf )
 {
    SOCKET sock = val_sock(o);
    int datalen = buf->length;
-   const char * volatile cdata = (const char *)&buf[0];
+   const char * volatile cdata = (const char *)buf->GetBase();
    int pos = 0;
 
    hx::EnterGCFreeZone();
@@ -1606,7 +1606,7 @@ int _hx_std_socket_send_to( Dynamic o, Array<unsigned char> buf, int p, int l, D
 
    // Capture after the field lookups above (which can allocate and move
    // buf); volatile keeps the allocation start in the scanned frame
-   const char * volatile cdata = (const char *)&buf[0];
+   const char * volatile cdata = (const char *)buf->GetBase();
 
    hx::EnterGCFreeZone();
    POSIX_LABEL(send_again);
@@ -1635,7 +1635,7 @@ int _hx_std_socket_recv_from( Dynamic o, Array<unsigned char> buf, int p, int l,
    if( p < 0 || l < 0 || p > dlen || l > dlen - p )
       hx::Throw(HX_CSTRING("Invalid data position"));
 
-   char * volatile data = (char *)&buf[0];
+   char * volatile data = (char *)buf->GetBase();
 
    // Zeroed so the plain-recv retry fallback below reports 0.0.0.0:0
    // instead of uninitialized stack memory
