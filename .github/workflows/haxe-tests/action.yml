@@ -21,7 +21,7 @@ runs:
         echo "sha=$full_sha" >> "$GITHUB_OUTPUT"
 
     - name: checkout haxe
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
       with:
         repository: HaxeFoundation/haxe
         path: haxe
