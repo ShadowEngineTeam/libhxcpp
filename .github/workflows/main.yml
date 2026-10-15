@@ -59,6 +59,20 @@ jobs:
     - run: clang++ -arch arm64 -std=c++11 -c -DHX_MACOS -DHXCPP_M64 -Iinclude src/hx/gc/GcRegCapture.cpp -o capture.o
       name: Compile the register capture
 
+  check-apple-ssl:
+    name: Check SSL for iOS and tvOS
+    runs-on: macos-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@v4
+
+    # at the toolchains' default minimum, so the pre-12 trust evaluation compiles too
+    - run: |
+        flags="-std=c++11 -c -arch arm64 -Iinclude -Iproject/thirdparty/mbedtls-3.6.7/include -Iproject/thirdparty/config/mbedtls/include -DMBEDTLS_USER_CONFIG_FILE=<mbedtls_config.h> -DHXCPP_M64 -DHXCPP_ARM64"
+        xcrun --sdk iphoneos clang++ $flags -miphoneos-version-min=9.0 -DIPHONE=IPHONE -DIPHONEOS=IPHONEOS src/hx/libs/ssl/SSL.cpp -o ssl-ios.o
+        xcrun --sdk appletvos clang++ $flags -mtvos-version-min=9.0 -DAPPLETV=APPLETV src/hx/libs/ssl/SSL.cpp -o ssl-tvos.o
+      name: Compile the SSL library
+
   check-run-bindir:
     name: Check run.n finds the compiled BuildTool (${{ matrix.dir }})
     strategy:

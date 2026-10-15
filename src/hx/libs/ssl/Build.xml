@@ -28,6 +28,11 @@
 
 	<flag value="-framework" if="macos"/>
 	<flag value="Security" if="macos"/>
+	<!-- A static iOS or tvOS build leaves Security to the app's link -->
+	<section if="iphoneos || iphonesim || appletvos || appletvsim" unless="static_link">
+		<flag value="-framework"/>
+		<flag value="Security"/>
+	</section>
 </target>
 
 </xml>

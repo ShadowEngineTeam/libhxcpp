@@ -15,7 +15,7 @@ typedef int SOCKET;
 #include <hxcpp.h>
 #include <hx/OS.h>
 
-#if defined(NEKO_MAC) && !defined(IPHONE) && !defined(APPLETV)
+#if defined(NEKO_MAC)
 #include <Security/Security.h>
 #endif
 
@@ -555,6 +555,71 @@ static int verify_callback(void* param, mbedtls_x509_crt *crt, int depth, uint32
 	CertCloseStore(store, 0);
 	return 0;
 }
+#elif defined(IPHONE) || defined(APPLETV)
+// iOS and tvOS have no root store to load, so when mbedTLS cannot trust a chain the
+// system judges it, and only that judgement replaces mbedTLS's: a wrong hostname, an
+// expired certificate or a bad signature stays an error. mbedTLS reports the untrusted
+// top of the chain first and the leaf last, so the decision waits for the leaf.
+static thread_local bool sChainUntrusted = false;
+
+static int verify_callback(void* param, mbedtls_x509_crt *crt, int depth, uint32_t *flags) {
+	if (depth > 0) {
+		if (*flags & MBEDTLS_X509_BADCERT_NOT_TRUSTED) {
+			sChainUntrusted = true;
+			*flags &= ~MBEDTLS_X509_BADCERT_NOT_TRUSTED;
+		}
+		return 0;
+	}
+
+	bool untrusted = sChainUntrusted || (*flags & MBEDTLS_X509_BADCERT_NOT_TRUSTED);
+	sChainUntrusted = false;
+	if (!untrusted || (*flags & MBEDTLS_X509_BADCERT_CN_MISMATCH)) {
+		if (untrusted)
+			*flags |= MBEDTLS_X509_BADCERT_NOT_TRUSTED;
+		return 0;
+	}
+
+	// The leaf, then the rest of the chain the peer sent, to find its issuers in
+	CFMutableArrayRef certs = CFArrayCreateMutable(NULL, 0, &kCFTypeArrayCallBacks);
+	if (!certs)
+		return MBEDTLS_ERR_X509_FATAL_ERROR;
+	for (const mbedtls_x509_crt *c = crt; c && c->raw.p; c = c->next) {
+		CFDataRef der = CFDataCreate(NULL, c->raw.p, c->raw.len);
+		SecCertificateRef cert = der ? SecCertificateCreateWithData(NULL, der) : NULL;
+		if (der)
+			CFRelease(der);
+		if (cert) {
+			CFArrayAppendValue(certs, cert);
+			CFRelease(cert);
+		} else if (c == crt) {
+			CFRelease(certs);
+			return MBEDTLS_ERR_X509_FATAL_ERROR;
+		}
+	}
+
+	SecPolicyRef policy = SecPolicyCreateSSL(true, NULL);
+	SecTrustRef trust = NULL;
+	OSStatus status = SecTrustCreateWithCertificates(certs, policy, &trust);
+	CFRelease(certs);
+	CFRelease(policy);
+	if (status != errSecSuccess || !trust)
+		return MBEDTLS_ERR_X509_FATAL_ERROR;
+
+	bool trusted;
+	if (__builtin_available(iOS 12.0, tvOS 12.0, *)) {
+		trusted = SecTrustEvaluateWithError(trust, NULL);
+	} else {
+		SecTrustResultType result;
+		trusted = SecTrustEvaluate(trust, &result) == errSecSuccess &&
+			(result == kSecTrustResultUnspecified || result == kSecTrustResultProceed);
+	}
+	CFRelease(trust);
+
+	*flags &= ~MBEDTLS_X509_BADCERT_NOT_TRUSTED;
+	if (!trusted)
+		*flags |= MBEDTLS_X509_BADCERT_NOT_TRUSTED;
+	return 0;
+}
 #endif
 
 Dynamic _hx_ssl_conf_new( bool server ) {
@@ -567,7 +632,7 @@ Dynamic _hx_ssl_conf_new( bool server ) {
 		conf->destroy();
 		ssl_error( ret );
 	}
-#ifdef NEKO_WINDOWS
+#if defined(NEKO_WINDOWS) || defined(IPHONE) || defined(APPLETV)
 	mbedtls_ssl_conf_verify(conf->c, verify_callback, NULL);
 #endif
 	// No version floor to set: mbedTLS 3 speaks TLS 1.2 and 1.3 only, and the
@@ -734,6 +799,11 @@ Dynamic _hx_ssl_cert_load_defaults(){
 	CFRelease(keychain);
 	if( chain != NULL )
 		return chain;
+#elif defined(IPHONE) || defined(APPLETV)
+	// An empty chain, so that verification runs and verify_callback asks the system
+	sslcert *chain = new sslcert();
+	chain->create( NULL );
+	return chain;
 #endif
 	return null();
 }
