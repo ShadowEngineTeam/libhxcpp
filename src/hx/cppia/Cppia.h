@@ -967,6 +967,8 @@ template<> struct ExprTypeOf<String> { enum { value = etString }; };
 
 
 #ifdef CPPIA_JIT
+void genNullReferenceExceptionCheck(CppiaCompiler *compiler, const JitVal &reg);
+
 // Loads the object a field holds when the code runs. A moving collection
 // updates the field, while an address written into the code would go stale.
 inline void genLoadHeldObject(CppiaCompiler *compiler, const JitVal &inDest, hx::Object **inHolder)

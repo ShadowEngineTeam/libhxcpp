@@ -20,5 +20,24 @@ class Script {
 		} catch (e:Dynamic) {
 			Sys.println("dynamic: caught");
 		}
+		var a:Array<Int> = null;
+		try {
+			a.push(1);
+			Sys.println("array push: no error");
+		} catch (e:Dynamic) {
+			Sys.println("array push: caught");
+		}
+		try {
+			var v = a[0];
+			Sys.println("array read: no error");
+		} catch (e:Dynamic) {
+			Sys.println("array read: caught");
+		}
+		try {
+			a[0] = 1;
+			Sys.println("array write: no error");
+		} catch (e:Dynamic) {
+			Sys.println("array write: caught");
+		}
 	}
 }
