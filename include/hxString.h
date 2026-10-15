@@ -191,7 +191,7 @@ public:
    #endif
    inline bool isUTF16Encoded() const {
       #ifdef HX_SMART_STRINGS
-      return __w && ((unsigned int *)__w)[-1] & HX_GC_STRING_CHAR16_T;
+      return __w && (headerWord(-1) & HX_GC_STRING_CHAR16_T);
       #else
       return false;
       #endif
@@ -199,7 +199,7 @@ public:
 
    inline bool isAsciiEncoded() const {
       #ifdef HX_SMART_STRINGS
-      return !__w || !(((unsigned int *)__w)[-1] & HX_GC_STRING_CHAR16_T);
+      return !__w || !(headerWord(-1) & HX_GC_STRING_CHAR16_T);
       #else
       return true;
       #endif
@@ -207,7 +207,7 @@ public:
 
    inline bool isAsciiEncodedQ() const {
       #ifdef HX_SMART_STRINGS
-      return !(((unsigned int *)__w)[-1] & HX_GC_STRING_CHAR16_T);
+      return !(headerWord(-1) & HX_GC_STRING_CHAR16_T);
       #else
       return true;
       #endif
@@ -225,6 +225,15 @@ public:
          return __w[index];
       return __s[index];
    }
+   // String data, and so its header words, need not be 4-byte aligned:
+   //  literals are packed char arrays
+   inline unsigned int headerWord(int inWord) const
+   {
+      unsigned int result;
+      memcpy(&result, __s + inWord*(int)sizeof(unsigned int), sizeof(result));
+      return result;
+   }
+
    // For GC (non-const) strings the memoized hash lives after the
    // terminator - note the offset is in BYTES, so wide strings store it
    // past their final two-byte NUL
@@ -237,6 +246,13 @@ public:
       return (unsigned int *)(__s + length + 1);
    }
 
+   inline unsigned int endHash() const
+   {
+      unsigned int result;
+      memcpy(&result, endHashSlot(), sizeof(result));
+      return result;
+   }
+
    inline unsigned int hash( ) const
    {
       if (!__s) return 0;
@@ -245,33 +261,25 @@ public:
          #ifdef HXCPP_PARANOID
          unsigned int result = calcHash();
 
-         unsigned int have = (((unsigned int *)__s)[-1] & HX_GC_CONST_ALLOC_BIT) ?
-                ((unsigned int *)__s)[-2] :  *endHashSlot();
+         unsigned int have = (headerWord(-1) & HX_GC_CONST_ALLOC_BIT) ?
+                headerWord(-2) :  endHash();
 
          if ( have != result )
          {
              printf("Bad string hash for %s\n", __s );
              printf(" Is %08x\n", result );
              printf(" Baked %08x\n", have );
-             printf(" Mark %08x\n",   ((unsigned int *)__s)[-1]  );
+             printf(" Mark %08x\n",   headerWord(-1)  );
          }
          #endif
          if (__s[HX_GC_CONST_ALLOC_MARK_OFFSET] & HX_GC_CONST_ALLOC_MARK_BIT)
          {
-            #ifdef __EMSCRIPTEN__
-            return  ((emscripten_align1_int*)__s)[-2];
-            #else
-            return  ((unsigned int *)__s)[-2];
-            #endif
+            return headerWord(-2);
          }
          // The cached value was published with a release fence before the
          // hash bit - pair it with an acquire so the value is seen too
          std::atomic_thread_fence(std::memory_order_acquire);
-        #ifdef __EMSCRIPTEN__
-           return *((emscripten_align1_int *)endHashSlot());
-        #else
-           return *endHashSlot();
-        #endif
+         return endHash();
       }
 
       // Slow path..
@@ -282,11 +290,7 @@ public:
       if ( (__s[HX_GC_STRING_HASH_OFFSET] & HX_GC_STRING_HASH_SLOT_BIT) &&
            !(__s[HX_GC_CONST_ALLOC_MARK_OFFSET] & HX_GC_CONST_ALLOC_MARK_BIT) )
       {
-         #ifdef __EMSCRIPTEN__
-         *((emscripten_align1_int *)endHashSlot()) = result;
-         #else
-         *endHashSlot() = result;
-         #endif
+         memcpy(endHashSlot(), &result, sizeof(result));
          // Publish the value before the flag.  The flag is set with a byte
          // store, so it cannot stomp the GC mark byte in the same header
          // word; concurrent memoizers write identical values.

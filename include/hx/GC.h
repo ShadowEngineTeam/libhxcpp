@@ -510,7 +510,9 @@ inline void MarkAlloc(void *inPtr ,hx::MarkContext *__inCtx)
    if ( !( ((size_t)inPtr) & 3) )
    #endif
    // This will also skip const regions
-   if ( !(((unsigned int *)inPtr)[-1] & gPrevMarkIdMask) )
+   unsigned int header;
+   memcpy(&header, (char *)inPtr - sizeof(header), sizeof(header));
+   if ( !(header & gPrevMarkIdMask) )
       MarkAllocUnchecked(inPtr,__inCtx);
 }
 inline void MarkObjectAlloc(hx::Object *inPtr ,hx::MarkContext *__inCtx)
