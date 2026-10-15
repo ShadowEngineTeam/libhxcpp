@@ -2141,7 +2141,8 @@ class BuildTool
             }
          }
       }
-      else if ( isRPi )
+      // A Pi running a 64-bit system builds as Linux ARM64
+      else if ( isRPi && !arm64 )
       {
          defines.set("toolchain","linux");
          defines.set("linux","linux");
