@@ -20,6 +20,9 @@ namespace hx
 			int cursor = 0;
 			Array<uint8_t> scratch;
 			Array<Dynamic> slots;
+			// ThreadLocal values, apart from the legacy __hxcpp_tls_* slots
+			Array<Dynamic> localSlots;
+			Array<int> localGenerations;
 
 		public:
 			friend class Scratch;
@@ -44,6 +47,8 @@ namespace hx
 
 			Dynamic getSlot(const int id);
 			void setSlot(const int id, const Dynamic& obj);
+			Dynamic getLocal(const int slot, const int generation);
+			void setLocal(const int slot, const int generation, const Dynamic& obj);
 
 			String toString() HXCPP_OVERRIDE;
 

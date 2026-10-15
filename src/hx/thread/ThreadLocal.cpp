@@ -14,8 +14,9 @@ struct hx::thread::ThreadLocal_obj::Impl
 	static int counter;
 
 	const int slot;
+	int generation;
 
-	Impl(const int _slot) : slot(_slot) {}
+	Impl(const int _slot) : slot(_slot), generation(1) {}
 
 	static Impl* get()
 	{
@@ -37,7 +38,9 @@ struct hx::thread::ThreadLocal_obj::Impl
 	{
 		std::lock_guard<std::mutex> lock(slotLock);
 
-		slots.emplace_back(reinterpret_cast<hx::thread::ThreadLocal_obj*>(obj)->impl);
+		auto impl = reinterpret_cast<hx::thread::ThreadLocal_obj*>(obj)->impl;
+		impl->generation++;
+		slots.emplace_back(impl);
 	}
 };
 
@@ -56,12 +59,12 @@ Dynamic hx::thread::ThreadLocal_obj::get()
 {
 	auto current = reinterpret_cast<hx::thread::ThreadImpl_obj*>(Thread_obj::current().GetPtr());
 
-	return current->getSlot(impl->slot);
+	return current->getLocal(impl->slot, impl->generation);
 }
 
 void hx::thread::ThreadLocal_obj::set(Dynamic obj)
 {
 	auto current = reinterpret_cast<hx::thread::ThreadImpl_obj*>(Thread_obj::current().GetPtr());
 
-	current->setSlot(impl->slot, obj);
+	current->setLocal(impl->slot, impl->generation, obj);
 }

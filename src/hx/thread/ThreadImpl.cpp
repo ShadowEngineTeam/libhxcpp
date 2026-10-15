@@ -164,6 +164,8 @@ int hx::thread::Thread_obj::id()
 hx::thread::ThreadImpl_obj::ThreadImpl_obj(const int _id)
 	: scratch(std::numeric_limits<uint16_t>::max(), std::numeric_limits<uint16_t>::max())
 	, slots(0, 0)
+	, localSlots(0, 0)
+	, localGenerations(0, 0)
 	, id(_id)
 	, native(new Native())
 {
@@ -173,6 +175,8 @@ hx::thread::ThreadImpl_obj::ThreadImpl_obj(const int _id)
 hx::thread::ThreadImpl_obj::ThreadImpl_obj(const int _id, Thread_obj::CreateFunction _job, CountingSemaphore _semaphore)
 	: scratch(std::numeric_limits<uint16_t>::max(), std::numeric_limits<uint16_t>::max())
 	, slots(0, 0)
+	, localSlots(0, 0)
+	, localGenerations(0, 0)
 	, id(_id)
 	, native(new Native(_job, this, _semaphore))
 {
@@ -202,10 +206,31 @@ void hx::thread::ThreadImpl_obj::setSlot(const int id, const Dynamic& obj)
 	slots->__SetItem(id, obj);
 }
 
+// A value stored by an earlier owner of a recycled slot reads as null, and
+// is dropped so it does not stay alive
+Dynamic hx::thread::ThreadImpl_obj::getLocal(const int slot, const int generation)
+{
+	if (slot >= localGenerations->length || localGenerations[slot] != generation)
+	{
+		if (slot < localSlots->length)
+			localSlots->__SetItem(slot, null());
+		return null();
+	}
+	return localSlots[slot];
+}
+
+void hx::thread::ThreadImpl_obj::setLocal(const int slot, const int generation, const Dynamic& obj)
+{
+	localSlots->__SetItem(slot, obj);
+	localGenerations[slot] = generation;
+}
+
 void hx::thread::ThreadImpl_obj::__Mark(HX_MARK_PARAMS)
 {
 	HX_MARK_MEMBER(scratch);
 	HX_MARK_MEMBER(slots);
+	HX_MARK_MEMBER(localSlots);
+	HX_MARK_MEMBER(localGenerations);
 }
 
 #ifdef HXCPP_VISIT_ALLOCS
@@ -214,6 +239,8 @@ void hx::thread::ThreadImpl_obj::__Visit(HX_VISIT_PARAMS)
 {
 	HX_VISIT_MEMBER(scratch);
 	HX_VISIT_MEMBER(slots);
+	HX_VISIT_MEMBER(localSlots);
+	HX_VISIT_MEMBER(localGenerations);
 }
 
 void hx::thread::ThreadImpl_obj::finalise(hx::Object* obj)
