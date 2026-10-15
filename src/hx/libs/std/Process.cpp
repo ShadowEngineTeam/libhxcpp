@@ -369,6 +369,7 @@ Dynamic _hx_std_process_run( String cmd, Array<String> vargs, int inShowParam )
          CreateProcessW(NULL,(wchar_t *)name,NULL,NULL,TRUE,
             CREATE_NO_WINDOW | (listed ? EXTENDED_STARTUPINFO_PRESENT : 0),
             NULL,NULL,listed ? &sinfex.info : &sinf,&pinf);
+      DWORD startError = started ? 0 : GetLastError();
 
       if (initialized)
          api.remove(attributes);
@@ -387,7 +388,18 @@ Dynamic _hx_std_process_run( String cmd, Array<String> vargs, int inShowParam )
          if (procEread) CloseHandle(procEread);
          if (procIwrite) CloseHandle(procIwrite);
          hx::ExitGCFreeZone();
-         hx::Throw(HX_CSTRING("Could not start process"));
+         String reason;
+         wchar_t *text = 0;
+         if (FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                            NULL, startError, 0, (LPWSTR)&text, 0, NULL) && text)
+         {
+            int len = (int)wcslen(text);
+            while (len > 0 && (text[len-1]==L'\r' || text[len-1]==L'\n' || text[len-1]==L' ' || text[len-1]==L'.'))
+               len--;
+            reason = String::create(text, len);
+            LocalFree(text);
+         }
+         hx::Throw(HX_CSTRING("Could not start process: ") + reason + HX_CSTRING(" (") + String((int)startError) + HX_CSTRING(")"));
       }
       hx::ExitGCFreeZone();
 
