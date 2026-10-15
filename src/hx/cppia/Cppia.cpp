@@ -2186,8 +2186,8 @@ struct CallMemberVTable : public CppiaExpr
       unsigned char *pointer = ctx->pointer; \
       ScriptCallable *func = vtable[slot]; \
       func->pushArgs(ctx, thisVal, args); \
-      /* TODO */; \
-      AutoStack save(ctx,pointer);
+      AutoStack save(ctx,pointer); \
+      BCR_CHECK_RET(errorValue);
 
    void runVoid(CppiaCtx *ctx) HXCPP_OVERRIDE
    {
