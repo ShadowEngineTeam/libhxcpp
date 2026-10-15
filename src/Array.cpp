@@ -331,7 +331,8 @@ void ArrayBase::__SetSizeExact(int inSize)
 {
    if (inSize==0)
    {
-      InternalReleaseMem(mBase);
+      if (mAlloc>=0)
+         InternalReleaseMem(mBase);
       mBase = 0;
       mAlloc = length = 0;
    }
