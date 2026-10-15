@@ -1823,13 +1823,13 @@ void __hxcpp_bytes_of_string(Array<unsigned char> &outBytes,const String &inStri
       const char16_t *end = src + inString.length;
       int bytes = 0;
       while(src<end)
-         bytes += UTF8Bytes( Char16Advance(src) );
+         bytes += UTF8Bytes( Char16Advance(src,false) );
 
       outBytes->__SetSize(bytes);
       char *ptr = outBytes->GetBase();
       src = inString.raw_wptr();
       while(src<end)
-         UTF8EncodeAdvance(ptr, Char16Advance(src));
+         UTF8EncodeAdvance(ptr, Char16Advance(src,false));
    }
    else
    #endif
@@ -2169,7 +2169,7 @@ bool String::utf8_str(::cpp::marshal::View<char> buffer, int* outByteLength) con
     {
         auto cursor = __w;
 
-        while (Char16Advance(cursor)) {}
+        while (Char16Advance(cursor,false)) {}
 
         auto calculated = cursor - __w - 1;
 
@@ -2180,7 +2180,7 @@ bool String::utf8_str(::cpp::marshal::View<char> buffer, int* outByteLength) con
 
         while (cursor < end)
         {
-            chars += UTF8Bytes(Char16Advance(cursor));
+            chars += UTF8Bytes(Char16Advance(cursor,false));
         }
 
         if (buffer.length < chars + 1)
@@ -2193,7 +2193,7 @@ bool String::utf8_str(::cpp::marshal::View<char> buffer, int* outByteLength) con
 
         while (cursor < end)
         {
-            UTF8EncodeAdvance(output, Char16Advance(cursor));
+            UTF8EncodeAdvance(output, Char16Advance(cursor,false));
         }
 
         *output = 0;
