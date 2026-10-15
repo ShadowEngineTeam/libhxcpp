@@ -147,6 +147,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed cpp::Variant's <= with a String acting as <, so equal strings compared false (native code and externs; generated code was not affected)
 * Fixed cpp.NativeString.parseInt and parseSubstrInt failing to link, as the runtime never defined __hxcpp_parse_substr_int. They give 0 for text that is not a number
 * Fixed StringTools.urlDecode replacing every character above 127 in a non-ASCII string with ?
+* Fixed anonymous objects not finding fields with non-ASCII names: Reflect.field read null, hasField was false, and setField added a second field of the same name
 
 ### Arrays and Bytes
 

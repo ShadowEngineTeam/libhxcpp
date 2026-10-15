@@ -167,12 +167,12 @@ public:
    }
    hx::Val __Field(const String &inField, hx::PropertyAccess)
    {
-      if (HX_QSTR_EQ(inField,name0)) return t0;
+      if (inField.eq(name0)) return t0;
       return null();
    }
    hx::Val __SetField(const String &inField,const hx::Val &inValue, hx::PropertyAccess inCallProp)
    {
-      if (inField.__s==name0.__s || HX_QSTR_EQ(inField,name0)) {
+      if (inField.__s==name0.__s || inField.eq(name0)) {
         t0 = inValue.Cast< _hx_T0 >();
         if (hx::ContainsPointers<_hx_T0>()) {
           HX_OBJ_WB_GET(this, hx::PointerOf(t0));
@@ -232,13 +232,8 @@ public:
       if (inField.__s==name0.__s) return t0;
       if (inField.__s==name1.__s) return t1;
 
-      #ifdef HX_SMART_STRINGS
-      if (!inField.isAsciiEncodedQ())
-         return null();
-      #endif
-
-      if (HX_QSTR_EQ_AE(inField,name0)) return t0;
-      if (HX_QSTR_EQ_AE(inField,name1)) return t1;
+      if (inField.eq(name0)) return t0;
+      if (inField.eq(name1)) return t1;
       return null();
    }
    hx::Val __SetField(const String &inField,const hx::Val &inValue, hx::PropertyAccess inCallProp) HXCPP_OVERRIDE
@@ -258,14 +253,14 @@ public:
         return inValue;
       }
 
-      if (HX_QSTR_EQ(inField,name0)) {
+      if (inField.eq(name0)) {
         t0 = inValue.Cast< _hx_T0 >();
         if (hx::ContainsPointers<_hx_T0>()) {
           HX_OBJ_WB_GET(this, hx::PointerOf(t0));
         }
         return inValue;
       }
-      if (HX_QSTR_EQ(inField,name1)) {
+      if (inField.eq(name1)) {
         t1 = inValue.Cast< _hx_T1 >();
         if (hx::ContainsPointers<_hx_T1>()) {
           HX_OBJ_WB_GET(this, hx::PointerOf(t1));
@@ -335,13 +330,9 @@ public:
       if (inField.__s==name0.__s) return t0;
       if (inField.__s==name1.__s) return t1;
       if (inField.__s==name2.__s) return t2;
-      #ifdef HX_SMART_STRINGS
-      if (!inField.isAsciiEncodedQ())
-         return null();
-      #endif
-      if (HX_QSTR_EQ_AE(inField,name0)) return t0;
-      if (HX_QSTR_EQ_AE(inField,name1)) return t1;
-      if (HX_QSTR_EQ_AE(inField,name2)) return t2;
+      if (inField.eq(name0)) return t0;
+      if (inField.eq(name1)) return t1;
+      if (inField.eq(name2)) return t2;
       return null();
    }
    hx::Val __SetField(const String &inField,const hx::Val &inValue, hx::PropertyAccess inCallProp) HXCPP_OVERRIDE
@@ -369,21 +360,21 @@ public:
       }
 
 
-      if (HX_QSTR_EQ(inField,name0)) {
+      if (inField.eq(name0)) {
         t0 = inValue.Cast< _hx_T0 >();
         if (hx::ContainsPointers<_hx_T0>()) {
           HX_OBJ_WB_GET(this, hx::PointerOf(t0));
         }
         return inValue;
       }
-      if (HX_QSTR_EQ(inField,name1)) {
+      if (inField.eq(name1)) {
         t1 = inValue.Cast< _hx_T1 >();
         if (hx::ContainsPointers<_hx_T1>()) {
           HX_OBJ_WB_GET(this, hx::PointerOf(t1));
         }
         return inValue;
       }
-      if (HX_QSTR_EQ(inField,name2)) {
+      if (inField.eq(name2)) {
         t2 = inValue.Cast< _hx_T2 >();
         if (hx::ContainsPointers<_hx_T2>()) {
           HX_OBJ_WB_GET(this, hx::PointerOf(t2));
@@ -462,14 +453,10 @@ public:
       if (inField.__s==name1.__s) return t1;
       if (inField.__s==name2.__s) return t2;
       if (inField.__s==name3.__s) return t3;
-      #ifdef HX_SMART_STRINGS
-      if (!inField.isAsciiEncodedQ())
-         return null();
-      #endif
-      if (HX_QSTR_EQ_AE(inField,name0)) return t0;
-      if (HX_QSTR_EQ_AE(inField,name1)) return t1;
-      if (HX_QSTR_EQ_AE(inField,name2)) return t2;
-      if (HX_QSTR_EQ_AE(inField,name3)) return t3;
+      if (inField.eq(name0)) return t0;
+      if (inField.eq(name1)) return t1;
+      if (inField.eq(name2)) return t2;
+      if (inField.eq(name3)) return t3;
       return null();
    }
    hx::Val __SetField(const String &inField,const hx::Val &inValue, hx::PropertyAccess inCallProp)
@@ -505,28 +492,28 @@ public:
 
 
 
-      if (HX_QSTR_EQ(inField,name0)) {
+      if (inField.eq(name0)) {
         t0 = inValue.Cast< _hx_T0 >();
         if (hx::ContainsPointers<_hx_T0>()) {
           HX_OBJ_WB_GET(this, hx::PointerOf(t0));
         }
         return inValue;
       }
-      if (HX_QSTR_EQ(inField,name1)) {
+      if (inField.eq(name1)) {
         t1 = inValue.Cast< _hx_T1 >();
         if (hx::ContainsPointers<_hx_T1>()) {
           HX_OBJ_WB_GET(this, hx::PointerOf(t1));
         }
         return inValue;
       }
-      if (HX_QSTR_EQ(inField,name2)) {
+      if (inField.eq(name2)) {
         t2 = inValue.Cast< _hx_T2 >();
         if (hx::ContainsPointers<_hx_T2>()) {
           HX_OBJ_WB_GET(this, hx::PointerOf(t2));
         }
         return inValue;
       }
-      if (HX_QSTR_EQ(inField,name3)) {
+      if (inField.eq(name3)) {
         t3 = inValue.Cast< _hx_T3 >();
         if (hx::ContainsPointers<_hx_T3>()) {
           HX_OBJ_WB_GET(this, hx::PointerOf(t3));
@@ -617,15 +604,11 @@ public:
       if (inField.__s==name2.__s) return t2;
       if (inField.__s==name3.__s) return t3;
       if (inField.__s==name4.__s) return t4;
-      #ifdef HX_SMART_STRINGS
-      if (!inField.isAsciiEncodedQ())
-         return null();
-      #endif
-      if (HX_QSTR_EQ_AE(inField,name0)) return t0;
-      if (HX_QSTR_EQ_AE(inField,name1)) return t1;
-      if (HX_QSTR_EQ_AE(inField,name2)) return t2;
-      if (HX_QSTR_EQ_AE(inField,name3)) return t3;
-      if (HX_QSTR_EQ_AE(inField,name4)) return t4;
+      if (inField.eq(name0)) return t0;
+      if (inField.eq(name1)) return t1;
+      if (inField.eq(name2)) return t2;
+      if (inField.eq(name3)) return t3;
+      if (inField.eq(name4)) return t4;
       return null();
    }
    hx::Val __SetField(const String &inField,const hx::Val &inValue, hx::PropertyAccess inCallProp)
@@ -669,35 +652,35 @@ public:
 
 
 
-      if (HX_QSTR_EQ(inField,name0)) {
+      if (inField.eq(name0)) {
         t0 = inValue.Cast< _hx_T0 >();
         if (hx::ContainsPointers<_hx_T0>()) {
           HX_OBJ_WB_GET(this, hx::PointerOf(t0));
         }
         return inValue;
       }
-      if (HX_QSTR_EQ(inField,name1)) {
+      if (inField.eq(name1)) {
         t1 = inValue.Cast< _hx_T1 >();
         if (hx::ContainsPointers<_hx_T1>()) {
           HX_OBJ_WB_GET(this, hx::PointerOf(t1));
         }
         return inValue;
       }
-      if (HX_QSTR_EQ(inField,name2)) {
+      if (inField.eq(name2)) {
         t2 = inValue.Cast< _hx_T2 >();
         if (hx::ContainsPointers<_hx_T2>()) {
           HX_OBJ_WB_GET(this, hx::PointerOf(t2));
         }
         return inValue;
       }
-      if (HX_QSTR_EQ(inField,name3)) {
+      if (inField.eq(name3)) {
         t3 = inValue.Cast< _hx_T3 >();
         if (hx::ContainsPointers<_hx_T3>()) {
           HX_OBJ_WB_GET(this, hx::PointerOf(t3));
         }
         return inValue;
       }
-      if (HX_QSTR_EQ(inField,name4)) {
+      if (inField.eq(name4)) {
         t4 = inValue.Cast< _hx_T4 >();
         if (hx::ContainsPointers<_hx_T4>()) {
           HX_OBJ_WB_GET(this, hx::PointerOf(t4));

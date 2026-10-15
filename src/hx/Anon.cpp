@@ -97,7 +97,7 @@ void Anon_obj::__Visit(hx::VisitContext *__inCtx)
 
 inline int Anon_obj::findFixed(const ::String &inKey, bool inSkip5)
 {
-   if (!mFixedFields || !inKey.isAsciiEncoded() )
+   if (!mFixedFields || !inKey.__s)
       return -1;
    VariantKey *fixed = getFixed();
 
@@ -119,8 +119,7 @@ inline int Anon_obj::findFixed(const ::String &inKey, bool inSkip5)
       if (mFixedFields<5)
       {
          for(int i=0;i<mFixedFields;i++)
-            if (fixed[i].hash==sought && (
-                   (fixed[i].key.length == inKey.length && !memcmp(fixed[i].key.raw_ptr(),inKey.raw_ptr(), inKey.length))))
+            if (fixed[i].hash==sought && fixed[i].key.eq(inKey))
                return i;
          return -1;
       }
@@ -167,7 +166,7 @@ inline int Anon_obj::findFixed(const ::String &inKey, bool inSkip5)
    while(fixed[min].hash==sought)
    {
       // Might be multiple?
-      if ( fixed[min].key.length == inKey.length && !memcmp(fixed[min].key.raw_ptr(),inKey.raw_ptr(), inKey.length))
+      if (fixed[min].key.eq(inKey))
          return min;
 
       min++;
@@ -182,7 +181,13 @@ hx::Val Anon_obj::__Field(const String &inName, hx::PropertyAccess inCallProp)
 {
 
    #ifdef HX_SMART_STRINGS
-   if (inName.isAsciiEncodedQ())
+   if (!inName.isAsciiEncodedQ())
+   {
+      int fixed = findFixed(inName);
+      if (fixed>=0)
+         return getFixed()[fixed].value;
+   }
+   else
    #endif
    if (mFixedFields>0)
    {
