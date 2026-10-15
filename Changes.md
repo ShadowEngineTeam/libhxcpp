@@ -144,6 +144,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed wchar_t strings with values above U+10FFFF overrunning their buffer, and wchar_str() and ConvertToWChar mangling characters outside the BMP where wchar_t is 32 bits
 * Fixed haxe.Utf8.charCodeAt with a negative index and NativeString.parseSubstrFloat with a negative start or huge length reading outside the string
 * Fixed string headers and memoized hashes being read and written through misaligned pointers
+* Fixed cpp::Variant's <= with a String acting as <, so equal strings compared false (native code and externs; generated code was not affected)
 
 ### Arrays and Bytes
 

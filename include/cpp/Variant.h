@@ -312,7 +312,7 @@ namespace cpp
       return type!=typeString || asString()!=inString;
    }
    inline bool Variant::operator < (const String &inRHS)  const { return asString() < inRHS; }
-   inline bool Variant::operator <= (const String &inRHS)  const { return asString() < inRHS; }
+   inline bool Variant::operator <= (const String &inRHS)  const { return asString() <= inRHS; }
    inline bool Variant::operator > (const String &inRHS)  const { return asString() > inRHS; }
    inline bool Variant::operator >= (const String &inRHS)  const { return asString() >= inRHS; }
 
