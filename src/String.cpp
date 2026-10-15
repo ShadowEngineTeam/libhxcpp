@@ -522,10 +522,6 @@ static const char *GCStringDup(const T *inStr,int inLen, int *outLen=0)
 
    char16_t *result = String::allocChar16Ptr(len);
    memcpy(result,inStr,2*len);
-   if (IsUtf16LowSurrogate(result[0]))
-      result[0] = 0xFFFD;
-   if (len>1 && IsUtf16HighSurrogate(result[len-1]))
-      result[len-1] = 0xFFFD;
    return (const char *)result;
 }
 
