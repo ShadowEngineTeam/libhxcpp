@@ -59,6 +59,30 @@ jobs:
     - run: clang++ -arch arm64 -std=c++11 -c -DHX_MACOS -DHXCPP_M64 -Iinclude src/hx/gc/GcRegCapture.cpp -o capture.o
       name: Compile the register capture
 
+  check-run-bindir:
+    name: Check run.n finds the compiled BuildTool (${{ matrix.dir }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            dir: Linux64
+          - os: macos-15-intel
+            dir: Mac64
+          - os: macos-latest
+            dir: MacArm64
+    runs-on: ${{ matrix.os }}
+    steps:
+    - name: checkout
+      uses: actions/checkout@v4
+
+    - uses: krdlab/setup-haxe@v2
+      with:
+        haxe-version: 4.3.7
+
+    - run: bash test/run_bindir/check.sh ${{ matrix.dir }}
+      name: Run through run.n
+
   check-haxelib:
     name: Check installing with haxelib
     strategy:

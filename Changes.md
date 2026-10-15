@@ -184,6 +184,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed long and unsigned long, and so size_t, being ambiguous when converted to Dynamic on macOS, where int64_t is long long: an Int default of -2147483648 failed to compile there (hxcpp #621, #1214)
 * Fixed an arm64 macOS build that defines HXCPP_M64 but not HXCPP_ARM64, as an Xcode build can, compiling the x86-64 register capture: the capture is chosen by the compiler's target (hxcpp #1023, #1237)
 * Fixed a relative path given with -options being read next to Build.xml instead of in the working directory; a missing options file now warns (hxcpp #1178)
+* Fixed haxelib run hxcpp ignoring a compiled BuildTool on Apple Silicon, ARM64 Linux and Windows on ARM: it looked only in the x86-64 bin folder, so the slower neko tool ran (hxcpp #1029)
 * Added the libhxcpp define: a build that uses the library gets -D libhxcpp=<version>. Compare it with version("x.y.z"); a plain string comparison compares text
 * Added separate Linux ARMv7 and ARM64 build architectures (hxcpp #1355)
 * Fixed AndroidCompat.cpp closing its extern "C" section in the wrong place (hxcpp #1404)

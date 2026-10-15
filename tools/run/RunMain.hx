@@ -85,6 +85,32 @@ class RunMain
          Sys.setCwd(oldDir);
    }
 
+   // The folder compile-cpp.hxml puts BuildTool in when built on this host
+   static function hostBinDir():Null<String>
+   {
+      var os = Sys.systemName();
+      if ((new EReg("window","i")).match(os))
+      {
+         var proc = Sys.getEnv("PROCESSOR_IDENTIFIER");
+         return proc!=null && (new EReg("\\barm","i")).match(proc) ? "WindowsArm64" : "Windows64";
+      }
+
+      var platform = (new EReg("mac","i")).match(os) ? "Mac" : (new EReg("linux","i")).match(os) ? "Linux" : null;
+      if (platform==null)
+         return null;
+
+      var arch = "";
+      try
+      {
+         var process = new sys.io.Process("uname", ["-m"]);
+         arch = process.stdout.readAll().toString();
+         process.close();
+      }
+      catch(e:Dynamic) { }
+
+      return platform + (arch.indexOf("aarch64")>=0 || arch.indexOf("arm64")>=0 ? "Arm64" : arch.indexOf("64")>=0 ? "64" : "");
+   }
+
    public static function executeHxcpp()
    {
       if (!sys.FileSystem.exists("./hxcpp.n"))
@@ -92,11 +118,8 @@ class RunMain
 
       if (Sys.args().indexOf("-DHXCPP_NEKO_BUILDTOOL=1")<0)
       {
-         var os = Sys.systemName();
-         var isWindows = (new EReg("window","i")).match(os);
-         var isMac = (new EReg("mac","i")).match(os);
-         var isLinux = (new EReg("linux","i")).match(os);
-         var binDir = isWindows ? "Windows64" : isMac ? "Mac64" : isLinux ? "Linux64" : null;
+         var isWindows = (new EReg("window","i")).match(Sys.systemName());
+         var binDir = hostBinDir();
          if (binDir!=null)
          {
             var compiled = 'bin/$binDir/BuildTool';
