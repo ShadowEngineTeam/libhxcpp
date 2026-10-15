@@ -1149,12 +1149,18 @@ struct CastExpr : public CppiaDynamicExpr
    int     typeId;
    ArrayType arrayType;
    TypeData *typeData;
+   // A safe cast to Int, Float, Bool or String, which checks the type
+   bool checked;
+   // What null becomes there: 0, 0.0 or false, as on the static targets
+   hx::Object *nullValue;
 
    CastExpr(CppiaStream &stream,CastOp inOp)
    {
       op = inOp;
       typeId = 0;
       typeData = 0;
+      checked = false;
+      nullValue = 0;
       if (op==castDataArray || op==castInstance)
          typeId = stream.getTypeId();
 
@@ -1169,8 +1175,24 @@ struct CastExpr : public CppiaDynamicExpr
 
    bool isBoolInt() HXCPP_OVERRIDE { return op == castBool; }
 
+   hx::Object *checkedObject(CppiaCtx *ctx)
+   {
+      hx::Object *obj = value->runObject(ctx);
+      if (!obj)
+         return nullValue;
+      if (!typeData->isClassOf(obj))
+         hx::BadCast();
+      return obj;
+   }
+
    int runInt(CppiaCtx *ctx) HXCPP_OVERRIDE
    {
+      if (checked)
+      {
+         Dynamic val = checkedObject(ctx);
+         BCR_CHECK;
+         return op==castBool ? (int)(bool)val : (int)val;
+      }
       if (op==castBool)
          return (bool)value->runInt(ctx);
       return value->runInt(ctx);
@@ -1178,11 +1200,23 @@ struct CastExpr : public CppiaDynamicExpr
 
    double runFloat(CppiaCtx *ctx) HXCPP_OVERRIDE
    {
+      if (checked)
+      {
+         Dynamic val = checkedObject(ctx);
+         BCR_CHECK;
+         return val;
+      }
       return value->runFloat(ctx);
    }
 
    String runString(CppiaCtx *ctx) HXCPP_OVERRIDE
    {
+      if (checked)
+      {
+         hx::Object *o = checkedObject(ctx);
+         BCR_CHECK;
+         return o ? o->toString() : String();
+      }
       switch(op)
       {
          case castInt:
@@ -1201,6 +1235,8 @@ struct CastExpr : public CppiaDynamicExpr
 
    hx::Object *runObject(CppiaCtx *ctx) HXCPP_OVERRIDE
    {
+      if (checked)
+         return checkedObject(ctx);
       if (op==castInt)
          return Dynamic(value->runInt(ctx)).mPtr;
       else if (op==castFloat)
@@ -1241,6 +1277,7 @@ struct CastExpr : public CppiaDynamicExpr
       if (op==castInstance)
       {
          typeData = inModule.types[typeId];
+         checked = true;
          if (typeData->isFloat)
             op=castFloat;
          else if (typeData->name==HX_CSTRING("Int"))
@@ -1250,7 +1287,12 @@ struct CastExpr : public CppiaDynamicExpr
          else if (typeData->name==HX_CSTRING("String"))
             op=castString;
          else
+         {
+            checked = false;
             return this;
+         }
+         nullValue = op==castInt || op==castFloat ? Dynamic(0).mPtr :
+                     op==castBool ? Dynamic(false).mPtr : 0;
       }
 
       if (op==castDynamic || op==castInt || op==castBool || op==castFloat || op==castString )
@@ -1302,8 +1344,31 @@ struct CastExpr : public CppiaDynamicExpr
       return obj;
    }
 
+   static hx::Object * SLJIT_CALL safeBasicCast(hx::Object *obj, CastExpr *inCast )
+   {
+      if (!obj)
+         return inCast->nullValue;
+      if (!inCast->typeData->isClassOf(obj) )
+      {
+         CppiaCtx::getCurrent()->exception = HX_INVALID_CAST.mPtr;
+         __hx_stack_set_last_exception();
+         return 0;
+      }
+      return obj;
+   }
+
    void genCode(CppiaCompiler *compiler, const JitVal &inDest,ExprType destType) HXCPP_OVERRIDE
    {
+      if (checked)
+      {
+         value->genCode(compiler, sJitTemp0.as(jtPointer), etObject);
+         compiler->callNative( (void *)safeBasicCast, sJitTemp0, (void *)this );
+         compiler->checkException();
+         if (destType!=etNull && destType!=etVoid)
+            compiler->convertReturnReg(etObject, inDest, destType);
+         return;
+      }
+
       if (destType==etNull || destType==etVoid)
       {
          value->genCode(compiler);
