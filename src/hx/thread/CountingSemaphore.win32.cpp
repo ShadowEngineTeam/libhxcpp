@@ -1,6 +1,7 @@
 #include <hxcpp.h>
 #include <windows.h>
 #include <memory>
+#include <hx/Thread.h>
 #include <hx/thread/CountingSemaphore.hpp>
 
 struct hx::thread::CountingSemaphore_obj::Impl
@@ -56,12 +57,13 @@ bool hx::thread::CountingSemaphore_obj::tryAcquire(Null<double> timeout)
 		__hxcpp_gc_safe_point();
 	// Zero-timeout poll cannot block - no free zone needed.  Also try a
 	// non-blocking grab first for the timed case.
+	DWORD waitMs = HxWaitMilliseconds(timeout.Default(0));
 	switch (WaitForSingleObject(impl->semaphore, 0))
 	{
 	case NO_ERROR:
 		return true;
 	case WAIT_TIMEOUT:
-		if (timeout.Default(0)<=0)
+		if (0 == waitMs)
 			return false;
 		break;
 	default:
@@ -70,7 +72,7 @@ bool hx::thread::CountingSemaphore_obj::tryAcquire(Null<double> timeout)
 
 	hx::EnterGCFreeZone();
 
-	switch (WaitForSingleObject(impl->semaphore, static_cast<DWORD>(timeout.Default(0) * 1000)))
+	switch (WaitForSingleObject(impl->semaphore, waitMs))
 	{
 	case NO_ERROR:
 		hx::ExitGCFreeZone();

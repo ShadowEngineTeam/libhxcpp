@@ -1,5 +1,6 @@
 #include <hxcpp.h>
 #include <dispatch/dispatch.h>
+#include <cmath>
 #include <hx/thread/CountingSemaphore.hpp>
 
 struct hx::thread::CountingSemaphore_obj::Impl
@@ -54,11 +55,16 @@ bool hx::thread::CountingSemaphore_obj::tryAcquire(Null<double> timeout)
 {
 	hx::AutoGCFreeZone zone;
 
+	double seconds = timeout.Default(0);
+	dispatch_time_t deadline = DISPATCH_TIME_NOW;
+	// double->int64_t is undefined past 2^63 nanoseconds
+	if (seconds >= 9.2e9)
+		deadline = DISPATCH_TIME_FOREVER;
 	// Convert to nanoseconds before truncating - casting the seconds value
 	// first discards the fractional part, so tryAcquire(0.5) returned
 	// immediately instead of waiting 500ms
-	return
-		(0 == dispatch_semaphore_wait(
-			impl->semaphore,
-			dispatch_time(DISPATCH_TIME_NOW, static_cast<int64_t>(timeout.Default(0) * 1e9))));
+	else if (seconds > 0)
+		deadline = dispatch_time(DISPATCH_TIME_NOW, static_cast<int64_t>(std::ceil(seconds * 1e9)));
+
+	return 0 == dispatch_semaphore_wait(impl->semaphore, deadline);
 }

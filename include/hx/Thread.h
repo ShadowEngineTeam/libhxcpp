@@ -41,12 +41,23 @@
 #define HXCPP_PTHREADS
 #endif
 
+#include <cmath>
+#include <limits>
+
 #ifdef RegisterClass
 #undef RegisterClass
 #endif
 
 #if defined(HX_WINDOWS)
 
+inline DWORD HxWaitMilliseconds(double inSeconds)
+{
+   if (!(inSeconds > 0))
+      return 0;
+   // double->DWORD is undefined past 2^32 (and 0xffffffff is INFINITE)
+   double ms = std::ceil(inSeconds*1000.0);
+   return ms >= 4294967294.0 ? 4294967294u : (DWORD)ms;
+}
 
 struct HxMutex
 {
@@ -199,9 +210,7 @@ struct HxSemaphore
     // Returns true on success, false on timeout
    bool WaitSeconds(double inSeconds)
    {
-      // double->DWORD is undefined past 2^32 (and 0xffffffff is INFINITE)
-      double ms = inSeconds*1000.0;
-      DWORD waitMs = ms >= 4294967294.0 ? 4294967294u : (DWORD)ms;
+      DWORD waitMs = HxWaitMilliseconds(inSeconds);
       #ifdef HX_WINRT
       return WaitForSingleObjectEx(mSemaphore,waitMs,false) != WAIT_TIMEOUT;
       #else
@@ -224,6 +233,33 @@ struct HxSemaphore
 #if !defined(__APPLE__) && (!defined(__ANDROID__) || __ANDROID_API__ >= 21)
 #define HX_THREAD_COND_MONOTONIC
 #endif
+
+inline void HxAddSeconds(timespec &ioTime, double inSeconds)
+{
+   if (!(inSeconds > 0))
+      return;
+   time_t sec = 0x7ffffffe;
+   long nsec = 0;
+   if (inSeconds < sec)
+   {
+      double whole = std::floor(inSeconds);
+      sec = (time_t)whole;
+      nsec = (long)std::ceil((inSeconds - whole)*1000000000.0);
+   }
+   ioTime.tv_nsec += nsec;
+   if (ioTime.tv_nsec >= 1000000000)
+   {
+      ioTime.tv_nsec -= 1000000000;
+      sec++;
+   }
+   if (sec > std::numeric_limits<time_t>::max() - ioTime.tv_sec)
+   {
+      ioTime.tv_sec = std::numeric_limits<time_t>::max();
+      ioTime.tv_nsec = 999999999;
+   }
+   else
+      ioTime.tv_sec += sec;
+}
 
 struct HxSemaphore
 {
@@ -324,19 +360,9 @@ struct HxSemaphore
    // Returns true if the wait was success, false on timeout.
    bool WaitSeconds(double inSeconds)
    {
-      // double->int is undefined past 2^31
-      if (inSeconds > 0x7fffffff)
-         inSeconds = 0x7fffffff;
-      int isec = (int)inSeconds;
       timespec spec;
       Now(spec);
-      spec.tv_nsec += (long)((inSeconds-isec)*1000000000.0);
-      if (spec.tv_nsec>=1000000000)
-      {
-         spec.tv_nsec-=1000000000;
-         isec++;
-      }
-      spec.tv_sec += isec;
+      HxAddSeconds(spec, inSeconds);
 
       AutoLock lock(mMutex);
 

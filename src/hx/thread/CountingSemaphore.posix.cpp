@@ -3,6 +3,7 @@
 #include <time.h>
 #include <memory>
 #include <cerrno>
+#include <hx/Thread.h>
 #include <hx/thread/CountingSemaphore.hpp>
 
 // sem_timedwait takes a deadline on the wall clock, which changing the system time moves
@@ -70,7 +71,8 @@ bool hx::thread::CountingSemaphore_obj::tryAcquire(Null<double> timeout)
 {
 	if (hx::gPauseForCollect)
 		__hxcpp_gc_safe_point();
-	if (0 == timeout.Default(0))
+	double seconds = timeout.Default(0);
+	if (!(seconds > 0))
 	{
 		return 0 == sem_trywait(&impl->semaphore);
 	}
@@ -79,20 +81,12 @@ bool hx::thread::CountingSemaphore_obj::tryAcquire(Null<double> timeout)
 		hx::EnterGCFreeZone();
 
 		struct timespec t;
-		auto delta = timeout.value;
-		int idelta = (int)delta, idelta2;
-		delta -= idelta;
-		delta *= 1.0e9;
 		#ifdef HX_SEM_CLOCKWAIT
 		clock_gettime(CLOCK_MONOTONIC, &t);
 		#else
 		clock_gettime(CLOCK_REALTIME, &t);
 		#endif
-		delta += t.tv_nsec;
-		idelta2 = (int)(delta / 1e9);
-		delta -= idelta2 * 1e9;
-		t.tv_sec += idelta + idelta2;
-		t.tv_nsec = (long)delta;
+		HxAddSeconds(t, seconds);
 
 		// Retry on EINTR - the absolute deadline keeps the timeout intact
 		int r;
@@ -105,6 +99,7 @@ bool hx::thread::CountingSemaphore_obj::tryAcquire(Null<double> timeout)
 			#endif
 		}
 		while (0 != r && EINTR == errno);
+		int error = errno;
 
 		if (0 == r)
 		{
@@ -114,7 +109,7 @@ bool hx::thread::CountingSemaphore_obj::tryAcquire(Null<double> timeout)
 		else
 		{
 			hx::ExitGCFreeZone();
-			if (errno == ETIMEDOUT)
+			if (error == ETIMEDOUT)
 			{
 				return false;
 			}
