@@ -181,6 +181,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed cpp.cppia.Module and cpp.cppia.Host.enableJit failing to compile outside the cppia host class: scriptable builds include hx/Scriptable.h from hxcpp.h (hxcpp #816)
 * Fixed cppia scripts using Array<cpp.Float64> failing to load with Unknown array type:double (hxcpp #633)
 * Fixed a cppia script failing to load with Unknown global when it reads a static property of an extern host class: a call by C++ name to a host class static is linked through the class (hxcpp #1183)
+* Fixed long and unsigned long, and so size_t, being ambiguous when converted to Dynamic on macOS, where int64_t is long long: an Int default of -2147483648 failed to compile there (hxcpp #621, #1214)
 * Added the libhxcpp define: a build that uses the library gets -D libhxcpp=<version>. Compare it with version("x.y.z"); a plain string comparison compares text
 * Added separate Linux ARMv7 and ARM64 build architectures (hxcpp #1355)
 * Fixed AndroidCompat.cpp closing its extern "C" section in the wrong place (hxcpp #1404)

@@ -378,14 +378,15 @@ Dynamic::Dynamic(short inVal)
    mPtr = fromInt(inVal);
 }
 
-#if !defined(__GNUC__) || defined(__MINGW32__) || (defined(__WORDSIZE) && (__WORDSIZE != 64))
+#if !defined(__GNUC__) || defined(__MINGW32__) || defined(__APPLE__) || (defined(__WORDSIZE) && (__WORDSIZE != 64))
+// long is 64 bits on 64-bit macOS, where int64_t is long long
 Dynamic::Dynamic(unsigned long inVal)
 {
-   mPtr = fromInt(inVal);
+   mPtr = inVal==(unsigned int)inVal ? fromInt((unsigned int)inVal) : Dynamic((cpp::UInt64)inVal).mPtr;
 }
 Dynamic::Dynamic(long inVal)
 {
-   mPtr = fromInt(inVal);
+   mPtr = inVal==(int)inVal ? fromInt((int)inVal) : Dynamic((cpp::Int64)inVal).mPtr;
 }
 #endif
 

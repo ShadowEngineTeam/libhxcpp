@@ -40,7 +40,7 @@ public:
    Dynamic(const cpp::Variant &inRHS) : super(inRHS.asDynamic()) { }
    template<typename T>
    Dynamic(const hx::Native<T *> &inInterface):super(inInterface.ptr ? inInterface->__GetRealObject() : (hx::Object *)0 ) { }
-   #if !defined(__GNUC__) || defined(__MINGW32__) || (defined(__WORDSIZE) && (__WORDSIZE != 64))
+   #if !defined(__GNUC__) || defined(__MINGW32__) || defined(__APPLE__) || (defined(__WORDSIZE) && (__WORDSIZE != 64))
    Dynamic(long inVal);
    Dynamic(unsigned long inVal);
    #endif
