@@ -5261,8 +5261,11 @@ public:
       #endif
 
       // Without the moving collector, only groups whose blocks are all empty can
-      // go back to the system; every allocator dropped its block when it was marked
-      #if !defined(HXCPP_GC_MOVING) && defined(HXCPP_VISIT_ALLOCS)
+      // go back to the system; every allocator dropped its block when it was marked.
+      // Not under Emscripten: wasm memory never shrinks, so a released group only
+      // fragments malloc's heap, and the next groups grow the memory instead of
+      // reusing it (an instance compiling repeatedly ran out at 2 GB).
+      #if !defined(HXCPP_GC_MOVING) && defined(HXCPP_VISIT_ALLOCS) && !defined(__EMSCRIPTEN__)
       if (full)
       {
          size_t mem = mRowsInUse<<IMMIX_LINE_BITS;
