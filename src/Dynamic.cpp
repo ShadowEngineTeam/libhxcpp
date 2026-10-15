@@ -422,7 +422,7 @@ Dynamic::Dynamic(char32_t inVal)
 
 Dynamic::Dynamic(double inVal)
 {
-   if ( (int)inVal==inVal && inVal>=-1 && inVal<256 )
+   if ( inVal>=-1 && inVal<256 && (int)inVal==inVal )
    {
       int idx = inVal+1;
       mPtr = sConstDynamicInts[idx].mPtr;
@@ -640,7 +640,7 @@ static bool IsInt(hx::Object *inPtr)
    if (t==vtFloat)
    {
       double val = inPtr->__ToDouble();
-      return ((int)val == val);
+      return val>=-2147483648.0 && val<=2147483647.0 && (int)val==val;
    }
    if (t==vtInt64)
    {
