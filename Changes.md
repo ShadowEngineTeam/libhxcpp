@@ -203,6 +203,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Simplified the Apple SDK lookup in the build tool (hxcpp #1327)
 * Fixed arm64 iOS simulator builds sharing the x86_64 objdir and library suffix, and linking dylibs for i386: they use obj/iphonesim...-arm64 and the .iphonesim-arm64 suffix (hxcpp #1343)
 * Fixed a weak-key map keeping alive a value that references its own key, and so the key and everything reachable from it: values are marked only while their key is (hxcpp #1357)
+* Fixed FileStat.ctime on Linux, macOS, FreeBSD and NetBSD reporting when the file's status last changed: it is the creation time, as on Windows, wherever the file system records one (hxcpp #1063)
 * Added the libhxcpp define: a build that uses the library gets -D libhxcpp=<version>. Compare it with version("x.y.z"); a plain string comparison compares text
 * Added separate Linux ARMv7 and ARM64 build architectures (hxcpp #1355)
 * Fixed AndroidCompat.cpp closing its extern "C" section in the wrong place (hxcpp #1404)
