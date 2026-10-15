@@ -269,6 +269,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed string headers and memoized hashes being read and written through misaligned pointers
 * Fixed cppia functions with an untyped return reading an uninitialised return type
 * Fixed thread wait timeouts that were negative, NaN, huge or under a millisecond failing, spinning or not waiting
+* Applied PCRE2's security backports for 10.42, including a heap overflow in pcre2_match with (*LIMIT_HEAP=n)
 * Added the libhxcpp define: a build that uses the library gets -D libhxcpp=<version>. Compare it with version("x.y.z"); a plain string comparison compares text
 * Added separate Linux ARMv7 and ARM64 build architectures (hxcpp #1355)
 * Fixed AndroidCompat.cpp closing its extern "C" section in the wrong place (hxcpp #1404)
