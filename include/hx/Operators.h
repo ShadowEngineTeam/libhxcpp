@@ -106,6 +106,9 @@ inline int Mod(int inLHS,int inRHS)
 {
    if (!inRHS)
       hx::Throw(HX_CSTRING("Mod by 0 Error."));
+   // INT_MIN % -1 traps in hardware
+   if (inRHS==-1)
+      return 0;
    return inLHS % inRHS;
 }
 #endif
