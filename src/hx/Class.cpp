@@ -247,11 +247,15 @@ Class Class_obj::Resolve(String inName)
 
 Dynamic Class_obj::ConstructEmpty()
 {
+   if (!mConstructEmpty)
+      hx::Throw(HX_CSTRING("Class ") + mName + HX_CSTRING(" has no constructor"));
    return mConstructEmpty();
 }
 
 Dynamic Class_obj::ConstructArgs(DynamicArray inArgs)
 {
+   if (!mConstructArgs)
+      hx::Throw(HX_CSTRING("Class ") + mName + HX_CSTRING(" has no constructor"));
    return mConstructArgs(inArgs);
 }
 
