@@ -2359,6 +2359,26 @@ struct CallGlobal : public CppiaExpr
    CppiaExpr *link(CppiaModule &inModule) HXCPP_OVERRIDE
    {
       String name = inModule.strings[fieldId];
+
+      // A static of an extern host class, such as a property accessor, comes by its C++ name
+      int split = name.indexOf(HX_CSTRING("_obj::"), null());
+      if (split>0)
+      {
+         String path = name.substr(0,split);
+         if (path.substr(0,2)==HX_CSTRING("::"))
+            path = path.substr(2,null());
+         hx::Class cls = hx::Class_obj::Resolve(path.split(HX_CSTRING("::"))->join(HX_CSTRING(".")));
+         Dynamic func;
+         if (cls.mPtr)
+            func = cls.mPtr->__Field(name.substr(split+6,null()), HX_PROP_NEVER);
+         if (func.mPtr)
+         {
+            CppiaExpr *replace = new CallDynamicFunction(inModule, this, func, args);
+            delete this;
+            return replace->link(inModule);
+         }
+      }
+
       LinkExpressions(args,inModule);
       return createGlobalBuiltin(this, name, args );
    }
