@@ -262,6 +262,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Removed the HXCPP_SQLITE_JSON1 define, which did nothing since SQLite builds the JSON functions in, and documented HXCPP_SQLITE_FTS5
 * Fixed constant allocations (Class objects, boxed one-character strings, frozen objects) being only 4-byte aligned
 * Fixed the moving GC ignoring the pin flag on alloc finalizers, so val_gc_ptr allocations could move under native code
+* Fixed the collector on ARM64 possibly missing a thread entering or leaving a GC-free zone
 * Added the libhxcpp define: a build that uses the library gets -D libhxcpp=<version>. Compare it with version("x.y.z"); a plain string comparison compares text
 * Added separate Linux ARMv7 and ARM64 build architectures (hxcpp #1355)
 * Fixed AndroidCompat.cpp closing its extern "C" section in the wrong place (hxcpp #1404)

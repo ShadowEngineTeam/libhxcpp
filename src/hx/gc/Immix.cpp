@@ -4875,6 +4875,9 @@ public:
          }
          return;
       }
+      // Pairs with the fences in EnterGCFreeZone and ExitGCFreeZone: the CAS
+      //  alone does not order the mGCFreeZone reads after it on ARM64
+      std::atomic_thread_fence(std::memory_order_seq_cst);
       #endif
 
       STAMP(t0)
