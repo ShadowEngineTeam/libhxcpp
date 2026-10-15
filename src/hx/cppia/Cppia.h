@@ -265,6 +265,7 @@ struct ScriptCallable : public CppiaDynamicExpr
 {
    int returnTypeId;
    ExprType returnType;
+   bool isBoolReturn;
    int argCount;
    int stackSize;
    bool hasDefaults;

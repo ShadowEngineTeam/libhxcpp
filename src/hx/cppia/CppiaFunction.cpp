@@ -30,6 +30,7 @@ ScriptCallable::ScriptCallable(CppiaStream &stream)
    data = 0;
    returnTypeId = stream.getInt();
    returnType = etVoid;
+   isBoolReturn = false;
    argCount = stream.getInt();
    args.resize(argCount);
    hasDefault.resize(argCount);
@@ -55,6 +56,7 @@ ScriptCallable::ScriptCallable(CppiaExpr *inBody) : CppiaDynamicExpr(inBody)
 {
    returnTypeId = 0;
    returnType = etVoid;
+   isBoolReturn = false;
    argCount = 0;
    stackSize = 0;
    captureSize = 0;
@@ -86,6 +88,7 @@ ScriptCallable::ScriptCallable(CppiaModule &inModule,ScriptNamedFunction *inFunc
 {
    returnTypeId = 0;
    returnType = etVoid;
+   isBoolReturn = false;
 
    argCount = 0;
    stackSize = 0;
@@ -156,6 +159,7 @@ CppiaExpr *ScriptCallable::link(CppiaModule &inModule)
    data = &inModule;
 
    returnType = inModule.types[ returnTypeId ]->expressionType;
+   isBoolReturn = inModule.types[ returnTypeId ]->haxeClass==ClassOf<bool>();
    layout.returnType = returnType;
 
    for(int a=0;a<args.size();a++)
@@ -762,6 +766,8 @@ public:
                case etFloat:
                   return ctx->getFloat();
                case etInt:
+                  if (function->isBoolReturn)
+                     return (bool)ctx->getInt();
                   return ctx->getInt();
                case etString:
                   return ctx->getString();
@@ -785,6 +791,8 @@ public:
          case etFloat:
             return ctx->getFloat( );
          case etInt:
+            if (function->isBoolReturn)
+               return (bool)ctx->getInt( );
             return ctx->getInt( );
          case etString:
             return ctx->getString( );

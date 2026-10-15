@@ -315,6 +315,8 @@ hx::Object *runFunExprDynamic(CppiaCtx *ctx, ScriptCallable *inFunExpr, hx::Obje
    unsigned char *pointer = ctx->pointer;
    inFunExpr->pushArgsDynamic(ctx, inThis, inArgs);
    AutoStack save(ctx,pointer);
+   if (inFunExpr->isBoolReturn)
+      return Dynamic(ctx->runInt(inFunExpr) ? true : false ).mPtr;
    return runContextConvertObject(ctx, inFunExpr->getReturnType(), inFunExpr );
 }
 
@@ -2193,11 +2195,15 @@ struct CallMemberVTable : public CppiaExpr
    String runString(CppiaCtx *ctx) HXCPP_OVERRIDE
    {
       CALL_VTABLE_SETUP(BCRReturn())
+      if (boolResult)
+         return String(ctx->runInt(func) ? true : false );
       return runContextConvertString(ctx, checkInterfaceReturnType ? func->getReturnType() : returnType, func);
    }
    hx::Object *runObject(CppiaCtx *ctx) HXCPP_OVERRIDE
    {
       CALL_VTABLE_SETUP(BCRReturn())
+      if (boolResult)
+         return Dynamic(ctx->runInt(func) ? true : false ).mPtr;
       return runContextConvertObject(ctx, checkInterfaceReturnType ? func->getReturnType() : returnType, func);
    }
 

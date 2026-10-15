@@ -104,16 +104,21 @@ struct CppiaEnumConstructor
          JitTemp val(compiler,getJitType(type));
          inArgs[i]->genCode(compiler, val, inArgs[i]->getType());
          compiler->move( sJitReturnReg.as(jtPointer), result );
+         bool isBool = inArgs[i]->isBoolInt();
          if (type==etString)
          {
             compiler->move( sJitReturnReg.star(jtInt,offset + offsetof(cpp::Variant,valStringLen)), val.as(jtInt) );
             compiler->move( sJitReturnReg.star(jtPointer,offset), val.as(jtPointer) + StringOffset::Ptr);
          }
+         else if (isBool)
+         {
+            compiler->move( sJitReturnReg.star(jtByte,offset), val.as(jtByte) );
+         }
          else
          {
             compiler->move( sJitReturnReg.star(type,offset), val );
          }
-         compiler->move( sJitReturnReg.star(jtInt,offset + offsetof(cpp::Variant,type)), (int)getVariantType(type) );
+         compiler->move( sJitReturnReg.star(jtInt,offset + offsetof(cpp::Variant,type)), (int)(isBool ? cpp::Variant::typeBool : getVariantType(type)) );
 
          offset += sizeof(cpp::Variant);
       }
