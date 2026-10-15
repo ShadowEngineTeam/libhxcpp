@@ -463,6 +463,13 @@ namespace
 
         return String(chars.ptr.ptr, chars.length);
     }
+
+#if !defined(HX_SMART_STRINGS)
+    View<uint8_t> utf8View(const String& string)
+    {
+        return View<uint8_t>(reinterpret_cast<uint8_t*>(const_cast<char*>(string.raw_ptr())), string.length);
+    }
+#endif
 }
 
 bool cpp::encoding::Utf16::isEncoded(const String& string)
@@ -500,12 +507,25 @@ int64_t cpp::encoding::Utf16::getByteCount(const String& string)
     else
     {
         auto bytes = int64_t{ 0 };
+#if defined(HX_SMART_STRINGS)
         for (auto i = 0; i < string.length; i++)
         {
             // Through unsigned char: raw_ptr() is signed, so a byte >= 0x80
             // sign-extended to a huge "codepoint" and miscounted as 4 bytes
             bytes += getByteCount(static_cast<char32_t>(static_cast<unsigned char>(string.raw_ptr()[i])));
         }
+#else
+        auto source = utf8View(string);
+        auto i      = int64_t{ 0 };
+
+        while (i < source.length)
+        {
+            auto p = Utf8::codepoint(source.slice(i));
+
+            i     += Utf8::getByteCount(p);
+            bytes += getByteCount(p);
+        }
+#endif
 
         return bytes;
     }
@@ -567,12 +587,7 @@ int64_t cpp::encoding::Utf16::encode(const String& string, const cpp::marshal::V
     else
 #endif
     {
-        auto bytes = int64_t{ 0 };
-        for (auto i = 0; i < string.length; i++)
-        {
-            // See getByteCount - avoid signed-char sign extension
-            bytes += getByteCount(static_cast<char32_t>(static_cast<unsigned char>(string.raw_ptr()[i])));
-        }
+        auto bytes = getByteCount(string);
 
         if (bytes > buffer.length)
         {
@@ -580,10 +595,24 @@ int64_t cpp::encoding::Utf16::encode(const String& string, const cpp::marshal::V
         }
 
         auto i = int64_t{ 0 };
+#if defined(HX_SMART_STRINGS)
         for (auto k = 0; k < string.length; k++)
         {
+            // See getByteCount - avoid signed-char sign extension
             i += encode(static_cast<char32_t>(static_cast<unsigned char>(string.raw_ptr()[k])), buffer.slice(i));
         }
+#else
+        auto source = utf8View(string);
+        auto k      = int64_t{ 0 };
+
+        while (k < source.length)
+        {
+            auto p = Utf8::codepoint(source.slice(k));
+
+            k += Utf8::getByteCount(p);
+            i += encode(p, buffer.slice(i));
+        }
+#endif
 
         return bytes;
     }
@@ -673,11 +702,41 @@ String cpp::encoding::Utf16::decode(const cpp::marshal::View<uint8_t>& buffer)
 
     return String(backing.ptr.ptr, chars);
 #else
-    return hx::Throw(HX_CSTRING("Not Implemented : UTF16 decode when HX_SMART_STRINGS is not defined"));
+    auto i     = int64_t{ 0 };
+    auto bytes = int64_t{ 0 };
+
+    while (i < buffer.length)
+    {
+        auto p = codepoint(buffer.slice(i));
+
+        if (0xD800 <= p && p < 0xE000)
+        {
+            return hx::Throw(HX_CSTRING("Invalid UTF16"));
+        }
+
+        i     += getByteCount(p);
+        bytes += Utf8::getByteCount(p);
+    }
+
+    auto backing = View<uint8_t>(static_cast<uint8_t*>(hx::InternalNew(bytes + 1, false)), bytes + 1);
+    auto k       = int64_t{ 0 };
+
+    i = 0;
+    while (i < buffer.length)
+    {
+        auto p = codepoint(buffer.slice(i));
+
+        i += getByteCount(p);
+        k += Utf8::encode(p, backing.slice(k));
+    }
+
+    backing.ptr.ptr[bytes] = 0;
+
+    return String(reinterpret_cast<char*>(backing.ptr.ptr), static_cast<int>(bytes));
 #endif
 }
 
-inline char32_t cpp::encoding::Utf16::codepoint(const cpp::marshal::View<uint8_t>& buffer)
+char32_t cpp::encoding::Utf16::codepoint(const cpp::marshal::View<uint8_t>& buffer)
 {
     auto first = static_cast<char16_t>(Marshal::readUInt16(buffer));
 

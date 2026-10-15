@@ -142,8 +142,16 @@ jobs:
         run: bin${{ inputs.sep }}App-debug
 
   native:
+      strategy:
+        fail-fast: false
+        matrix:
+          include:
+            - variant: ''
+              flags: ''
+            - variant: ' (no smart strings)'
+              flags: -D disable_unicode_strings
       runs-on: ${{ inputs.os }}
-      name: '${{ inputs.label }}: native'
+      name: '${{ inputs.label }}: native${{ matrix.variant }}'
       defaults:
         run:
           working-directory: test/native
@@ -155,7 +163,7 @@ jobs:
           with:
             haxe: ${{ inputs.haxe }}
         - name: build
-          run: haxe compile.hxml -D ${{ env.HXCPP_ARCH_FLAG }}
+          run: haxe compile.hxml ${{ matrix.flags }} -D ${{ env.HXCPP_ARCH_FLAG }}
         - name: run
           run: bin${{ inputs.sep }}Native
 

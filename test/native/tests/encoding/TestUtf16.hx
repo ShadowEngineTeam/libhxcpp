@@ -16,9 +16,11 @@ class TestUtf16 extends Test {
 		Assert.isFalse(Utf16.isEncoded("test"));
 	}
 
+	#if !disable_unicode_strings
 	function test_isEncoded_utf16() {
 		Assert.isTrue(Utf16.isEncoded("😂"));
 	}
+	#end
 
 	public function test_getByteCount_codepoint() {
 		Assert.equals(2i64, Utf16.getByteCount('a'.code));
