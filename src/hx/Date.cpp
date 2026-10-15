@@ -583,23 +583,20 @@ int __hxcpp_is_dst(double inSeconds)
 double __hxcpp_timezone_offset(double inSeconds)
 {
    #ifdef HX_WINDOWS
-   if (inSeconds < 0)
-   {
-      int isDst = 0;
-      return (double)hx_windows_offset(inSeconds, &isDst);
-   }
-   #endif
-
+   int isDst = 0;
+   return (double)hx_windows_offset(inSeconds, &isDst);
+   #else
    struct tm localTime;
    __internal_localtime( inSeconds, &localTime);
 
-   #if defined(HX_WINDOWS) || defined(__SNC__) || defined(__ORBIS__)
+   #if defined(__SNC__) || defined(__ORBIS__)
    struct tm gmTime;
    __internal_gmtime(inSeconds, &gmTime );
 
    return mktime(&localTime) - mktime(&gmTime);
    #else
    return localTime.tm_gmtoff;
+   #endif
    #endif
 }
 

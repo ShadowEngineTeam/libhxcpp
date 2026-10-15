@@ -235,6 +235,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed a failed file write (disk full, a closed pipe) aborting the process with "GCFree Zone mismatch" instead of throwing
 * Fixed Sys.getCwd returning null for long paths, reading an unfilled buffer for long paths on Windows, and Sys.programPath writing past its buffer on Linux
 * Fixed Process.exitCode returning 0 when called again on POSIX, and kill and close acting on a pid that was already reaped
+* Fixed Date.getTimezoneOffset on Windows leaving out daylight saving time (300 in New York in July, where the other targets give 240)
 
 ### Regular expressions, zlib and databases
 
