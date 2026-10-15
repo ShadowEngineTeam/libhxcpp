@@ -1315,55 +1315,61 @@ String String::__URLDecode() const
    // [length], some memory will be wasted here, but on the assumption that
    // most URLs have only a few '%NN' encodings in them, don't bother
    // counting the number of characters in the resulting string first.
-   char *decoded = NewString(length), *d = decoded;
-
    bool hasBig = false;
 
    #ifdef HX_SMART_STRINGS
    if (isUTF16Encoded())
    {
+      // Characters above 127 are kept, as UTF-8 of up to 3 bytes per unit
+      if (length > 0x7fffffff/3)
+         hx::Throw(HX_CSTRING("String too long"));
+      char *decoded = NewString(length*3), *d = decoded;
       for (int i = 0; i < length; i++)
       {
          int c = __w[i];
          if (c > 127)
-            *d++ = '?';
+         {
+            if (IsUtf16HighSurrogate(c) && i+1<length && IsUtf16LowSurrogate(__w[i+1]))
+            {
+               c = 0x10000 + ( ((c-0xd800) << 10) | (__w[i+1]-0xdc00) );
+               i++;
+            }
+            else if (IsUtf16Surrogate(c))
+               c = 0xFFFD;
+            UTF8EncodeAdvance(d, c);
+         }
          else if (c == '+')
             *d++ = ' ';
          else if ((c == '%') && (i < (length - 2)))
          {
-            int ch = ((hex(__w[i + 1]) << 4) | (hex(__w[i + 2])));
-            if (ch>127)
-               hasBig = true;
-            *d++ = ch;
+            *d++ = ((hex(__w[i + 1]) << 4) | (hex(__w[i + 2])));
             i += 2;
          }
          else
              *d++ = c;
       }
+      return _hx_utf8_to_utf16((const unsigned char *)decoded, d-decoded,false);
    }
-   else
    #endif
+
+   char *decoded = NewString(length), *d = decoded;
+   for (int i = 0; i < length; i++)
    {
-      for (int i = 0; i < length; i++)
+      int c = (unsigned char)__s[i];
+      if (c == '+')
+         *d++ = ' ';
+      else if ((c == '%') && (i < (length - 2)))
       {
-         int c = __s[i];
-         if (c > 127)
-            *d++ = '?';
-         else if (c == '+')
-            *d++ = ' ';
-         else if ((c == '%') && (i < (length - 2)))
-         {
-            int ch = ((hex(__s[i + 1]) << 4) | (hex(__s[i + 2])));
-            #ifdef HX_SMART_STRINGS
-            if (ch>127)
-               hasBig = true;
-            #endif
-            *d++ = ch;
-            i += 2;
-         }
-         else
-             *d++ = c;
+         int ch = ((hex(__s[i + 1]) << 4) | (hex(__s[i + 2])));
+         #ifdef HX_SMART_STRINGS
+         if (ch>127)
+            hasBig = true;
+         #endif
+         *d++ = ch;
+         i += 2;
       }
+      else
+          *d++ = c;
    }
 
    #ifdef HX_SMART_STRINGS
