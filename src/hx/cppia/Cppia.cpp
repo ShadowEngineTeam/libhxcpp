@@ -5603,9 +5603,10 @@ struct ArrayAccessI : public CppiaDynamicExpr
       index = index->link(inModule);
 
       TypeData *type = inModule.types[classId];
-      // TODO - not always cppiaClass
       if (type->cppiaClass)
          throw "ArrayAccess interface can't be implemented in cppia";
+      if (!type->haxeBase)
+         throw "ArrayAccess needs a host class with __get and __set";
 
       __get = type->haxeBase->findFunction("__get");
       if (!__get.execute)
@@ -5664,6 +5665,57 @@ struct ArrayAccessI : public CppiaDynamicExpr
       }
    }
 
+
+   Dynamic callGet(CppiaCtx *ctx, hx::Object *obj, int i)
+   {
+      unsigned char *pointer = ctx->pointer;
+      ctx->pushObject(obj);
+      ctx->pushInt(i);
+      AutoStack a(ctx,pointer);
+      __get.execute(ctx);
+      Dynamic result;
+      setResult(ctx,result);
+      return result;
+   }
+
+   void callSet(CppiaCtx *ctx, hx::Object *obj, int i, const Dynamic &inValue)
+   {
+      unsigned char *pointer = ctx->pointer;
+      ctx->pushObject(obj);
+      ctx->pushInt(i);
+      if (accessType == etInt)
+         ctx->pushInt(inValue);
+      else if (accessType == etFloat)
+         ctx->pushFloat(inValue);
+      else if (accessType == etString)
+         ctx->pushString(inValue.mPtr ? inValue.mPtr->toString() : String());
+      else
+         ctx->pushObject(inValue.mPtr);
+      AutoStack a(ctx,pointer);
+      __set.execute(ctx);
+   }
+
+   // The value a compound assignment or increment stores
+   Dynamic update(const Dynamic &before, const Dynamic &inValue)
+   {
+      if (crement!=coNone)
+         return before + (crement==coPreInc || crement==coPostInc ? 1 : -1);
+      switch(assign)
+      {
+         case aoAdd: return before + inValue;
+         case aoMult: return before * (Float)inValue;
+         case aoDiv: return before / (Float)inValue;
+         case aoSub: return before - (Float)inValue;
+         case aoAnd: return (int)before & (int)inValue;
+         case aoOr: return (int)before | (int)inValue;
+         case aoXOr: return (int)before ^ (int)inValue;
+         case aoShl: return (int)before << (int)inValue;
+         case aoShr: return (int)before >> (int)inValue;
+         case aoUShr: return hx::UShr((int)before,(int)inValue);
+         case aoMod: return hx::Mod(before,(Float)inValue);
+         default: return inValue;
+      }
+   }
 
    template<typename T>
    void run(CppiaCtx *ctx,T &outValue)
@@ -5738,59 +5790,90 @@ struct ArrayAccessI : public CppiaDynamicExpr
          return;
       }
 
-   #if 0
-      if (crement!=coNone)
+      // Compound assignment and increments: read with __get, combine, write with __set
+      Dynamic before = callGet(ctx,obj,i);
+      BCR_VCHECK;
+      Dynamic operand;
+      if (crement==coNone)
       {
-         Dynamic val0 = obj->__GetItem(i);
-         Dynamic val1 = val0 + (crement<=coPostInc ? 1 : -1);
-         obj->__SetItem(i, val1);
-         return crement & coPostInc ? val0.mPtr : val1.mPtr;
+         operand = value->runObject(ctx);
+         BCR_VCHECK;
       }
-      if (assign == aoSet)
-      {
-         hx::Object *val = value->runObject(ctx);
-         BCR_CHECK;
-         return obj->__SetItem(i, val).mPtr;
-      }
-
-      Dynamic val0 = obj->__GetItem(i);
-      Dynamic val1;
-
-      switch(assign)
-      {
-         case aoAdd: val1 = val0 + Dynamic(value->runObject(ctx)); break;
-         case aoMult: val1 = val0 * value->runFloat(ctx); break;
-         case aoDiv: val1 = val0 / value->runFloat(ctx); break;
-         case aoSub: val1 = val0 - value->runFloat(ctx); break;
-         case aoAnd: val1 = (int)val0 & value->runInt(ctx); break;
-         case aoOr: val1 = (int)val0 | value->runInt(ctx); break;
-         case aoXOr: val1 = (int)val0 ^ value->runInt(ctx); break;
-         case aoShl: val1 = (int)val0 << value->runInt(ctx); break;
-         case aoShr: val1 = (int)val0 >> value->runInt(ctx); break;
-         case aoUShr: val1 = hx::UShr((int)val0,value->runInt(ctx)); break;
-         case aoMod: val1 = hx::Mod(val0 ,value->runFloat(ctx)); break;
-         default: ;
-      }
-      BCR_CHECK;
-      obj->__SetItem(i,val1);
-      return val1.mPtr;
-   #endif
+      Dynamic after = update(before,operand);
+      callSet(ctx,obj,i,after);
+      BCR_VCHECK;
+      SetVal(outValue, crement==coPostInc || crement==coPostDec ? before : after);
    }
 
    CppiaExpr  *makeSetter(AssignOp op,CppiaExpr *inValue) HXCPP_OVERRIDE
    {
-      if (op!=aoSet)
-         throw "TODO - arrayAccess undefined setter";
       assign = op;
       value = inValue;
       return this;
    }
    CppiaExpr  *makeCrement(CrementOp inOp) HXCPP_OVERRIDE
    {
-      throw "TODO - arrayAccess makeCrement";
       crement = inOp;
       return this;
    }
+
+   #ifdef CPPIA_JIT
+   // args: this expression, the object, the index, the operand, the value read
+   static hx::Object * SLJIT_CALL jitGet(JitMultiArg *args)
+   {
+      ArrayAccessI *expr = (ArrayAccessI *)args[0].obj;
+      return expr->callGet(CppiaCtx::getCurrent(), args[1].obj, args[2].ival).mPtr;
+   }
+
+   static hx::Object * SLJIT_CALL jitSet(JitMultiArg *args)
+   {
+      ArrayAccessI *expr = (ArrayAccessI *)args[0].obj;
+      expr->callSet(CppiaCtx::getCurrent(), args[1].obj, args[2].ival, args[3].obj);
+      return args[3].obj;
+   }
+
+   static hx::Object * SLJIT_CALL jitUpdate(JitMultiArg *args)
+   {
+      ArrayAccessI *expr = (ArrayAccessI *)args[0].obj;
+      Dynamic before = args[4].obj;
+      Dynamic after = expr->update(before, args[3].obj);
+      expr->callSet(CppiaCtx::getCurrent(), args[1].obj, args[2].ival, after);
+      return expr->crement==coPostInc || expr->crement==coPostDec ? before.mPtr : after.mPtr;
+   }
+
+   void genCode(CppiaCompiler *compiler, const JitVal &inDest, ExprType destType) HXCPP_OVERRIDE
+   {
+      JitMultiArgs args(compiler, 5);
+      compiler->move(args.arg(0,jtPointer), JitVal((void *)this));
+      if (object)
+         object->genCode(compiler, args.arg(1,jtPointer), etObject);
+      else
+         compiler->move(args.arg(1,jtPointer), JitFramePos(0,jtPointer));
+      genNullReferenceExceptionCheck(compiler, args.arg(1,jtPointer));
+      index->genCode(compiler, args.arg(2,jtInt), etInt);
+
+      if (crement==coNone && assign==aoNone)
+         compiler->callNative((void *)jitGet, args);
+      else if (crement==coNone && assign==aoSet)
+      {
+         value->genCode(compiler, args.arg(3,jtPointer), etObject);
+         compiler->callNative((void *)jitSet, args);
+      }
+      else
+      {
+         compiler->callNative((void *)jitGet, args);
+         compiler->move(args.arg(4,jtPointer), sJitReturnReg.as(jtPointer));
+         if (crement==coNone)
+            value->genCode(compiler, args.arg(3,jtPointer), etObject);
+         else
+            compiler->move(args.arg(3,jtPointer), JitVal((void *)0));
+         compiler->callNative((void *)jitUpdate, args);
+      }
+
+      if (destType!=etVoid && destType!=etNull)
+         compiler->convertReturnReg(etObject, inDest, destType);
+   }
+   #endif
 
    void runVoid(CppiaCtx *ctx) HXCPP_OVERRIDE
       { null val; run(ctx,val); BCR_VCHECK; }
