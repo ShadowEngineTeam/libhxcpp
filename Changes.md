@@ -2,6 +2,8 @@
 libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
+* Fixed a class with a cpp.Function field failing to compile with HXCPP_GC_GENERATIONAL: Haxe 4.3 write barriers the field's setter as if it held an object, and cpp::Function now has the null mPtr that barrier needs (HaxeFoundation/hxcpp#1425 by Tutez64)
+
 libhxcpp 6.0.0-rc.1
 ------------------------------------------------------------
 
