@@ -792,7 +792,7 @@ class Setup
          else
          {
             var ival = Std.parseInt(ioDefines.get("HXCPP_MSVC_VER"));
-            if (ival>0)
+            if (ival>=140)
             {
                var varName = "VS" + ival+ "COMNTOOLS";
                var where = Sys.getEnv(varName);
@@ -813,11 +813,15 @@ class Setup
                Sys.putEnv("HXCPP_MSVC", where);
                Log.setup('Using MSVC Ver $ival in $where ($varName)');
             }
-            else
+            else if (ival == null)
             {
                Log.setup('Using specified MSVC Ver $val');
                ioDefines.set("HXCPP_MSVC", val );
                Sys.putEnv("HXCPP_MSVC", val);
+            }
+            else
+            {
+               Log.error('HXCPP_MSVC_VER ${ival} is not supported');
             }
         }
       }
