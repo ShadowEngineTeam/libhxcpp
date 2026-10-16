@@ -26,8 +26,9 @@ using StringTools;
 class Release
 {
    // The version format haxelib accepts: x.y.z with an optional alpha, beta,
-   // preview or rc tag, which may be numbered.
-   static final VERSION = ~/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-(alpha|beta|preview|rc)(\.(0|[1-9]\d*))?)?$/;
+   // or rc tag, which may be numbered. Its client also reads -preview, but its
+   // server refuses to publish it.
+   static final VERSION = ~/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-(alpha|beta|rc)(\.(0|[1-9]\d*))?)?$/;
 
    static final HEADING_RULE = ~/^-{3,}$/;
 
@@ -59,7 +60,7 @@ class Release
    {
       final version:String = Json.parse(File.getContent("haxelib.json")).version;
       if (version == null || !VERSION.match(version))
-         throw new ReleaseError('haxelib.json\'s version "$version" is not one haxelib accepts (x.y.z, or x.y.z-alpha|beta|preview|rc[.n])');
+         throw new ReleaseError('haxelib.json\'s version "$version" is not one haxelib accepts (x.y.z, or x.y.z-alpha|beta|rc[.n])');
 
       final heading = topSection().heading;
       final expected = 'libhxcpp $version';

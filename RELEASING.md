@@ -10,16 +10,15 @@ libhxcpp uses [semantic versioning](https://semver.org), with its own numbers st
 - **Minor** (6.1.0): new features, compatible with what came before.
 - **Patch** (6.0.1): fixes only.
 
-Pre-releases use the four tags haxelib accepts, each optionally numbered, in this order:
+Pre-releases use the three tags haxelib accepts, each optionally numbered, in this order:
 
 | Tag | Use |
 |---|---|
 | `6.0.0-alpha.1` | Early, incomplete; anything may change |
 | `6.0.0-beta.1` | Feature complete for the release, still being fixed |
-| `6.0.0-preview.1` | A preview for projects to try |
 | `6.0.0-rc.1` | A release candidate: the release, unless something is found |
 
-All of them sort before `6.0.0`. haxelib rejects any other suffix, such as `-dev` or `-nightly`.
+All of them sort before `6.0.0`. haxelib rejects any other suffix, such as `-dev` or `-nightly`. Its client also understands `-preview`, but its server refuses to publish it.
 
 Each release is tagged `v<version>`, published as a GitHub release with `libhxcpp-<version>.zip`, and submitted to haxelib as `libhxcpp`. The GitHub release stays available whatever happens on haxelib.
 
@@ -40,8 +39,8 @@ libhxcpp 6.0.0 (unreleased)
 
 One commit, and nothing else in it:
 
-- set `"version"` in `haxelib.json` to exactly the version being released, for example `6.0.0-preview.1` or `6.0.0`;
-- change the top heading of Changes.md to match it, without "(unreleased)": `libhxcpp 6.0.0-preview.1`.
+- set `"version"` in `haxelib.json` to exactly the version being released, for example `6.0.0-beta.1` or `6.0.0`;
+- change the top heading of Changes.md to match it, without "(unreleased)": `libhxcpp 6.0.0-beta.1`.
 
 Check it locally before pushing:
 
@@ -83,7 +82,7 @@ libhxcpp 6.0.1 (unreleased)
 ------------------------------------------------------------
 ```
 
-After a pre-release, keep working toward the same version: after `6.0.0-preview.1`, go back to `6.0.0 (unreleased)`, and list the changes since the preview.
+After a pre-release, keep working toward the same version: after `6.0.0-beta.1`, go back to `6.0.0 (unreleased)`, and list the changes since the beta.
 
 ## When a release is wrong
 
