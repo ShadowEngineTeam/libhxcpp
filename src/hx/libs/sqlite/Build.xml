@@ -2,7 +2,7 @@
 
 <pragma once="true" />
 
-<set name="SQLITE_DIR" value="${HXCPP}/project/thirdparty/sqlite-3.51.2"/>
+<set name="SQLITE_DIR" value="${HXCPP}/project/thirdparty/sqlite-3.54.0"/>
 
 <files id="hxcpp_sqlite" dir="${this_dir}" >
   <options name="Options.txt" ifExists="Options.txt"/>
@@ -12,6 +12,8 @@
 
   <compilerflag value="-I${SQLITE_DIR}"/>
   <compilerflag value="-DSQLITE_ENABLE_FTS5" if="HXCPP_SQLITE_FTS5"/>
+  <!-- SQLite 3.54 needs this to use only the APIs a UWP app may call -->
+  <compilerflag value="-DSQLITE_UWP=1" if="winrt"/>
   
   <file name="Sqlite.cpp"/>
 
