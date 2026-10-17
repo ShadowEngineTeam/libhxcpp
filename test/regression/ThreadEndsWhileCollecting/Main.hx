@@ -69,11 +69,12 @@ class Main {
 	static function main() {
 		untyped __cpp__("reportFailures()");
 
-		var stop:Bool = false;
+		// A Lock, not a shared Bool, so the collector thread sees the stop
+		var stop = new Lock();
 		var collections:Int = 0;
 		var collectorDone = new Lock();
 		Thread.create(() -> {
-			while (!stop) {
+			while (!stop.wait(0)) {
 				// Garbage to fill whatever rows a collection frees
 				var garbage:Array<Array<Int>> = [for (j in 0...200) [j, j]];
 				cpp.vm.Gc.run(true);
@@ -94,7 +95,7 @@ class Main {
 			}
 			ended += BATCH;
 		}
-		stop = true;
+		stop.release();
 		collectorDone.wait();
 
 		Sys.println("threads ended while the roots were walked");

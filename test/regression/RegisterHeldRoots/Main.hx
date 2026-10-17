@@ -67,14 +67,12 @@ function main() {
 	for (attempt in 0...ATTEMPTS) {
 		var done:Lock = new Lock();
 		var result:Int = 0;
-		var finished:Bool = false;
 		Thread.create(() -> {
 			result = sumAcrossSafePoints();
-			finished = true;
 			done.release();
 		});
-		collectUntil(() -> finished);
-		done.wait();
+		// Polling the lock, not a shared Bool, orders the result before the read
+		collectUntil(() -> done.wait(0));
 		if (result != expected) {
 			wrong++;
 		}
@@ -85,14 +83,11 @@ function main() {
 	for (attempt in 0...ATTEMPTS) {
 		var done:Lock = new Lock();
 		var result:Int = 0;
-		var finished:Bool = false;
 		Thread.create(() -> {
 			result = sumAcrossFreeZones();
-			finished = true;
 			done.release();
 		});
-		collectUntil(() -> finished);
-		done.wait();
+		collectUntil(() -> done.wait(0));
 		if (result != expected) {
 			wrong++;
 		}

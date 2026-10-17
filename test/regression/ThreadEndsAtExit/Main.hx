@@ -53,9 +53,20 @@ namespace
 		#endif
 	}
 
+	// sGo is set by one thread and polled by another, so it is read and
+	// written atomically
+	int goSignal(int inIndex)
+	{
+		#ifdef HX_WINDOWS
+		return InterlockedCompareExchange((volatile LONG *)&sGo[inIndex], 0, 0);
+		#else
+		return __sync_fetch_and_add(&sGo[inIndex], 0);
+		#endif
+	}
+
 	void waitToEnd(int inIndex)
 	{
-		while (!sGo[inIndex])
+		while (!goSignal(inIndex))
 		{
 			#ifdef HX_WINDOWS
 			Sleep(1);
@@ -70,7 +81,12 @@ namespace
 		int ended = 0;
 		for (int i = 0; i < WORKERS; i++)
 		{
-			sGo[i] = 1;
+			#ifdef HX_WINDOWS
+			InterlockedExchange((volatile LONG *)&sGo[i], 1);
+			#else
+			__sync_lock_test_and_set(&sGo[i], 1);
+			__sync_synchronize();
+			#endif
 			#ifdef HX_WINDOWS
 			if (WaitForSingleObject(sThreads[i], 5000) == WAIT_OBJECT_0)
 				ended++;

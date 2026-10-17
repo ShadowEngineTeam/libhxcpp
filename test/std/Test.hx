@@ -846,9 +846,11 @@ class Test extends utest.Test
       Assert.pass();
    }
 
-   static var socketClientRunning = true;
+   // A Lock, not a shared Bool, so the main thread sees the client finish
+   static var socketClientDone:sys.thread.Lock;
    public static function readOutput(proc:Process)
    {
+      var done = socketClientDone = new sys.thread.Lock();
       Thread.create( function() {
          while(true)
          {
@@ -864,7 +866,7 @@ class Test extends utest.Test
          }
          var code = proc.exitCode();
          v("process exit code :" + code);
-         socketClientRunning = false;
+         done.release();
       });
    }
 
@@ -900,14 +902,8 @@ class Test extends utest.Test
       v("close original..");
       socket.close();
 
-      for(wait in 0...10)
-      {
-         if (!socketClientRunning)
-            break;
-         v("wait for client...");
-         Sys.sleep(0.1);
-      }
-      Assert.isFalse(socketClientRunning, "Socket client did not finish");
+      v("wait for client...");
+      Assert.isTrue(socketClientDone.wait(1.0), "Socket client did not finish");
    }
 
    public static function socketClient()
