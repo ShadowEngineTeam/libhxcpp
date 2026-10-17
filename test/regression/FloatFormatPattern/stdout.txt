@@ -1,0 +1,9 @@
+%.3f: set 1.500
+%s: refused 1.500
+%n: refused 1.500
+%d: refused 1.500
+%.3f%s: refused 1.500
+%: refused 1.500
+no conversion: refused 1.500
+%f %f: refused 1.500
+100%% %8.2e: set 100% 1.50e+00

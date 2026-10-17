@@ -122,11 +122,45 @@ bool HX_DOUBLE_PATTERN_CUSTOM = false;
 #define HX_UINT_PATTERN "%ud"
 }
 
+// The pattern is given to snprintf with one double, so it may hold exactly one
+// floating-point conversion, %[flags][width][.precision] then e, f, g or a in
+// either case, and no other conversion that would read an argument
+static bool isFloatFormat(const char *inFormat)
+{
+   int conversions = 0;
+   for(const char *p = inFormat; *p; p++)
+   {
+      if (*p!='%')
+         continue;
+      p++;
+      if (*p=='%')
+         continue;
+      while(*p && strchr("-+ #0",*p))
+         p++;
+      while(*p>='0' && *p<='9')
+         p++;
+      if (*p=='.')
+      {
+         p++;
+         while(*p>='0' && *p<='9')
+            p++;
+      }
+      if (!*p || !strchr("eEfFgGaA",*p))
+         return false;
+      conversions++;
+   }
+   return conversions==1;
+}
+
 void __hxcpp_set_float_format(String inFormat)
 {
+  char pattern[20];
   int last = inFormat.length < 19 ? inFormat.length : 19;
-  memcpy(HX_DOUBLE_PATTERN, inFormat.utf8_str(), last*sizeof(char) );
-  HX_DOUBLE_PATTERN[last] = '\0';
+  memcpy(pattern, inFormat.utf8_str(), last*sizeof(char) );
+  pattern[last] = '\0';
+  if (!isFloatFormat(pattern))
+     hx::Throw( HX_CSTRING("set_float_format: the format must hold one floating-point conversion, such as %.6g, and no other") );
+  memcpy(HX_DOUBLE_PATTERN, pattern, sizeof(pattern));
   hx::HX_DOUBLE_PATTERN_CUSTOM = true;
 }
 
