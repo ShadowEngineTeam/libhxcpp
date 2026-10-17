@@ -260,7 +260,7 @@ public:
       if (inSize<length)
       {
          int s = GetElementSize();
-         memset(mBase + inSize*s, 0, (length-inSize)*s);
+         memset(mBase + (size_t)inSize*s, 0, (size_t)(length-inSize)*s);
          length = inSize;
       }
       else if (inSize>length)
@@ -720,7 +720,7 @@ public:
       // An empty array may have no buffer, and memcpy is undefined on null
       // even for zero bytes
       if (inElements>0)
-         ::memcpy(mBase + s*inStart, inData, s*inElements);
+         ::memcpy(mBase + (size_t)s*inStart, inData, (size_t)s*inElements);
       if (hx::ContainsPointers<ELEM_>())
       {
          HX_OBJ_WB_PESSIMISTIC_GET(this);

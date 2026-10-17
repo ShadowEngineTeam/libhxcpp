@@ -128,7 +128,7 @@ ArrayBase::ArrayBase(int inSize,int inReserve,int inElementSize,bool inAtomic)
    length = inSize;
    if (alloc)
    {
-      mBase = (char *)hx::InternalNew(alloc * inElementSize,false);
+      mBase = (char *)hx::InternalNew((size_t)alloc * inElementSize,false);
       HX_OBJ_WB_GET(this,mBase);
 #ifdef HXCPP_TELEMETRY
       __hxt_new_array(mBase, alloc * inElementSize);
@@ -161,11 +161,11 @@ void ArrayBase::reserve(int inSize) const
          if (wasUnamanaged)
          {
             char *base=(char *)hx::InternalNew(bytes,false);
-            memcpy(base,mBase,length*elemSize);
+            memcpy(base,mBase,(size_t)length*elemSize);
             mBase = base;
          }
          else
-            mBase = (char *)hx::InternalRealloc(length*elemSize,mBase, bytes );
+            mBase = (char *)hx::InternalRealloc((size_t)length*elemSize,mBase, bytes );
       }
       else
       {
@@ -219,12 +219,12 @@ void ArrayBase::Realloc(int inSize) const
          if (wasUnamanaged)
          {
             char *base=(char *)hx::InternalNew(bytes,false);
-            memcpy(base,mBase,length*elemSize);
+            memcpy(base,mBase,(size_t)length*elemSize);
             mBase = base;
          }
          else
          {
-            mBase = (char *)hx::InternalRealloc(length*elemSize,mBase, bytes, true);
+            mBase = (char *)hx::InternalRealloc((size_t)length*elemSize,mBase, bytes, true);
             int o = bytes;
             bytes = hx::ObjectSizeSafe(mBase);
          }
@@ -264,7 +264,7 @@ void ArrayBase::zero(Dynamic inFirst, Dynamic inCount)
       count = length - first;
 
    int size = GetElementSize();
-   memset(mBase + first*size, 0, count*size);
+   memset(mBase + (size_t)first*size, 0, (size_t)count*size);
 }
 
 int ArrayBase::Memcmp(ArrayBase *inOther)
@@ -353,11 +353,11 @@ void ArrayBase::__SetSizeExact(int inSize)
          if (wasUnamanaged)
          {
             char *base=(char *)(AllocAtomic() ? hx::NewGCPrivate(0,bytes) : hx::NewGCBytes(0,bytes));
-            memcpy(base,mBase,std::min(length,inSize)*elemSize);
+            memcpy(base,mBase,(size_t)std::min(length,inSize)*elemSize);
             mBase = base;
          }
          else
-            mBase = (char *)hx::InternalRealloc(length*elemSize,mBase, bytes );
+            mBase = (char *)hx::InternalRealloc((size_t)length*elemSize,mBase, bytes );
       }
       else if (AllocAtomic())
       {
@@ -400,7 +400,7 @@ void ArrayBase::Insert(int inPos)
    {
       resize(length+1);
       int s = GetElementSize();
-      memmove(mBase + inPos*s + s, mBase+inPos*s, (length-inPos-1)*s );
+      memmove(mBase + (size_t)inPos*s + s, mBase+(size_t)inPos*s, (size_t)(length-inPos-1)*s );
    }
 }
 
@@ -427,7 +427,7 @@ void ArrayBase::Splice(ArrayBase *outResult,int inPos,int inLen)
    {
       outResult->resize(inLen);
       if (inLen>0)
-         memcpy(outResult->mBase, mBase+inPos*s, s*inLen);
+         memcpy(outResult->mBase, mBase+(size_t)inPos*s, (size_t)s*inLen);
 #ifdef HXCPP_GC_GENERATIONAL
       // Only needed if we have pointer elements - primitive (atomic) arrays
       // carry no GC refs, so skip the remembered-set push entirely.
@@ -437,7 +437,7 @@ void ArrayBase::Splice(ArrayBase *outResult,int inPos,int inLen)
    }
    int after = length-(inPos+inLen);
    if (after>0)
-      memmove(mBase+inPos*s, mBase + (inPos+inLen)*s, after*s);
+      memmove(mBase+(size_t)inPos*s, mBase + (size_t)(inPos+inLen)*s, (size_t)after*s);
    resize(length-inLen);
 }
 
@@ -460,7 +460,7 @@ void ArrayBase::Slice(ArrayBase *outResult,int inPos,int inEnd)
    {
       outResult->resize(n);
       int s = GetElementSize();
-      memcpy(outResult->mBase, mBase+inPos*s, n*s);
+      memcpy(outResult->mBase, mBase+(size_t)inPos*s, (size_t)n*s);
 #ifdef HXCPP_GC_GENERATIONAL
       // Only needed if we have pointer elements - primitive (atomic) arrays
       // carry no GC refs, so skip the remembered-set push entirely.
@@ -475,7 +475,7 @@ void ArrayBase::RemoveElement(int inPos)
    if (inPos<length)
    {
       int s = GetElementSize();
-      memmove(mBase + inPos*s, mBase+inPos*s + s, (length-inPos-1)*s );
+      memmove(mBase + (size_t)inPos*s, mBase+(size_t)inPos*s + s, (size_t)(length-inPos-1)*s );
       resize(length-1);
    }
 
@@ -490,7 +490,7 @@ void ArrayBase::Concat(ArrayBase *outResult,const char *inSecond,int inLen)
       memcpy(ptr,mBase,n);
    ptr += n;
    if (inLen>0)
-      memcpy(ptr,inSecond,inLen*GetElementSize());
+      memcpy(ptr,inSecond,(size_t)inLen*GetElementSize());
    HX_OBJ_WB_PESSIMISTIC_GET(this);
 }
 
