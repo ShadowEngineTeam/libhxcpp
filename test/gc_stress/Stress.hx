@@ -370,7 +370,15 @@ class Stress {
 
 	static final mutex = new Mutex();
 	static var failure:Null<String> = null;
+	// Read and written under mutex: the workers poll it while others set it
 	static var stop = false;
+
+	static function stopped():Bool {
+		mutex.acquire();
+		var result = stop;
+		mutex.release();
+		return result;
+	}
 
 	public static function finalized(n:Node):Void {
 		finalizerRuns++;
@@ -399,7 +407,7 @@ class Stress {
 			workers.push(w);
 			Thread.create(() -> {
 				try {
-					while (!stop) {
+					while (!stopped()) {
 						var err = w.step();
 						if (err != null)
 							fail('worker ${w.index}: $err');
@@ -418,7 +426,7 @@ class Stress {
 		var deadline = Sys.time() + seconds;
 		var collections = 0;
 		var zombies = 0;
-		while (!stop && Sys.time() < deadline) {
+		while (!stopped() && Sys.time() < deadline) {
 			switch (rng.below(10)) {
 				case 0: Gc.run(true);
 				case 1: Gc.run(false);
@@ -435,7 +443,9 @@ class Stress {
 			}
 			Sys.sleep(0.002);
 		}
+		mutex.acquire();
 		stop = true;
+		mutex.release();
 		for (t in 0...threads)
 			finished.wait();
 

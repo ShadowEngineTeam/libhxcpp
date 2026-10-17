@@ -33,6 +33,9 @@ race_top:wakeThreadLocked
 # below the frame that entered is dead, and can only keep extra objects alive.
 # What the thread wrote before entering is ordered by mGCFreeZone.
 race_top:hx::MarkConservative
+# Entering a GC-free zone copies the caller's whole frame for that scan,
+# including locals another thread may be writing through a reference.
+race_top:hx::CaptureCallerFrame
 
 # Haxe 4.3 std (sys.thread.Thread): HaxeThread.create stores the new thread's
 # handle into an anonymous object from both the new thread and its creator.
