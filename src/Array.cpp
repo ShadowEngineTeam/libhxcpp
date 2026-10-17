@@ -295,10 +295,14 @@ void ArrayBase::Blit(int inDestElement, ArrayBase *inSourceArray, int inSourceEl
    const char *src = inSourceArray->mBase + (size_t)inSourceElement*srcSize;
    char *dest = mBase + (size_t)inDestElement*srcSize;
    size_t len = (size_t)inElementCount*srcSize;
-   if (src+len < dest || dest+len<src)
-      memcpy(dest,src,len);
-   else
-      memmove(dest,src,len);
+   // memcpy and memmove are undefined on a null buffer even for zero bytes
+   if (len>0)
+   {
+      if (src+len < dest || dest+len<src)
+         memcpy(dest,src,len);
+      else
+         memmove(dest,src,len);
+   }
 
    HX_OBJ_WB_PESSIMISTIC_GET(this);
 }
@@ -422,7 +426,8 @@ void ArrayBase::Splice(ArrayBase *outResult,int inPos,int inLen)
    if (outResult)
    {
       outResult->resize(inLen);
-      memcpy(outResult->mBase, mBase+inPos*s, s*inLen);
+      if (inLen>0)
+         memcpy(outResult->mBase, mBase+inPos*s, s*inLen);
 #ifdef HXCPP_GC_GENERATIONAL
       // Only needed if we have pointer elements - primitive (atomic) arrays
       // carry no GC refs, so skip the remembered-set push entirely.
@@ -430,7 +435,9 @@ void ArrayBase::Splice(ArrayBase *outResult,int inPos,int inLen)
          HX_OBJ_WB_PESSIMISTIC_GET(outResult);
 #endif
    }
-   memmove(mBase+inPos*s, mBase + (inPos+inLen)*s, (length-(inPos+inLen))*s);
+   int after = length-(inPos+inLen);
+   if (after>0)
+      memmove(mBase+inPos*s, mBase + (inPos+inLen)*s, after*s);
    resize(length-inLen);
 }
 
@@ -478,9 +485,12 @@ void ArrayBase::Concat(ArrayBase *outResult,const char *inSecond,int inLen)
 {
    char *ptr =  outResult->GetBase();
    int n = length * GetElementSize();
-   memcpy(ptr,mBase,n);
+   // Either array may be empty, with no buffer
+   if (n>0)
+      memcpy(ptr,mBase,n);
    ptr += n;
-   memcpy(ptr,inSecond,inLen*GetElementSize());
+   if (inLen>0)
+      memcpy(ptr,inSecond,inLen*GetElementSize());
    HX_OBJ_WB_PESSIMISTIC_GET(this);
 }
 

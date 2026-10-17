@@ -5862,7 +5862,10 @@ class LocalAllocator : public hx::StackContext
    int                   mRegisterBufSize;
 
    #ifndef HXCPP_SINGLE_THREADED_APP
-   volatile bool   mGCFreeZone;
+   // Atomic so that a collector which reads true also sees what this thread
+   //  wrote before entering the zone: its registers, its stack and anything
+   //  it changed under another lock, such as the finalizer map
+   std::atomic<bool> mGCFreeZone;
    // True while our mReadyForCollect event may be set - lets the zone exit
    // clear it without taking the global state lock
    bool            mReadySignalled;

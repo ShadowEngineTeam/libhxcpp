@@ -717,7 +717,10 @@ public:
    {
       EnsureSize(inStart+inElements);
       int s = GetElementSize();
-      ::memcpy(mBase + s*inStart, inData, s*inElements);
+      // An empty array may have no buffer, and memcpy is undefined on null
+      // even for zero bytes
+      if (inElements>0)
+         ::memcpy(mBase + s*inStart, inData, s*inElements);
       if (hx::ContainsPointers<ELEM_>())
       {
          HX_OBJ_WB_PESSIMISTIC_GET(this);
@@ -1381,7 +1384,8 @@ template<typename ELEM_>
 Array<ELEM_> Array_obj<ELEM_>::copy( )
 {
    Array_obj *result = new Array_obj((int)length,0);
-   ::memcpy(result->GetBase(),GetBase(),length*sizeof(ELEM_));
+   if (length)
+      ::memcpy(result->GetBase(),GetBase(),length*sizeof(ELEM_));
    return result;
 }
 
