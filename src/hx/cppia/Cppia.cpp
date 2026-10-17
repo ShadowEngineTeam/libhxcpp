@@ -1270,8 +1270,9 @@ struct CastExpr : public CppiaDynamicExpr
 
       if (op==castNOP)
       {
+         CppiaExpr *result = value;
          delete this;
-         return value;
+         return result;
       }
 
       if (op==castInstance)
