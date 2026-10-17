@@ -2,6 +2,7 @@
 #include <math.h>
 #include <hxMath.h>
 #include <stdio.h>
+#include <atomic>
 
 using namespace hx;
 
@@ -338,31 +339,36 @@ Dynamic CreateDynamicStruct(const void *inValue, int inSize, DynamicHandlerFunc 
 
 // --- Dynamic -------------------------------------------------
 
-Dynamic sConstDynamicInts[256+1];
-Dynamic sConstDynamicInt64s[256+1];
+// Boxed values from -1 to 255, made once and shared by every thread. A slot is
+// published with a release and read with an acquire, so a thread that finds a
+// box also sees it built. Two threads may both make one: the first is kept, and
+// the other is a small constant allocation that is never used.
+static std::atomic<hx::Object *> sConstDynamicInts[256+1];
+static std::atomic<hx::Object *> sConstDynamicInt64s[256+1];
+
+template<typename DATA>
+static hx::Object *constBox(std::atomic<hx::Object *> &ioSlot, int inVal)
+{
+   hx::Object *result = ioSlot.load(std::memory_order_acquire);
+   if (!result)
+   {
+      hx::Object *made = new (hx::NewObjConst)DATA(inVal);
+      if (ioSlot.compare_exchange_strong(result, made, std::memory_order_acq_rel, std::memory_order_acquire))
+         result = made;
+   }
+   return result;
+}
 
 static hx::Object *fromSmallInt64(int inVal)
 {
-   int idx = inVal+1;
-   hx::Object *result = sConstDynamicInt64s[idx].mPtr;
-   if (!result)
-      result = sConstDynamicInt64s[idx].mPtr = new (hx::NewObjConst)Int64Data(inVal);
-   return result;
+   return constBox<Int64Data>(sConstDynamicInt64s[inVal+1], inVal);
 }
 
 static hx::Object *fromInt(int inVal)
 {
-   hx::Object *result = 0;
    if (inVal>=-1 && inVal<256)
-   {
-      int idx = inVal+1;
-      result = sConstDynamicInts[idx].mPtr;
-      if (!result)
-         result = sConstDynamicInts[idx].mPtr = new (hx::NewObjConst)IntData(inVal);
-   }
-   else
-      result = (hx::Object *)new IntData(inVal);
-   return result;
+      return constBox<IntData>(sConstDynamicInts[inVal+1], inVal);
+   return (hx::Object *)new IntData(inVal);
 }
 
 Dynamic::Dynamic(bool inVal) : super( inVal ? hx::DynTrue.mPtr : hx::DynFalse.mPtr ) { }
@@ -424,10 +430,7 @@ Dynamic::Dynamic(double inVal)
 {
    if ( inVal>=-1 && inVal<256 && (int)inVal==inVal && !(inVal==0 && signbit(inVal)) )
    {
-      int idx = inVal+1;
-      mPtr = sConstDynamicInts[idx].mPtr;
-      if (!mPtr)
-         mPtr = sConstDynamicInts[idx].mPtr = new (hx::NewObjConst)IntData((int)inVal);
+      mPtr = constBox<IntData>(sConstDynamicInts[(int)inVal+1], (int)inVal);
    }
    else
       mPtr = (hx::Object *)new DoubleData(inVal);
