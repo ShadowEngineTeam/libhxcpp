@@ -1028,7 +1028,8 @@ Dynamic _hx_std_socket_accept( Dynamic o )
       block_error();
    }
 
-   // accept() does not inherit these from the listening socket
+   // macOS copies SO_NOSIGPIPE from the listening socket, but a socket
+   // passed in from elsewhere may not have it
    #ifdef NEKO_MAC
       int set = 1;
       setsockopt(s,SOL_SOCKET,SO_NOSIGPIPE,(void *)&set, sizeof(int));
