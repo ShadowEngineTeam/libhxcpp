@@ -10,6 +10,8 @@ test/std/android
 test/std/cpp32
 test/std/cpp64
 test/std/mybase.db
+test/gc_stress/bin-*
+test/cppia/host_classes.info
 test/std/hxcpp.db
 test/opMatrix/Ops.hx
 test/opMatrix/cpp
