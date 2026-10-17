@@ -1,0 +1,89 @@
+name: codeql
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE.txt'
+      - '.github/ISSUE_TEMPLATE/**'
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE.txt'
+      - '.github/ISSUE_TEMPLATE/**'
+  schedule:
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze the C++ sources
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+    - name: checkout
+      uses: actions/checkout@v7
+
+    - name: setup
+      uses: ./.github/workflows/setup
+      with:
+        haxe: 4.3.7
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v4
+      with:
+        languages: c-cpp
+        build-mode: manual
+
+    # CodeQL sees only what is compiled while it watches, so no compile cache.
+    # The std tests build the runtime and the std libraries; the cppia host
+    # adds cppia.
+    - name: Build the std tests
+      working-directory: test/std
+      run: haxe compile64.hxml
+
+    - name: Build the cppia host
+      working-directory: project
+      run: haxe compile-cppia.hxml -D HXCPP_M64
+
+    - name: Analyze
+      uses: github/codeql-action/analyze@v4
+      with:
+        category: c-cpp
+        upload: never
+        output: sarif
+
+    # paths-ignore does not apply to compiled languages, so the vendored
+    # libraries' results are dropped here: they are tracked upstream
+    - name: Drop results in vendored code
+      run: |
+        python3 - sarif <<'EOF'
+        import glob, json, os, sys
+        for path in glob.glob(os.path.join(sys.argv[1], "*.sarif")):
+            sarif = json.load(open(path))
+            for run in sarif["runs"]:
+                kept = []
+                for result in run.get("results", []):
+                    locations = result.get("locations") or [{}]
+                    uri = locations[0].get("physicalLocation", {}).get("artifactLocation", {}).get("uri", "")
+                    if not uri.startswith("project/thirdparty/"):
+                        kept.append(result)
+                print(f"{path}: {len(run.get('results', []))} results, {len(kept)} outside project/thirdparty")
+                run["results"] = kept
+            json.dump(sarif, open(path, "w"))
+        EOF
+
+    - name: Upload the results
+      uses: github/codeql-action/upload-sarif@v4
+      with:
+        sarif_file: sarif
+        category: c-cpp

@@ -126,8 +126,9 @@ jobs:
     - name: Build and run the regression tests on Alpine
       run: docker run --rm -v "$PWD:/w" -w /w alpine:edge sh -c "apk add --no-cache neko g++ linux-headers && sh test/regression/run-generated.sh"
 
-  # The regression suite under UBSan and ASan. A sanitizer report fails its
-  # test; the reports go to files because the runner only shows stdout.
+  # The regression, std and GC stress suites under UBSan, ASan and TSan. A
+  # sanitizer report fails its suite; the reports go to files because the
+  # runner only shows stdout. Each suite runs even when one before it failed.
   check-sanitizers:
     name: Check with ${{ matrix.name }}
     strategy:
@@ -138,6 +139,8 @@ jobs:
           sanitize: undefined
         - name: ASan
           sanitize: address
+        - name: TSan
+          sanitize: thread
     runs-on: ubuntu-latest
     env:
       # Each test would otherwise recompile the whole runtime
@@ -145,18 +148,33 @@ jobs:
       UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1:suppressions=${{ github.workspace }}/test/sanitizers/ubsan.supp:log_path=/tmp/sanitizer/report
       # The conservative GC cannot see locals moved to a fake stack
       ASAN_OPTIONS: detect_leaks=0:detect_stack_use_after_return=0:log_path=/tmp/sanitizer/report
+      # Every race is reported, not only the first; the exit status still fails
+      TSAN_OPTIONS: halt_on_error=0:second_deadlock_stack=1:suppressions=${{ github.workspace }}/test/sanitizers/tsan.supp:log_path=/tmp/sanitizer/report
     steps:
     - name: checkout
       uses: actions/checkout@v7
 
     - name: setup
+      id: setup
       uses: ./.github/workflows/setup
       with:
         haxe: 4.3.7
 
     - name: Run the regression tests
+      if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
       working-directory: test/regression
       run: haxe --run Run -D HXCPP_M64 -D HXCPP_SANITIZE=${{ matrix.sanitize }}
+
+    - name: Run the std tests
+      if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+      working-directory: test/std
+      run: haxe compile64.hxml -D HXCPP_SANITIZE=${{ matrix.sanitize }} && cpp64/Test
+
+    # Shorter than the 30 s of the stress jobs: sanitized code runs several times slower
+    - name: Run the GC stress test
+      if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+      working-directory: test/gc_stress
+      run: haxe compile.hxml -D HXCPP_M64 -D HXCPP_SANITIZE=${{ matrix.sanitize }} && bin/Stress 10
 
     - name: Show the sanitizer reports
       if: ${{ !cancelled() }}

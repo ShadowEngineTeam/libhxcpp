@@ -1,0 +1,2 @@
+# ThreadSanitizer suppressions for the sanitizer CI jobs (TSAN_OPTIONS).
+# Each entry names the issue that tracks the race it hides.
