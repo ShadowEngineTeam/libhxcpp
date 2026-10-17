@@ -221,6 +221,13 @@ bool hxInWatchList(uintptr_t watch)
 
 #ifdef HX_GC_VERIFY_GENERATIONAL
 static bool sGcVerifyGenerational = false;
+
+#if defined(__GXX_RTTI) || defined(_CPPRTTI)
+#include <typeinfo>
+#define HX_GC_VERIFY_TYPE(obj) ((obj) ? typeid(*(obj)).name() : "a root")
+#else
+#define HX_GC_VERIFY_TYPE(obj) ((obj) ? "an object" : "a root")
+#endif
 #endif
 
 
@@ -1840,6 +1847,12 @@ public:
 
     bool isGenerational;
 
+    #ifdef HX_GC_VERIFY_GENERATIONAL
+    // The object whose members are being marked, so a nursery object that
+    //  escaped a generational collection can be reported with what held it
+    hx::Object *mVerifyParent = 0;
+    #endif
+
     MarkContext(int inThreadId = -1)
     {
        #ifdef HXCPP_DEBUG
@@ -1976,7 +1989,13 @@ public:
              hx::Object *obj = marking->pop();
              if (obj)
              {
+                #ifdef HX_GC_VERIFY_GENERATIONAL
+                mVerifyParent = obj;
                 obj->__Mark(this);
+                mVerifyParent = 0;
+                #else
+                obj->__Mark(this);
+                #endif
                 #ifdef HX_MULTI_THREAD_MARKING
                 // Load balance
                 if (sLazyThreads && marking->count>32)
@@ -2082,7 +2101,9 @@ void MarkAllocUnchecked(void *inPtr,hx::MarkContext *__inCtx)
       #ifdef HX_GC_VERIFY_GENERATIONAL
       if (sGcVerifyGenerational)
       {
-         printf("Nursery alloc escaped generational collection %p\n", inPtr);
+         hx::Object *parent = __inCtx->mVerifyParent;
+         printf("Nursery alloc escaped generational collection %p, held by %s %p\n", inPtr, HX_GC_VERIFY_TYPE(parent), parent);
+         fflush(stdout);
          DebuggerTrap();
       }
       #endif
@@ -2177,7 +2198,9 @@ void MarkObjectAllocUnchecked(hx::Object *inPtr,hx::MarkContext *__inCtx)
       #if defined(HX_GC_VERIFY_GENERATIONAL)
          if (sGcVerifyGenerational)
          {
-            printf("Nursery object escaped generational collection %p\n", inPtr);
+            hx::Object *parent = __inCtx->mVerifyParent;
+            printf("Nursery object escaped generational collection %p, a %s held by %s %p\n", inPtr, HX_GC_VERIFY_TYPE(inPtr), HX_GC_VERIFY_TYPE(parent), parent);
+            fflush(stdout);
             DebuggerTrap();
          }
       #endif
