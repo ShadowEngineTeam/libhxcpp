@@ -9,6 +9,7 @@ libhxcpp 6.0.0 (unreleased)
 * Fixed haxe.Timer.stamp when threads make the first call together: later stamps could move backwards, and on Apple platforms it could divide by a timebase not yet read
 * Fixed a cppia cast that compiles to nothing reading the expression it had just freed
 * __hxcpp_set_float_format accepts only a pattern with one floating-point conversion, such as %.6g, and throws otherwise: a pattern with %s or %n read or wrote memory through the double it was given
+* Fixed a collection waiting for a thread that loops on an uncontended Semaphore.acquire until the loop ended, on Linux, Windows and other POSIX systems: the fast path now stops at a pending collection, as Mutex.acquire and Semaphore.tryAcquire do
 * The regression, std and GC stress suites run under UBSan, ASan and TSan in CI, and CodeQL analyzes the C++ sources
 
 libhxcpp 6.0.0-rc.1

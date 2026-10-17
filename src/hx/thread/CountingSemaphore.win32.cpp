@@ -30,7 +30,12 @@ hx::thread::CountingSemaphore_obj::CountingSemaphore_obj(int value) : impl(new I
 
 void hx::thread::CountingSemaphore_obj::acquire()
 {
-	// Uncontended fast path - skip the GC free zone unless we will block
+	// Uncontended fast path - skip the GC free zone unless we will block.
+	// A thread that only ever takes the semaphore uncontended, allocating
+	// nothing, otherwise never reaches a safe point, and a collection waits
+	// for it for ever.
+	if (hx::gPauseForCollect)
+		__hxcpp_gc_safe_point();
 	if (NO_ERROR == WaitForSingleObject(impl->semaphore, 0))
 		return;
 
