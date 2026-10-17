@@ -1,0 +1,7 @@
+copy: 0 0
+splice: 0 0
+concat: 0 0 2
+slice: 0 0
+splice nothing from a full array: [1,2,3]
+splice to the end: [1]
+insert into empty: [7]
