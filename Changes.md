@@ -3,6 +3,13 @@ libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
 * Fixed a class with a cpp.Function field failing to compile with HXCPP_GC_GENERATIONAL: Haxe 4.3 write barriers the field's setter as if it held an object, and cpp::Function now has the null mPtr that barrier needs (HaxeFoundation/hxcpp#1425 by Tutez64)
+* Fixed the collector scanning a thread that had just entered a GC-free zone without seeing that thread's last writes, on ARM64 and other weakly ordered CPUs: it could read stale registers and miss an object held only there
+* Fixed the shared boxes for Ints and Int64s from -1 to 255 reaching another thread before they were built, on weakly ordered CPUs
+* Fixed haxe.io.Bytes and Memory reading and writing 16, 32 and 64-bit values through misaligned pointers at odd offsets, which is undefined and traps on CPUs without unaligned access
+* Fixed haxe.Timer.stamp when threads make the first call together: later stamps could move backwards, and on Apple platforms it could divide by a timebase not yet read
+* Fixed a cppia cast that compiles to nothing reading the expression it had just freed
+* __hxcpp_set_float_format accepts only a pattern with one floating-point conversion, such as %.6g, and throws otherwise: a pattern with %s or %n read or wrote memory through the double it was given
+* The regression, std and GC stress suites run under UBSan, ASan and TSan in CI, and CodeQL analyzes the C++ sources
 
 libhxcpp 6.0.0-rc.1
 ------------------------------------------------------------
