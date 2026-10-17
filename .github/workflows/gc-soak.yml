@@ -1,0 +1,60 @@
+name: gc soak
+# Runs one GC stress mode over and over for a while, to catch failures too rare
+# for the stress jobs in main.yml. Started by hand, or by pushing a soak/ branch.
+on:
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: Minutes to keep running the stress test on each OS
+        default: '45'
+      flags:
+        description: Defines for the stress build
+        default: '-D HXCPP_GC_GENERATIONAL -D HXCPP_GC_VERIFY'
+  push:
+    branches: ['soak/**']
+
+jobs:
+  soak:
+    name: Soak on ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    env:
+      MINUTES: ${{ inputs.minutes || '45' }}
+      FLAGS: ${{ inputs.flags || '-D HXCPP_GC_GENERATIONAL -D HXCPP_GC_VERIFY' }}
+    steps:
+    - name: checkout
+      uses: actions/checkout@v7
+
+    - name: setup
+      uses: ./.github/workflows/setup
+      with:
+        haxe: 4.3.7
+
+    - name: Build the stress test
+      working-directory: test/gc_stress
+      run: haxe compile.hxml $FLAGS -D ${{ startsWith(matrix.os, 'macos') && 'HXCPP_ARM64' || 'HXCPP_M64' }}
+
+    # Alternates 4 and 8 threads; every failing run's output is kept
+    - name: Run it until the time is up
+      working-directory: test/gc_stress
+      run: |
+        deadline=$(( $(date +%s) + MINUTES * 60 ))
+        runs=0; failures=0
+        while [ $(date +%s) -lt $deadline ]; do
+          runs=$((runs + 1))
+          threads=$(( runs % 2 == 0 ? 8 : 4 ))
+          if ! bin/Stress 60 $threads > run.txt 2>&1; then
+            failures=$((failures + 1))
+            echo "::error::run $runs ($threads threads) failed"
+            cat run.txt
+          fi
+        done
+        echo "$failures of $runs runs failed"
+        [ $failures -eq 0 ]
