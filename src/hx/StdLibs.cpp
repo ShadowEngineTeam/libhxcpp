@@ -428,39 +428,29 @@ void __hxcpp_exit(int inExitCode)
 
 double  __time_stamp()
 {
+// The starting point is set by the first call, from whichever thread makes it.
+// Static locals are initialised exactly once even when threads race to it,
+// where a check for zero let two threads both set it, and on Apple let one
+// read the timebase while another filled it in.
 #ifdef HX_WINDOWS
-   static __int64 t0=0;
-   static double period=0;
+   static const __int64 t0 = []() { __int64 v = 0; QueryPerformanceCounter((LARGE_INTEGER*)&v); return v; }();
+   static const double period = qpcFrequency.QuadPart ? 1.0/qpcFrequency.QuadPart : 0;
    __int64 now;
 
-   if (QueryPerformanceCounter((LARGE_INTEGER*)&now))
-   {
-      if (t0==0)
-      {
-         t0 = now;
-         period = 1.0/qpcFrequency.QuadPart;
-      }
-      if (period!=0)
-         return (now-t0)*period;
-   }
+   if (period!=0 && QueryPerformanceCounter((LARGE_INTEGER*)&now))
+      return (now-t0)*period;
    return (double)clock() / ( (double)CLOCKS_PER_SEC);
 #elif defined(__APPLE__)
-   static mach_timebase_info_data_t timebase;
-   static unsigned long long t0 = 0;
+   static const mach_timebase_info_data_t timebase = []() { mach_timebase_info_data_t tb; mach_timebase_info(&tb); return tb; }();
+   static const unsigned long long t0 = mach_absolute_time();
    unsigned long long now = mach_absolute_time();
-   if (t0==0)
-   {
-      mach_timebase_info(&timebase);
-      t0 = now;
-   }
    return (double)(now-t0) * timebase.numer / timebase.denom * 1e-9;
 #elif defined(__unix__)
-   static double t0 = 0;
    struct timespec ts;
    if( clock_gettime(CLOCK_MONOTONIC,&ts) )
       throw Dynamic("Could not get time");
    double t =  ( ts.tv_sec + ((double)ts.tv_nsec) / 1000000000.0 );
-   if (t0==0) t0 = t;
+   static const double t0 = t;
    return t-t0;
 #else
    return (double)clock() / ( (double)CLOCKS_PER_SEC);
