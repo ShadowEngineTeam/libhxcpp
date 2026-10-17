@@ -41,7 +41,13 @@ jobs:
       working-directory: test/gc_stress
       run: haxe compile.hxml $FLAGS -D ${{ startsWith(matrix.os, 'macos') && 'HXCPP_ARM64' || 'HXCPP_M64' }}
 
-    # Alternates 4 and 8 threads; every failing run's output is kept
+    - name: Install gdb
+      if: runner.os == 'Linux'
+      run: sudo apt-get update -qq && sudo apt-get install -y -qq gdb
+
+    # Alternates 4 and 8 threads. On Linux and macOS each run is under a
+    # debugger, which prints every thread's stack if it crashes or traps; on
+    # Windows only the exit status is kept. Every failing run's output is kept.
     - name: Run it until the time is up
       working-directory: test/gc_stress
       run: |
@@ -50,7 +56,21 @@ jobs:
         while [ $(date +%s) -lt $deadline ]; do
           runs=$((runs + 1))
           threads=$(( runs % 2 == 0 ? 8 : 4 ))
-          if ! bin/Stress 60 $threads > run.txt 2>&1; then
+          case "$RUNNER_OS" in
+            Linux)
+              gdb -q -batch -ex "handle SIGPIPE nostop noprint pass" -ex run -ex "thread apply all bt" \
+                --args bin/Stress 60 $threads > run.txt 2>&1
+              grep -q "exited normally" run.txt; ok=$? ;;
+            macOS)
+              lldb --batch -o run -k "thread backtrace all" -k "quit 1" -- bin/Stress 60 $threads > run.txt 2>&1
+              grep -q "exited with status = 0" run.txt; ok=$? ;;
+            *)
+              bin/Stress 60 $threads > run.txt 2>&1
+              status=$?
+              echo "exit status $status" >> run.txt
+              ok=$status ;;
+          esac
+          if [ $ok -ne 0 ]; then
             failures=$((failures + 1))
             echo "::error::run $runs ($threads threads) failed"
             cat run.txt
