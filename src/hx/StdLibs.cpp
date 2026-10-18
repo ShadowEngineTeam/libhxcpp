@@ -776,6 +776,13 @@ bool __instanceof(const Dynamic &inValue, const Dynamic &inType)
    hx::Class c = inType;
    if (c==null())
       return false;
+   // Classes and enums are both Class_obj, so the Class and Enum types are told
+   // apart by whether the value is an enum, as on the other targets
+   if (c.mPtr==hx::Class_obj::__SGetClass().mPtr || c.mPtr==hx::GetEnumClass().mPtr)
+   {
+      hx::Class_obj *value = dynamic_cast<hx::Class_obj *>(inValue.GetPtr());
+      return value && value->__IsEnum()==(c.mPtr==hx::GetEnumClass().mPtr);
+   }
    return c->CanCast(inValue.GetPtr());
 }
 

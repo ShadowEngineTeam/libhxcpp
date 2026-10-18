@@ -201,13 +201,18 @@ Class Class_obj::GetSuper()
 
 
 Class Class_obj__mClass;
+// What Std.isOfType(v, Enum) tests against: a class object of its own, so that
+// classes and enums can be told apart (see __instanceof)
+Class Enum_obj__mClass;
 
 Class  Class_obj::__GetClass() const { return Class_obj__mClass; }
 Class &Class_obj::__SGetClass() { return Class_obj__mClass; }
+Class &GetEnumClass() { return Enum_obj__mClass; }
 
 void Class_obj::__boot()
 {
 Static(Class_obj__mClass) = hx::_hx_RegisterClass(HX_CSTRING("Class"),TCanCast<Class_obj>,sNone,sNone, 0,0 , 0, 0 );
+Static(Enum_obj__mClass) = hx::_hx_RegisterClass(HX_CSTRING("Enum"),TCanCast<Class_obj>,sNone,sNone, 0,0 , 0, 0 );
 }
 
 
@@ -236,12 +241,7 @@ Class Class_obj::Resolve(String inName)
    ClassMapLock lock;
    ClassMap::const_iterator i = sClassMap->find(inName);
    if (i==sClassMap->end())
-   {
-      // Class class...
-      if (inName==HX_CSTRING("Enum"))
-         return Class_obj__mClass;
       return null();
-   }
    return i->second;
 }
 

@@ -3,8 +3,25 @@
 
 
 
-// Enum (ie enum object class def)  is the same as Class.
-typedef hx::Class Enum;
+// Enum (ie enum object class def) holds a Class, as Haxe gives an Enum<T>
+// value the type hx::Class. It is a type of its own only so that
+// hx::ClassOf< ::Enum >(), which Std.isOfType(v, Enum) passes, is the Enum
+// class object and not the Class one: with a typedef the two were the same, and
+// every class and every enum was both a Class and an Enum.
+struct Enum : public hx::Class
+{
+   Enum() { }
+   template<typename T>
+   Enum(const T &inValue) : hx::Class(inValue) { }
+};
+
+namespace hx
+{
+   HXCPP_EXTERN_CLASS_ATTRIBUTES hx::Class &GetEnumClass();
+
+   template<>
+   inline hx::Class &ClassOf< ::Enum >() { return GetEnumClass(); }
+}
 
 
 namespace hx
