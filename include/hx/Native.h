@@ -7,6 +7,8 @@
 */
 
 #include <stdio.h>
+#include <stdint.h>
+#include <type_traits>
 
 #ifndef HXCPP_H
 #define HXCPP_H
@@ -52,6 +54,40 @@ namespace hx
          void _hx_decRef();
    };
 
+   #ifdef HX_OBJECT_H
+   HXCPP_EXTERN_CLASS_ATTRIBUTES void RegisterVTableOffset(uintptr_t inOffset);
+
+   // A @:nativeGen interface sits at an offset inside its object, as a virtual
+   // base, so a pointer to it must be found by converting a real object, not by
+   // casting the object's address. The offset found is registered, so that the
+   // collector takes a pointer to the interface as a reference to the object.
+   // From a Variant, an object that is not one falls back to its handle, as
+   // before; from a Dynamic it gives null, as Dynamic's conversion always did.
+   template<typename T>
+   inline T nativeInterfaceOf(hx::Object *inObject, std::true_type, bool inOrHandle)
+   {
+      T result = inObject ? dynamic_cast<T>(inObject) : 0;
+      if (result)
+         RegisterVTableOffset( (uintptr_t)(reinterpret_cast<char *>(result) - reinterpret_cast<char *>(inObject)) );
+      else if (inObject && inOrHandle)
+         result = (T)inObject->__GetHandle();
+      return result;
+   }
+
+   // Native types that are not classes have no interface to find
+   template<typename T>
+   inline T nativeInterfaceOf(hx::Object *inObject, std::false_type, bool)
+   {
+      return inObject ? (T)inObject->__GetHandle() : 0;
+   }
+
+   template<typename T>
+   inline T nativeInterfaceOf(hx::Object *inObject, bool inOrHandle)
+   {
+      return nativeInterfaceOf<T>(inObject, std::integral_constant<bool, std::is_polymorphic<typename std::remove_pointer<T>::type>::value>(), inOrHandle);
+   }
+   #endif
+
    template<typename T>
    class Native
    {
@@ -61,10 +97,25 @@ namespace hx
          Native () : ptr(0) { }
          Native (T inPtr) : ptr(inPtr) { }
          Native (const Native<T> &inNative) : ptr(inNative.ptr) { }
+         #ifdef HX_OBJECT_H
+         // From an object whose class implements T: the conversion moves the
+         // pointer to T inside the object, where casting the object's address
+         // gave a second @:nativeGen interface the wrong pointer
+         template<typename O, typename = typename std::enable_if<std::is_convertible<O *, T>::value>::type>
+         Native (const ::hx::ObjectPtr<O> &inObject) : ptr(inObject.mPtr)
+         {
+            if (ptr)
+               RegisterVTableOffset( (uintptr_t)(reinterpret_cast<char *>(ptr) - reinterpret_cast<char *>(inObject.mPtr)) );
+         }
+         #endif
+         #ifdef HX_DYNAMIC_H
+         // An exact match for Dynamic, which also converts to Variant and to
+         // Native, so a cast from Dynamic is not ambiguous
+         Native (const ::Dynamic &inDynamic) : ptr(nativeInterfaceOf<T>(inDynamic.mPtr, false)) { }
+         #endif
          #ifdef CPP_VARIANT_ONCE_H
          Native (const cpp::Variant &inVariant) {
-            hx::Object *obj = inVariant.asObject();
-            ptr = obj  ? (T)inVariant.valObject->__GetHandle() : 0;
+            ptr = nativeInterfaceOf<T>(inVariant.asObject(), true);
          }
          #endif
 

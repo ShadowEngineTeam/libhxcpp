@@ -10,6 +10,7 @@ libhxcpp 6.0.0 (unreleased)
 * Fixed a cppia cast that compiles to nothing reading the expression it had just freed
 * __hxcpp_set_float_format accepts only a pattern with one floating-point conversion, such as %.6g, and throws otherwise: a pattern with %s or %n read or wrote memory through the double it was given
 * Fixed a collection waiting for a thread that loops on an uncontended Semaphore.acquire until the loop ended, on Linux, Windows and other POSIX systems: the fast path now stops at a pending collection, as Mutex.acquire and Semaphore.tryAcquire do
+* Fixed @:nativeGen interfaces on a class that implements more than one: converting an object, or a Dynamic, to the second interface gave the object's address instead of the interface's, so calls through it crashed, and the collector freed an object held only through such an interface. Classes with these interfaces also failed to compile with MSVC (HaxeFoundation/hxcpp#1380)
 * The regression, std and GC stress suites run under UBSan, ASan and TSan in CI, and CodeQL analyzes the C++ sources
 
 libhxcpp 6.0.0-rc.1

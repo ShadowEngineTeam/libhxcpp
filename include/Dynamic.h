@@ -83,7 +83,9 @@ public:
    // Conversion to generic pointer requires you to tag the class with a typedef
    template<typename T>
    inline operator typename hx::Native<T *> () const {
-      return hx::Native<T *>(dynamic_cast<T *>(mPtr));
+      // Native's constructor also registers the interface's offset with the
+      // collector, which a bare dynamic_cast here did not
+      return hx::Native<T *>(*this);
    }
 
 

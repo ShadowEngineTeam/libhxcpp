@@ -283,11 +283,15 @@ inline bool TIsInterface(hx::Object *inPtr)
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES void RegisterVTableOffset(uintptr_t inOffset);
 
+// Generated for each @:nativeGen interface a class implements. Haxe makes those
+// interfaces virtual bases, whose offset can only be read from a constructed
+// object, and a null CLASS* converts to a null INTERFACE*, so this registers 0.
+// hx::Native registers the real offset when it converts an object instead.
 #define HX_REGISTER_VTABLE_OFFSET( CLASS, INTERFACE ) \
 { \
    CLASS *dummy = (CLASS *)0; \
    INTERFACE *intf = dummy; \
-   ::hx::RegisterVTableOffset( reinterpret_cast<uintptr_t>(reinterpret_cast<char *>(intf) - reinterpret_cast<char *>(dummy) )); \
+   ::hx::RegisterVTableOffset( (uintptr_t)(reinterpret_cast<char *>(intf) - reinterpret_cast<char *>(dummy)) ); \
 }
 
 
