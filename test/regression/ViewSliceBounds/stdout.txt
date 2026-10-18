@@ -1,0 +1,10 @@
+1, INT64_MAX: refused
+16, INT64_MAX: refused
+0, 16: ok
+4, 12: ok
+16, 0: ok
+4, 13: refused
+17, 0: refused
+-1, 2: refused
+2, -1: refused
+INT64_MAX, 1: refused

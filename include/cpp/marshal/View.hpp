@@ -98,7 +98,9 @@ inline cpp::marshal::View<T> cpp::marshal::View<T>::slice(int64_t index) const
 template<class T>
 inline cpp::marshal::View<T> cpp::marshal::View<T>::slice(int64_t inIndex, int64_t inLength) const
 {
-    if (inIndex < 0 || inLength < 0 || inIndex > length || inIndex + inLength > length)
+    // Against the room left after inIndex, which cannot overflow once inIndex
+    // is known to be in the view, where inIndex + inLength could
+    if (inIndex < 0 || inLength < 0 || inIndex > length || inLength > length - inIndex)
     {
         hx::Throw(HX_CSTRING("View OOB"));
     }
