@@ -7,6 +7,9 @@ import sys.io.Process;
 // so kill(pid, 0) fails) within a few seconds, and that close does not wait.
 // Windows has no zombies and prints the same lines. openfl/libhxcpp#180
 @:cppFileCode('
+#include <hx/Native.h>
+#include <thread>
+#include <exception>
 #ifndef HX_WINDOWS
 #include <signal.h>
 #include <errno.h>
@@ -18,6 +21,26 @@ static bool childExists(int inPid)
 #else
 	return ::kill(inPid, 0) == 0 || errno != ESRCH;
 #endif
+}
+static void runOnJoinedWorker(Dynamic action)
+{
+	struct ErrorRoot {
+		Dynamic value;
+		ErrorRoot() { hx::GCAddRoot(&value.mPtr); }
+		~ErrorRoot() { hx::GCRemoveRoot(&value.mPtr); }
+	} error;
+	std::exception_ptr nativeError;
+	hx::AutoGCFreeZone zone;
+	std::thread worker([&]() {
+		hx::NativeAttach attached;
+		try { action(); }
+		catch (Dynamic e) { error.value = e; }
+		catch (...) { nativeError = std::current_exception(); }
+	});
+	worker.join();
+	zone.close();
+	if (nativeError) std::rethrow_exception(nativeError);
+	if (error.value.mPtr) hx::Throw(error.value);
 }
 ')
 class Main {
@@ -46,10 +69,15 @@ class Main {
 		return new Process("/bin/sh", ["-c", "sleep " + seconds]);
 	}
 
-	@:analyzer(ignore)
-	static function startAndDrop(seconds:Float, pids:Array<Int>) {
-		var p = start(seconds);
-		pids.push(p.getPid());
+	static function startAndDrop(seconds:Float, pids:Array<Int>, refs:Array<cpp.vm.WeakRef<Dynamic>>) {
+		// A returned function can leave conservative roots on the current stack.
+		// Join after the worker detaches, so GC cannot retain the child that way.
+		var action:Dynamic = function() {
+			var p = start(seconds);
+			pids.push(p.getPid());
+			refs.push(new cpp.vm.WeakRef<Dynamic>(@:privateAccess p.p));
+		};
+		untyped __cpp__("runOnJoinedWorker({0})", action);
 	}
 
 	static function main() {
@@ -71,9 +99,11 @@ class Main {
 
 		// Never closed: the finalizer cleans up while the child still runs
 		var pids = [];
-		startAndDrop(0.3, pids);
+		var refs = [];
+		startAndDrop(0.3, pids, refs);
 		for (i in 0...3)
 			cpp.vm.Gc.run(true);
+		Sys.println("process handle collected: " + (refs[0].get() == null));
 		Sys.println("collected before exit: " + (allGone(pids) ? "reaped" : "left a zombie"));
 
 		// Many short-lived children closed at once
