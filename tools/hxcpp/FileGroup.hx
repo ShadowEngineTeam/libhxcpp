@@ -195,6 +195,26 @@ class FileGroup
       }
    }
 
+   // Names that differ only in case are one file, and one object file, on case-insensitive file systems.
+   // Checked on every host, since the same generated code is built on all of them.
+   public function checkCaseCollisions()
+   {
+      var names = [for(file in mFiles) file.mName];
+      names.sort(Reflect.compare);
+      var seen = new Map<String,String>();
+      for(name in names)
+      {
+         var key = name.toLowerCase();
+         var other = seen.get(key);
+         if (other!=null && other!=name)
+            Log.error("Files in group " + mId + " differ only in case: \"" + other + "\" and \"" + name + "\". " +
+               "On case-insensitive file systems (Windows, macOS) they are the same file, so one overwrites the other, " +
+               "and they compile to the same object file. " +
+               "For generated Haxe code, rename one of the classes so that their names differ by more than case.");
+         seen.set(key, name);
+      }
+   }
+
    public function filterOptions(contents:String)
    {
       // Old-style

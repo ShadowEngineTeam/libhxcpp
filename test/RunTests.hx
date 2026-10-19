@@ -119,6 +119,23 @@ class RunTests
       command("haxelib", ["run", "hxcpp", "Build.xml"]);
    }
 
+   // The build must fail early, naming both files, whatever the case sensitivity of the file system
+   public static function case_collision() {
+      setDir("case_collision");
+      var args = ["run", "hxcpp", "Build.xml"];
+      Sys.println("haxelib " + args.join(" "));
+      var proc = new sys.io.Process("haxelib", args);
+      var output = proc.stdout.readAll().toString() + proc.stderr.readAll().toString();
+      var code = proc.exitCode();
+      proc.close();
+      Sys.println(output);
+      if (code==0)
+         throw "build should have failed";
+      for(expected in ["Texpr.cpp", "TExpr.cpp", "differ only in case"])
+         if (output.indexOf(expected)<0)
+            throw 'error message does not mention "$expected"';
+   }
+
 
    public static function setDir(name:String)
    {
@@ -205,6 +222,7 @@ class RunTests
       run("native", native);
       run("debugger", debugger);
       run("cxx_standard", cxx_standard);
+      run("case_collision", case_collision);
 
       Sys.println("");
 

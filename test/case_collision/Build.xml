@@ -1,0 +1,13 @@
+<xml>
+  <!-- Two files that differ only in case. They do not need to exist: the build tool
+       must reject the group before compiling, on every file system. -->
+  <files id="main">
+    <file name="src/Texpr.cpp"/>
+    <file name="src/TExpr.cpp"/>
+  </files>
+
+  <target id="default" output="casetest" tool="linker" toolid="exe">
+    <files id="main"/>
+    <outdir name="out"/>
+  </target>
+</xml>

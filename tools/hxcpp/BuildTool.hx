@@ -422,6 +422,9 @@ class BuildTool
       var target:Target = mTargets.get(inTarget);
       target.checkError();
 
+      for(group in target.mFileGroups)
+         group.checkCaseCollisions();
+
       for(sub in target.mSubTargets)
          buildTarget(sub,null);
 
