@@ -2,6 +2,7 @@
 #define INCLUDED_HX_SCRIPTABLE
 
 #include <typeinfo>
+#include <string.h>
 #ifdef __clang__
 #pragma clang diagnostic ignored "-Winvalid-offsetof"
 #endif
@@ -36,30 +37,22 @@ struct ScriptNamedFunction : public ScriptFunction
 };
 
 
+// cppia frames pack values, so a Float can be at any 4-byte offset. memcpy
+// reads and writes it there on every target, and compiles to a single load or
+// store wherever the target allows that. The HXCPP_ALIGN_FLOAT version copied
+// the two halves by hand and wrote only the high one, so on 32-bit ARM and
+// Emscripten a Float stored in a frame kept a stale low half.
 inline void SetFloatAligned(void *inPtr, const Float &inValue)
 {
-   #ifdef HXCPP_ALIGN_FLOAT
-   int *dest = (int *)inPtr;
-   const int *src = (const int *)&inValue;
-   dest[1] = src[1];
-   #else
-   *(Float *)inPtr = inValue;
-   #endif
+   memcpy(inPtr, &inValue, sizeof(Float));
 }
 
 
 inline Float GetFloatAligned(const void *inPtr)
 {
-   #ifdef HXCPP_ALIGN_FLOAT
    Float result;
-   int *dest = (int *)&result;
-   const int *src = (const int *)inPtr;
-   dest[0] = src[0];
-   dest[1] = src[1];
+   memcpy(&result, inPtr, sizeof(Float));
    return result;
-   #else
-   return *(Float *)inPtr;
-   #endif
 }
 
 
