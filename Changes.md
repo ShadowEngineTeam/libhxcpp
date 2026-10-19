@@ -13,6 +13,7 @@ libhxcpp 6.0.0 (unreleased)
 * Fixed @:nativeGen interfaces on a class that implements more than one: converting an object, or a Dynamic, to the second interface gave the object's address instead of the interface's, so calls through it crashed, and the collector freed an object held only through such an interface. Classes with these interfaces also failed to compile with MSVC (HaxeFoundation/hxcpp#1380)
 * Fixed Std.isOfType(v, Class) and Std.isOfType(v, Enum) both being true for every class and every enum: a class is now only a Class and an enum only an Enum, as on the other targets, and haxe.Serializer writes an enum type as an enum (HaxeFoundation/hxcpp#1391)
 * Fixed cpp.marshal.View.slice(index, length) accepting a length so large that the bounds check overflowed, which gave a view larger than its buffer (API level 500)
+* Fixed Process.close, and the collector cleaning up a Process, leaving the child a zombie on Linux, macOS and other POSIX systems when it was still running: such a child is now reaped when it exits, by a thread that waits only for those children, without blocking close or killing the child, and without a SIGCHLD handler
 * The regression, std and GC stress suites run under UBSan, ASan and TSan in CI, and CodeQL analyzes the C++ sources
 
 libhxcpp 6.0.0-rc.1

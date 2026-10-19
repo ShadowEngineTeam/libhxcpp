@@ -1,0 +1,5 @@
+close before exit: reaped
+close did not wait: true
+close after exit: reaped
+collected before exit: reaped
+40 closed children: all reaped
