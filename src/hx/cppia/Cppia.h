@@ -660,6 +660,8 @@ public:
    std::string name;
    std::map<int, void *> interfaceScriptTables;
    std::vector<ScriptNamedFunction *> nativeInterfaceFunctions;
+   // Fill host interface slots whose signature differs from the script function
+   std::vector<ScriptCallable *> interfaceAdapters;
    std::set<String> nativeProperties;
    hx::Class     mClass;
 

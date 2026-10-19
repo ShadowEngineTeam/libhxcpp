@@ -5,6 +5,181 @@
 namespace hx
 {
 
+// --- Host interface adapters ---------------------------------------------
+//
+// A host interface calls through its slots with the arguments laid out as the
+// host compiled them: a generic one, such as Map<K,V>, passes every K and V as
+// an object. A script class may implement it with typed arguments, String and
+// Int, and its function reads a String and an Int from the frame, so it read
+// garbage and could crash. Where the two signatures differ, the slot gets an
+// adapter. It reads the host's arguments, calls the script function as a
+// dynamic call does, which converts them, and converts what it returns.
+
+// Ints and Bools are stored alike
+static char interfaceStorage(char inSig)
+{
+   return inSig==sigBool ? sigInt : inSig;
+}
+
+static char interfaceSignatureOf(ExprType inType)
+{
+   switch(inType)
+   {
+      case etVoid: return sigVoid;
+      case etInt: return sigInt;
+      case etFloat: return sigFloat;
+      case etString: return sigString;
+      default: return sigObject;
+   }
+}
+
+static bool interfaceSignatureMatches(const char *inHostSig, ScriptCallable *inFunction)
+{
+   int argCount = (int)strlen(inHostSig) - 1;
+   if (argCount!=(int)inFunction->args.size())
+      return false;
+   if (interfaceStorage(inHostSig[0])!=interfaceSignatureOf(inFunction->returnType))
+      return false;
+   for(int a=0;a<argCount;a++)
+      if (interfaceStorage(inHostSig[a+1])!=interfaceSignatureOf(inFunction->args[a].argType))
+         return false;
+   return true;
+}
+
+struct InterfaceAdapterExpr : public CppiaExpr
+{
+   const char     *signature;
+   ScriptCallable *target;
+
+   InterfaceAdapterExpr(const char *inSignature, ScriptCallable *inTarget)
+      : signature(inSignature), target(inTarget) { }
+
+   CppiaExpr *link(CppiaModule &inModule) HXCPP_OVERRIDE { return this; }
+
+   static void run(CppiaCtx *ctx, InterfaceAdapterExpr *inAdapter)
+   {
+      const char *sig = inAdapter->signature;
+      ScriptCallable *target = inAdapter->target;
+      int argCount = (int)strlen(sig) - 1;
+
+      // All of the host's arguments are read before anything is pushed
+      hx::Object *thisVal = ctx->getThis();
+      Array<Dynamic> args = Array_obj<Dynamic>::__new(argCount, argCount);
+      int pos = sizeof(hx::Object *);
+      for(int a=0;a<argCount;a++)
+      {
+         switch(sig[a+1])
+         {
+            case sigBool:
+               args[a] = (bool)ctx->getInt(pos);
+               pos += sizeof(int);
+               break;
+            case sigInt:
+               args[a] = ctx->getInt(pos);
+               pos += sizeof(int);
+               break;
+            case sigFloat:
+               args[a] = ctx->getFloat(pos);
+               pos += sizeof(Float);
+               break;
+            case sigString:
+               args[a] = ctx->getString(pos);
+               pos += sizeof(String);
+               break;
+            default:
+               args[a] = ctx->getObject(pos);
+               pos += sizeof(hx::Object *);
+         }
+      }
+
+      Dynamic result;
+      {
+         unsigned char *pointer = ctx->pointer;
+         target->pushArgsDynamic(ctx, thisVal, args);
+         AutoStack save(ctx, pointer);
+         switch(target->returnType)
+         {
+            case etInt:
+               {
+                  int value = ctx->runInt(target);
+                  result = target->isBoolReturn ? Dynamic((bool)value) : Dynamic(value);
+               }
+               break;
+            case etFloat:
+               result = ctx->runFloat(target);
+               break;
+            case etString:
+               result = ctx->runString(target);
+               break;
+            case etVoid:
+               ctx->runVoid(target);
+               break;
+            default:
+               result = ctx->runObject(target);
+         }
+      }
+
+      switch(sig[0])
+      {
+         case sigVoid:
+            break;
+         case sigBool:
+            ctx->returnBool( result.mPtr && (bool)result );
+            break;
+         case sigInt:
+            ctx->returnInt( result.mPtr ? (int)result : 0 );
+            break;
+         case sigFloat:
+            ctx->returnFloat( result.mPtr ? (Float)result : 0.0 );
+            break;
+         case sigString:
+            ctx->returnString( result.mPtr ? result->toString() : String() );
+            break;
+         default:
+            ctx->returnObject(result);
+      }
+   }
+
+   void runVoid(CppiaCtx *ctx) HXCPP_OVERRIDE
+   {
+      run(ctx, this);
+   }
+
+   #ifdef CPPIA_JIT
+   // Compiled code calls a slot's compiled function directly, so the adapter
+   // is compiled too: a call to the same native code. An exception cannot
+   // unwind through compiled frames, so it is handed back in ctx->exception.
+   static void SLJIT_CALL runCompiled(CppiaCtx *ctx, InterfaceAdapterExpr *inAdapter)
+   {
+      TRY_NATIVE
+         run(ctx, inAdapter);
+      CATCH_NATIVE
+   }
+
+   void genCode(CppiaCompiler *compiler, const JitVal &inDest, ExprType destType) HXCPP_OVERRIDE
+   {
+      compiler->callNative( (void *)runCompiled, sJitCtx, JitVal((void *)this) );
+   }
+   #endif
+};
+
+static ScriptCallable *createInterfaceAdapter(CppiaModule &inModule, ScriptNamedFunction *inHost, ScriptCallable *inTarget)
+{
+   // Lays out the arguments from the host signature
+   ScriptCallable *adapter = new ScriptCallable(inModule, inHost);
+   adapter->body = new InterfaceAdapterExpr(inHost->signature, inTarget);
+   adapter->data = &inModule;
+   char ret = inHost->signature[0];
+   adapter->returnType = ret==sigVoid ? etVoid : ret==sigFloat ? etFloat : ret==sigString ? etString :
+                         ret==sigObject ? etObject : etInt;
+   adapter->isBoolReturn = ret==sigBool;
+   #ifdef CPPIA_JIT
+   // That constructor runs the host's own function, which would call back here
+   adapter->compiled = 0;
+   #endif
+   return adapter;
+}
+
 
 
 class CppiaEnumBase : public EnumBase_obj
@@ -1239,6 +1414,9 @@ void CppiaClassInfo::compile()
       DBGLOG(" Compile member %s::%s\n", name.c_str(), memberFunctions[i]->name.c_str() );
       memberFunctions[i]->compile();
    }
+
+   for(size_t i=0;i<interfaceAdapters.size();i++)
+      interfaceAdapters[i]->compile();
 }
 #endif
 
@@ -1277,7 +1455,22 @@ void CppiaClassInfo::link()
          int interfaceSlot = cppia.findInterfaceSlot( memberFunctions[i]->name );
          DBGLOG("Set %s : %s to %d @%p\n", name.c_str(), memberFunctions[i]->name.c_str(), interfaceSlot, vtable);
          if (interfaceSlot>0 && interfaceSlot<interfaceSlotSize)
-            vtable[ -interfaceSlot ] = memberFunctions[i]->funExpr;
+         {
+            ScriptCallable *func = memberFunctions[i]->funExpr;
+            // A host interface with a different signature gets an adapter
+            for(size_t n=0; n<nativeInterfaceFunctions.size(); n++)
+            {
+               ScriptNamedFunction *host = nativeInterfaceFunctions[n];
+               if (host->name && memberFunctions[i]->name==host->name && host->signature &&
+                     !interfaceSignatureMatches(host->signature, func))
+               {
+                  func = createInterfaceAdapter(cppia, host, func);
+                  interfaceAdapters.push_back(func);
+                  break;
+               }
+            }
+            vtable[ -interfaceSlot ] = func;
+         }
       }
    }
 
