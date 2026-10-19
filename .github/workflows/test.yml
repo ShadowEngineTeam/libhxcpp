@@ -253,7 +253,8 @@ jobs:
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         working-directory: test/haxe
         run: |
-          haxe compile.hxml -D HXCPP_GC_VERIFY -D $HXCPP_ARCH_FLAG
+          # The full suite can exceed the default block pool's capacity.
+          haxe compile.hxml -D HXCPP_GC_VERIFY -D HXCPP_GC_BIG_BLOCKS -D $HXCPP_ARCH_FLAG
           bin/TestMain
       - name: runtime (c++20)
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
