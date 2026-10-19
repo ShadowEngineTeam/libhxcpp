@@ -1,0 +1,10 @@
+script: get z 26, exists q false
+host: exists z true, get z 26
+host: exists a true, get a 3, exists q false
+host: scale a 4.5, rounded 5
+host: caught thrown by the script
+script: get z 26, exists q false
+host: exists z true, get z 26
+host: exists a true, get a 3, exists q false
+host: scale a 4.5, rounded 5
+host: caught thrown by the script

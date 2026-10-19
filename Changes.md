@@ -14,6 +14,7 @@ libhxcpp 6.0.0 (unreleased)
 * Fixed Std.isOfType(v, Class) and Std.isOfType(v, Enum) both being true for every class and every enum: a class is now only a Class and an enum only an Enum, as on the other targets, and haxe.Serializer writes an enum type as an enum (HaxeFoundation/hxcpp#1391)
 * Fixed cpp.marshal.View.slice(index, length) accepting a length so large that the bounds check overflowed, which gave a view larger than its buffer (API level 500)
 * Fixed cppia on 32-bit ARM and Emscripten storing only the high half of a Float in a frame, so Float arguments, locals and results lost their low bits
+* Fixed cppia script classes that implement a host interface with type parameters, such as a Map<String, Int>: calls through the interface passed the arguments as objects while the script function read them as typed values, so they read the wrong values and could crash. Such a call now goes through an adapter that converts the arguments and the result
 * The regression, std and GC stress suites run under UBSan, ASan and TSan in CI, and CodeQL analyzes the C++ sources
 * The build tool stops with a clear error when a file group lists files whose names differ only in case, such as the Texpr.cpp and TExpr.cpp that classes Texpr and TExpr generate: on Windows and macOS they are one file and one object file, and the build failed with unrelated errors (libhxcpp #70). Rename one of the classes
 
