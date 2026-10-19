@@ -23,6 +23,12 @@
 #include <stdlib.h>
 #include <vector>
 #include <string>
+#if !defined(HX_WINRT) && !defined(EPPC) && !defined(NEKO_WINDOWS) && !defined(__EMSCRIPTEN__) && !defined(HXCPP_SINGLE_THREADED_APP)
+#define HX_PROCESS_REAPER
+#include <thread>
+#include <mutex>
+#include <chrono>
+#endif
 
 namespace
 {
@@ -89,6 +95,87 @@ struct HandleListApi
 #endif
 
 
+#ifdef HX_PROCESS_REAPER
+
+// Children closed or collected while still running. Nothing else waits for
+// them, so they would stay zombies for as long as this process lives. One
+// native thread reaps them, polling only these pids: never waitpid(-1), which
+// would take children other code is waiting for, and no SIGCHLD handler, so an
+// embedding host keeps its own policy. It ends when the list is empty. The
+// state is never destroyed, since a finalizer may still use it at exit.
+namespace
+{
+   struct ProcessReaper
+   {
+      std::mutex lock;
+      std::vector<pid_t> pids;
+      bool running = false;
+   };
+   ProcessReaper &sReaper = *new ProcessReaper();
+
+   // True once the child is gone: reaped here, or not ours to wait for (as
+   // when the host ignores SIGCHLD and the system reaps it)
+   bool reapIfDone(pid_t inPid)
+   {
+      int r;
+      do
+         r = waitpid(inPid, 0, WNOHANG);
+      while (r<0 && errno==EINTR);
+      return r==inPid || (r<0 && errno==ECHILD);
+   }
+
+   void reaperLoop()
+   {
+      int delayMs = 10;
+      while(true)
+      {
+         {
+            std::lock_guard<std::mutex> l(sReaper.lock);
+            for(size_t i=0; i<sReaper.pids.size(); )
+            {
+               if (reapIfDone(sReaper.pids[i]))
+               {
+                  sReaper.pids[i] = sReaper.pids.back();
+                  sReaper.pids.pop_back();
+               }
+               else
+                  i++;
+            }
+            if (sReaper.pids.empty())
+            {
+               sReaper.running = false;
+               return;
+            }
+         }
+         std::this_thread::sleep_for(std::chrono::milliseconds(delayMs));
+         if (delayMs<200)
+            delayMs *= 2;
+      }
+   }
+
+   // Takes no GC memory and never waits on the collector, so it is safe from
+   // the finalizer during a collection
+   void reapLater(pid_t inPid)
+   {
+      std::lock_guard<std::mutex> l(sReaper.lock);
+      sReaper.pids.push_back(inPid);
+      if (!sReaper.running)
+      {
+         try
+         {
+            std::thread(reaperLoop).detach();
+            sReaper.running = true;
+         }
+         catch(...)
+         {
+            // The pid stays listed; the next close starts the thread again
+         }
+      }
+   }
+}
+#endif
+
+
 struct vprocess : public hx::Object
 {
   HX_IS_INSTANCE_OF enum { _hx_ClassId = hx::clsIdProcess };
@@ -146,11 +233,21 @@ struct vprocess : public hx::Object
                do_close(oread);
             if (iwrite!=-1)
                do_close(iwrite);
-            // Reap if the child already exited - a process the user never
-            // calls exitCode() on otherwise stays a zombie until the host
-            // exits (a still-running child is left for the OS to reparent)
+            // Reap the child if it already exited - one the user never calls
+            // exitCode() on otherwise stays a zombie until the host exits. A
+            // child still running is reaped later, off this thread, so close
+            // does not wait for it and does not kill it.
             if (pid > 0 && !reaped)
-               waitpid(pid, 0, WNOHANG);
+            {
+               int r;
+               do
+                  r = waitpid(pid, 0, WNOHANG);
+               while (r<0 && errno==EINTR);
+               #ifdef HX_PROCESS_REAPER
+               if (r==0)
+                  reapLater(pid);
+               #endif
+            }
             pid = -1;
          #endif
          // Reset the stale values - the OS recycles handles/fds, so a later

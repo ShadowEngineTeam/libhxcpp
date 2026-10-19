@@ -15,6 +15,7 @@ libhxcpp 6.0.0 (unreleased)
 * Fixed cpp.marshal.View.slice(index, length) accepting a length so large that the bounds check overflowed, which gave a view larger than its buffer (API level 500)
 * Fixed cppia on 32-bit ARM and Emscripten storing only the high half of a Float in a frame, so Float arguments, locals and results lost their low bits
 * Fixed cppia script classes that implement a host interface with type parameters, such as a Map<String, Int>: calls through the interface passed the arguments as objects while the script function read them as typed values, so they read the wrong values and could crash. Such a call now goes through an adapter that converts the arguments and the result
+* Fixed Process.close, and the collector cleaning up a Process, leaving the child a zombie on Linux, macOS and other POSIX systems when it was still running: such a child is now reaped when it exits, by a thread that waits only for those children, without blocking close or killing the child, and without a SIGCHLD handler
 * The regression, std and GC stress suites run under UBSan, ASan and TSan in CI, and CodeQL analyzes the C++ sources
 * The build tool stops with a clear error when a file group lists files whose names differ only in case, such as the Texpr.cpp and TExpr.cpp that classes Texpr and TExpr generate: on Windows and macOS they are one file and one object file, and the build failed with unrelated errors (libhxcpp #70). Rename one of the classes
 
