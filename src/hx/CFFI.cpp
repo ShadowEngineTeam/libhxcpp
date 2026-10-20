@@ -838,14 +838,15 @@ hx::Object * val_ocall3(hx::Object * arg1,int arg2,hx::Object * arg3,hx::Object 
 }
 
 
-hx::Object * val_ocallN(hx::Object * arg1,int arg2,hx::Object * arg3) THROWS
+hx::Object * val_ocallN(hx::Object * arg1,int arg2,hx::Object ** arg3, int nCount) THROWS
 {
    if (!arg1) hx::Throw(HX_INVALID_OBJECT);
-#if (HXCPP_API_LEVEL>=500)
-   return hx::invoker::invoke(arg1->__IField(arg2), Dynamic(arg3)).GetPtr();
-#else
-   return arg1->__IField(arg2)->__run(Dynamic(arg3)).GetPtr();
-#endif
+   Dynamic field = arg1->__IField(arg2);
+   if (!field.mPtr) Dynamic::ThrowBadFunctionError();
+   Array<Dynamic> args = Array_obj<Dynamic>::__new(0, nCount);
+   while (nCount-- > 0)
+     args << *arg3++;
+   return field->__Run( args ).GetPtr();
 }
 
 

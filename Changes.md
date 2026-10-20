@@ -345,6 +345,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed DEFINE_PRIM_MULT exporting nothing with HXCPP_JS_PRIME (Emscripten): primitives with more than five arguments are exported and take their arguments as a JavaScript array
 * Fixed the debugger's breakpoint updates having no memory barriers, and made building with MSVC older than Visual Studio 2015 stop with a clear message
 * Fixed telemetry unlocking its allocation mutex before locking it when it skips an allocation made inside a CFFI call; on Windows that left the mutex held and the next thread that tracked an allocation blocked forever
+* Fixed the CFFI val_ocallN taking three parameters against its four-parameter declaration, so every call passed the argument array's address as a single argument; it now passes the arguments it is given
 
 ### Build tool and platforms
 
