@@ -315,9 +315,9 @@ void __hxcpp_dbg_threadCreatedOrTerminated(int threadNumber, bool created);
 
 // The following is called by the stack macros, but only if
 // HXCPP_DEBUGGER is set
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+[[noreturn]] HXCPP_EXTERN_CLASS_ATTRIBUTES
 Dynamic __hxcpp_dbg_checkedThrow(Dynamic toThrow);
-HXCPP_EXTERN_CLASS_ATTRIBUTES
+[[noreturn]] HXCPP_EXTERN_CLASS_ATTRIBUTES
 Dynamic __hxcpp_dbg_checkedRethrow(Dynamic toThrow);
 
 #else // !HXCPP_DEBUGGER
@@ -367,8 +367,8 @@ inline void __hxcpp_dbg_setOnScriptLoadedFunction(Dynamic) { }
 // created and terminated
 inline void __hxcpp_dbg_threadCreatedOrTerminated(int, bool) { }
 
-inline Dynamic __hxcpp_dbg_checkedThrow(Dynamic toThrow) { return hx::Throw(toThrow); }
-inline Dynamic __hxcpp_dbg_checkedRethrow(Dynamic toThrow) { return hx::Rethrow(toThrow); }
+[[noreturn]] inline Dynamic __hxcpp_dbg_checkedThrow(Dynamic toThrow) { hx::Throw(toThrow); }
+[[noreturn]] inline Dynamic __hxcpp_dbg_checkedRethrow(Dynamic toThrow) { hx::Rethrow(toThrow); }
 
 #endif // HXCPP_DEBUGGER
 

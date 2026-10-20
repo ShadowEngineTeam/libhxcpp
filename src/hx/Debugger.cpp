@@ -1545,7 +1545,7 @@ Dynamic __hxcpp_dbg_checkedThrow(Dynamic toThrow)
     if (!hx::CanBeCaught(toThrow))
         hx::CriticalError(HX_CSTRING("Uncatchable Throw: ") + toThrow->toString(),true);
 
-    return hx::Throw(toThrow);
+    hx::Throw(toThrow);
 }
 
 
@@ -1554,7 +1554,7 @@ Dynamic __hxcpp_dbg_checkedRethrow(Dynamic toThrow)
     if (!hx::CanBeCaught(toThrow))
         hx::CriticalError(HX_CSTRING("Uncatchable Throw: ") + toThrow->toString(),true);
 
-    return hx::Rethrow(toThrow);
+    hx::Rethrow(toThrow);
 }
 
 

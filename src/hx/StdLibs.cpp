@@ -65,7 +65,6 @@ Dynamic Throw(Dynamic inDynamic)
    __hx_stack_set_last_exception();
    #endif
    throw inDynamic;
-   return null();
 }
 
 
@@ -75,7 +74,6 @@ Dynamic Rethrow(Dynamic inDynamic)
    __hx_stack_push_last_exception();
    #endif
    throw inDynamic;
-   return null();
 }
 
 
