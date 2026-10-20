@@ -674,7 +674,7 @@ Dynamic _hx_std_process_run( String cmd, Array<String> vargs, int inShowParam )
 **/
 int _hx_std_process_stdout_read( Dynamic handle, Array<unsigned char> buf, int pos, int len )
 {
-   if( pos < 0 || len < 0 || pos > buf->length || len > buf->length - pos )
+   if( pos < 0 || len <= 0 || pos > buf->length || len > buf->length - pos )
       return 0;
    vprocess *p = getProcess(handle);
 
@@ -711,7 +711,7 @@ int _hx_std_process_stdout_read( Dynamic handle, Array<unsigned char> buf, int p
 **/
 int _hx_std_process_stderr_read( Dynamic handle, Array<unsigned char> buf, int pos, int len )
 {
-   if( pos < 0 || len < 0 || pos > buf->length || len > buf->length - pos )
+   if( pos < 0 || len <= 0 || pos > buf->length || len > buf->length - pos )
       return 0;
    vprocess *p = getProcess(handle);
 
@@ -780,7 +780,7 @@ static ssize_t writeNoSigpipe(int inFd, const void *inData, size_t inLen)
 
 int _hx_std_process_stdin_write( Dynamic handle, Array<unsigned char> buf, int pos, int len )
 {
-   if( pos < 0 || len < 0 || pos > buf->length || len > buf->length - pos )
+   if( pos < 0 || len <= 0 || pos > buf->length || len > buf->length - pos )
       return 0;
    vprocess *p = getProcess(handle);
 
