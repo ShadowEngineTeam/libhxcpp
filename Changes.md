@@ -143,6 +143,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed Semaphore.tryAcquire throwing "Failed to wait for semaphore" on Linux and Android for negative, NaN and huge timeouts, and returning early on Windows for huge ones; sub-millisecond waits on Windows now round up instead of returning at once, so Lock.wait no longer busy-polls the last millisecond of a timed wait, and Lock.wait with a huge timeout no longer spins where time_t is 32-bit
 * Fixed the Windows main and natively attached thread objects holding GetCurrentThread's pseudo-handle, so setName and getName called from another thread named that thread instead; and fixed Scratch's copy assignment (Haxe 5) keeping its old view and release function and freeing the malloc path twice
 * Made hx::NativeAttach and hx::AutoGCFreeZone non-copyable: a copy duplicated the guard's ownership, so one scope detached the thread or left the GC-free zone twice
+* Fixed values stored in a ThreadLocal staying alive for the life of every thread that set them after the ThreadLocal itself was collected
 
 ### Strings, numbers, Dynamic and reflection
 

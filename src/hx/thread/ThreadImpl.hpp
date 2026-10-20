@@ -15,6 +15,8 @@ namespace hx
 {
 	namespace thread
 	{
+		int ThreadLocalLiveGeneration(int slot);
+
 		class ThreadImpl_obj final : public Thread_obj
 		{
 			int cursor = 0;

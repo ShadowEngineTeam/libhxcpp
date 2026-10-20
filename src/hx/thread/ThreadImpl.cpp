@@ -230,6 +230,11 @@ void hx::thread::ThreadImpl_obj::__Mark(HX_MARK_PARAMS)
 {
 	HX_MARK_MEMBER(scratch);
 	HX_MARK_MEMBER(slots);
+	// Values of collected ThreadLocals can never be read again. The constructor
+	// can be marked before it has made localSlots.
+	for (int i = 0; localSlots.mPtr && i < localSlots->length; i++)
+		if (i >= localGenerations->length || localGenerations[i] != ThreadLocalLiveGeneration(i))
+			localSlots->__unsafe_set(i, null());
 	HX_MARK_MEMBER(localSlots);
 	HX_MARK_MEMBER(localGenerations);
 }
