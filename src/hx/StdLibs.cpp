@@ -806,10 +806,12 @@ int __int__(double x)
 }
 
 
-static inline bool is_hex_string(const char *c, int len)
+// A hex prefix with a character after it. Each character is read only once
+// the one before it matched, so the string is never measured or overrun
+static inline bool is_hex_string(const char *c)
 {
-   return (len > 2 && c[0] == '0' && (c[1] == 'x' || c[1] == 'X'))
-      || (len > 3 && (c[0] == '-' || c[0] == '+') && c[1] == '0' && (c[2] == 'x' || c[2] == 'X'));
+   return (c[0] == '0' && (c[1] == 'x' || c[1] == 'X') && c[2])
+      || ((c[0] == '-' || c[0] == '+') && c[1] == '0' && (c[2] == 'x' || c[2] == 'X') && c[3]);
 }
 
 // Locale-independent strtod - the process locale is global mutable state
@@ -846,7 +848,7 @@ static bool hxParseIntChars(const char *str, int &outResult)
    // isspace requires an unsigned char value - a negative char (any
    // non-ASCII utf8 byte) is undefined behaviour
    while (isspace((unsigned char)*str)) ++str;
-   bool isHex = is_hex_string(str, strlen(str));
+   bool isHex = is_hex_string(str);
    char *end = 0;
    // Parse at a fixed 64-bit width so the overflow behaviour does not
    // depend on the platform's long size (32-bit on Windows, 64-bit on

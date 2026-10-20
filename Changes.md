@@ -77,6 +77,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Sped up releasing GC block groups: released blocks leave the address-ordered block list in one pass instead of one erase each, which was quadratic while threads are stopped (Gc.compact of 1 GB: 112 ms to 83 ms)
 * Shortened the large-allocation lock: a recycled large buffer is cleared after the lock is released, as a fresh one is, instead of stalling other threads' large allocations for the whole clear (4 threads allocating 12000 zeroed 1 MB buffers: about 15% faster)
 * Fixed reserving room in an empty hash table allocating 2 buckets whatever the size asked for, so converting a map's value storage rehashed it over a dozen times; converting 300k IntMap entries is about 15% faster
+* Std.parseInt no longer measures the whole string to look for a hex prefix
 
 ### Garbage collector
 
