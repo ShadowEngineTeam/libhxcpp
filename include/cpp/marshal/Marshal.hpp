@@ -196,9 +196,9 @@ template<class T>
 inline ::cpp::Pointer<T> cpp::marshal::Marshal::readBigEndianPointer(const View<uint8_t>& view)
 {
 #ifdef HXCPP_BIG_ENDIAN
-    return readPointer<T*>(view);
+    return readPointer<T>(view);
 #else
-    return reverse(readPointer<T*>(view));
+    return ::cpp::Pointer<T>(reverse(read<T*>(view)));
 #endif
 }
 
@@ -278,9 +278,9 @@ template<class T>
 inline ::cpp::Pointer<T> cpp::marshal::Marshal::readLittleEndianPointer(const View<uint8_t>& view)
 {
 #ifndef HXCPP_BIG_ENDIAN
-    return readPointer<T*>(view);
+    return readPointer<T>(view);
 #else
-    return reverse(readPointer<T*>(view));
+    return ::cpp::Pointer<T>(reverse(read<T*>(view)));
 #endif
 }
 
