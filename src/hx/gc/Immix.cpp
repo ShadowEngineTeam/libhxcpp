@@ -7071,6 +7071,8 @@ int GcGetThreadAttachedCount()
 #ifdef HXCPP_VISIT_ALLOCS
 class GcFreezer : public hx::VisitContext
 {
+   std::unordered_map<void *, void *> copies;
+
 public:
    void visitObject(hx::Object **ioPtr) HXCPP_OVERRIDE
    {
@@ -7078,9 +7080,16 @@ public:
       if (!obj || IsConstAlloc(obj))
          return;
 
-      unsigned int s = ObjectSize(obj);
+      auto found = copies.find(obj);
+      if (found!=copies.end())
+      {
+         *ioPtr = (hx::Object *)found->second;
+         return;
+      }
+
+      unsigned int s = ObjectSizeSafe(obj);
       void *result = InternalCreateConstBuffer(obj,s,false);
-      //printf(" Freeze %d\n", s);
+      copies[obj] = result;
       *ioPtr = (hx::Object *)result;
       (*ioPtr)->__Visit(this);
    }
@@ -7090,9 +7099,17 @@ public:
       void *data = *ioPtr;
       if (!data || IsConstAlloc(data))
          return;
-      unsigned int s = ObjectSize(data);
-      //printf(" Freeze %d\n", s);
+
+      auto found = copies.find(data);
+      if (found!=copies.end())
+      {
+         *ioPtr = found->second;
+         return;
+      }
+
+      unsigned int s = ObjectSizeSafe(data);
       void *result = InternalCreateConstBuffer(data,s,false);
+      copies[data] = result;
       *ioPtr = result;
    }
 };

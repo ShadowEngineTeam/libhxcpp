@@ -1,0 +1,5 @@
+frozen children share identity: true
+frozen values preserved: true
+frozen arrays share identity: true
+frozen self reference: true
+frozen cycle: true
