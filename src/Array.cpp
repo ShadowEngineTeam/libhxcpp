@@ -639,7 +639,25 @@ String ArrayBase::joinArray(ArrayBase *inBase, String inSeparator)
 void ArrayBase::safeSort(DynamicSorterFunc inSorter, bool inIsString)
 {
    if (inIsString)
-       SafeSorter<String>::Sort(this, length,inSorter);
+   {
+      // The comparator takes Dynamic arguments, so box each String once
+      // rather than two per comparison
+      const int n = length;
+      if (n<2)
+         return;
+      Array<Dynamic> boxed(n, n);
+      {
+         String *s = (String *)GetBase();
+         for(int i=0;i<n;i++)
+            boxed->init(i, Dynamic(s[i]));
+      }
+      SafeSorter<Dynamic>::Sort(boxed.mPtr, n, inSorter);
+      if (length!=n)
+         return;
+      String *s = (String *)GetBase();
+      for(int i=0;i<n;i++)
+         s[i] = boxed[i];
+   }
    else
        SafeSorter<Dynamic>::Sort(this, length,inSorter);
 }
