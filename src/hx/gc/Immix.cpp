@@ -3056,6 +3056,8 @@ public:
 #endif
 
 
+static const size_t sLargeAllocSpaceFloor = 40 << 20;
+
 class GlobalAllocator *sGlobalAlloc = 0;
 
 
@@ -3239,7 +3241,7 @@ public:
       mLargeMin = (size_t)-1;
       mLargeMax = 0;
       mRecycleSize = 0;
-      mLargeAllocSpace = 40 << 20;
+      mLargeAllocSpace = sLargeAllocSpaceFloor;
       mLargeAllocForceRefresh = mLargeAllocSpace;
       // Start at 1 Meg...
       mTotalAfterLastCollect = 1<<20;
@@ -5352,8 +5354,11 @@ public:
       #endif
 
       // Large alloc target
+      // A burst's allowance halves at each collection, down to what the heap
+      // needs now, so garbage after it does not pile up to the old peak
       size_t blockSize =  GetWorkingMemory();
-      growLargeAllocSpace(blockSize);
+      size_t space = std::max(blockSize, mLargeAllocSpace.load(std::memory_order_relaxed)/2);
+      mLargeAllocSpace.store(std::max(space, sLargeAllocSpaceFloor), std::memory_order_relaxed);
       mLargeAllocForceRefresh = mLargeAllocated + mLargeAllocSpace;
 
       mTotalAfterLastCollect = MemUsage();
