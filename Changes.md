@@ -221,6 +221,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed Array.sort crashing, corrupting the heap or hanging when the comparator is inconsistent (one returning random results to shuffle, for example) or changes the array it sorts: both sorts use a stable merge sort that stays in range whatever the comparator returns
 * Fixed copying an array crashing with telemetry's allocation tracking on: the tracker read the type of an object whose constructor had not run
 * Fixed Array.filter called through reflection or a Dynamic keeping the value a predicate wrote into the slot instead of the value it was given, so it disagreed with a direct call
+* Fixed cpp.marshal.View (Haxe 5) reinterpret and compare narrowing 64-bit lengths: reinterpreting a view of 4 GiB or more to a wider element type gave the wrong length, and compare could report views of different lengths as equal; fill uses a 64-bit index
 
 ### Sockets and TLS
 

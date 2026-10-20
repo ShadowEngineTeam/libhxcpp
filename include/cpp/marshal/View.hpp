@@ -72,7 +72,7 @@ inline void cpp::marshal::View<T>::clear() const
 template<class T>
 inline void cpp::marshal::View<T>::fill(T value) const
 {
-    for (auto i = 0; i < length; i++)
+    for (int64_t i = 0; i < length; i++)
     {
         ptr.ptr[i] = value;
     }
@@ -112,23 +112,9 @@ template<class T>
 template<class K>
 inline cpp::marshal::View<K> cpp::marshal::View<T>::reinterpret() const
 {
-    auto newPtr   = ::cpp::Pointer<K>(reinterpret_cast<K*>(ptr.ptr));
-    auto fromSize = sizeof(T);
-    auto toSize   = sizeof(K);
+    auto newPtr = ::cpp::Pointer<K>(reinterpret_cast<K*>(ptr.ptr));
 
-    if (toSize == fromSize)
-    {
-        return cpp::marshal::View<K>(newPtr, length);
-    }
-    if (toSize < fromSize)
-    {
-        return cpp::marshal::View<K>(newPtr, length * (fromSize / toSize));
-    }
-
-    auto shrink    = static_cast<double>(fromSize) / toSize;
-    auto newLength = static_cast<int>(std::floor(length * shrink));
-
-    return cpp::marshal::View<K>(newPtr, newLength);
+    return cpp::marshal::View<K>(newPtr, static_cast<int64_t>(static_cast<uint64_t>(length) * sizeof(T) / sizeof(K)));
 }
 
 template<class T>
@@ -142,7 +128,7 @@ inline int cpp::marshal::View<T>::compare(const View<T>& inRHS) const
         return result;
     }
 
-    return length - inRHS.length;
+    return length < inRHS.length ? -1 : (length > inRHS.length ? 1 : 0);
 }
 
 template<class T>
