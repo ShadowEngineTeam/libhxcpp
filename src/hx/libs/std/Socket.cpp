@@ -1,5 +1,6 @@
 #if !defined(HX_WINRT) && !defined(EPPC)
 #include <hxcpp.h>
+#include <chrono>
 #include <hx/OS.h>
 
 #include <string.h>
@@ -837,6 +838,24 @@ static struct timeval *init_timeval( double f, struct timeval *t ) {
    return t;
 }
 
+#ifdef NEKO_POSIX
+static double monotonicSeconds()
+{
+   return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+
+// A finite wait that a signal interrupted goes on for what is left of it,
+// not for its whole length again
+static void remainingTimeval(double inDeadline, struct timeval *t)
+{
+   double left = inDeadline - monotonicSeconds();
+   if (left < 0)
+      left = 0;
+   t->tv_sec = (int)left;
+   t->tv_usec = (int)((left - (int)left) * 1000000);
+}
+#endif
+
 /**
    socket_select : read : 'socket array -> write : 'socket array -> others : 'socket array -> timeout:number? -> 'socket array array
    <doc>Perform the [select] operation. Timeout is in seconds or [null] if infinite</doc>
@@ -846,6 +865,7 @@ Array<Dynamic> _hx_std_socket_select( Array<Dynamic> rs, Array<Dynamic> ws, Arra
    SOCKET n = 0;
    fd_set rx, wx, ex;
    fd_set *ra, *wa, *ea;
+   double deadline = -1;
 
    POSIX_LABEL(select_again);
    ra = make_socket_array(rs,&rx,&n);
@@ -856,6 +876,15 @@ Array<Dynamic> _hx_std_socket_select( Array<Dynamic> rs, Array<Dynamic> ws, Arra
    struct timeval *tt = 0;
    if( timeout.mPtr )
       tt = init_timeval(timeout,&tval);
+   #ifdef NEKO_POSIX
+   if (tt)
+   {
+      if (deadline < 0)
+         deadline = monotonicSeconds() + tval.tv_sec + tval.tv_usec * 1e-6;
+      else
+         remainingTimeval(deadline, &tval);
+   }
+   #endif
 
    hx::EnterGCFreeZone();
    if( select((int)(n+1),ra,wa,ea,tt) == SOCKET_ERROR )
@@ -895,6 +924,7 @@ void _hx_std_socket_fast_select( Array<Dynamic> rs, Array<Dynamic> ws, Array<Dyn
    SOCKET n = 0;
    fd_set rx, wx, ex;
    fd_set *ra, *wa, *ea;
+   double deadline = -1;
 
    POSIX_LABEL(select_again);
    ra = make_socket_array(rs,&rx,&n);
@@ -905,6 +935,15 @@ void _hx_std_socket_fast_select( Array<Dynamic> rs, Array<Dynamic> ws, Array<Dyn
    struct timeval *tt = 0;
    if( timeout.mPtr )
       tt = init_timeval(timeout,&tval);
+   #ifdef NEKO_POSIX
+   if (tt)
+   {
+      if (deadline < 0)
+         deadline = monotonicSeconds() + tval.tv_sec + tval.tv_usec * 1e-6;
+      else
+         remainingTimeval(deadline, &tval);
+   }
+   #endif
 
    hx::EnterGCFreeZone();
    if( select((int)(n+1),ra,wa,ea,tt) == SOCKET_ERROR )
@@ -1546,12 +1585,21 @@ void _hx_std_socket_poll_events(Dynamic pdata, double timeout)
 #else
    int tot = p->rcount + p->wcount;
 
+   int waitMs = (int)(timeout * 1000);
+   double deadline = monotonicSeconds() + timeout;
    hx::EnterGCFreeZone();
 poll_events_again:
-   if (poll(p->fds, tot, (int)(timeout * 1000)) < 0)
+   if (poll(p->fds, tot, waitMs) < 0)
    {
       if (errno == EINTR)
+      {
+         if (timeout >= 0)
+         {
+            double left = deadline - monotonicSeconds();
+            waitMs = left > 0 ? (int)(left * 1000) + 1 : 0;
+         }
          goto poll_events_again;
+      }
       hx::ExitGCFreeZone();
 
       return;
