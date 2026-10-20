@@ -30,8 +30,8 @@
     Currently, the 'spill-pointers' options is needed for GC.  If you do not need gc,
     for example compiling non-haxe code, you can disable by specifying HXCPP_NO_GC_LINK
 
-       EMSDK < 6, this is in BINARYEN_EXTRA_PASSES
-       EMSDK >= 6, this is in BINARYEN_EXTRA_PASSES, but also requires profiling-funcs or the stack can't be found
+       It runs in BINARYEN_EXTRA_PASSES, and always with profiling-funcs, without which
+       it can't find the stack pointer
           The extra data from profiling-funcs can later be stripped
        At some point in the future, spill-pointers may move to wasm-opt, which can also handle stripping
 
@@ -154,7 +154,7 @@
   <flag name="-s" value="WASM=1" />
   <flag value="--Wno-limited-postlink-optimizations" unless="HXCPP_NO_GC_LINK" />
   <flag name="-s" value="BINARYEN_EXTRA_PASSES='--spill-pointers'" unless="HXCPP_NO_GC_LINK" />
-  <flag value="--profiling-funcs" if="add_spill_pointers_pass || EMSDK6+" />
+  <flag value="--profiling-funcs" unless="HXCPP_NO_GC_LINK" />
   <section unless="HXCPP_LINK_NO_EXCEPTIONS" >
      <flag name="-s" value="DISABLE_EXCEPTION_CATCHING=0" if="HXCPP_NO_WASM_EXEPTIONS" />
      <flag value="-fwasm-exceptions" unless="HXCPP_NO_WASM_EXEPTIONS" />
@@ -200,7 +200,7 @@
   <flag name="-s" value="WASM=1" />
   <flag value="--Wno-limited-postlink-optimizations" unless="HXCPP_NO_GC_LINK" />
   <flag name="-s" value="BINARYEN_EXTRA_PASSES='--spill-pointers'" unless="HXCPP_NO_GC_LINK" />
-  <flag value="--profiling-funcs" if="add_spill_pointers_pass || EMSDK6+" />
+  <flag value="--profiling-funcs" unless="HXCPP_NO_GC_LINK" />
   <section unless="HXCPP_LINK_NO_EXCEPTIONS" >
      <flag name="-s" value="DISABLE_EXCEPTION_CATCHING=0" if="HXCPP_NO_WASM_EXEPTIONS" />
      <flag value="-fwasm-exceptions" unless="HXCPP_NO_WASM_EXEPTIONS" />

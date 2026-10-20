@@ -381,6 +381,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed Android builds failing with "no member named 'sscanf' in namespace 'std'": GcCommon.cpp now includes <cstdio>
 * Fixed x86_64 Android builds producing arm64 code when they ask for HXCPP_X86_64 without HXCPP_M64, as Lime does
 * Fixed toggling a define such as HXCPP_TELEMETRY, HXCPP_GC_BIG_BLOCKS or HXCPP_M64 not recompiling the runtime and hxcpp's libraries, which left objects built both ways and could fail to link
+* Fixed Emscripten builds running --spill-pointers without --profiling-funcs when the detected emscripten version was below 6 or misread, which failed to find the stack pointer or lost GC roots; the two always go together
 
 
 4.3.xx
