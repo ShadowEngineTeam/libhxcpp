@@ -1,0 +1,4 @@
+cleanup keeps every frame: true
+catching cleanup keeps every frame: true
+cleanup calls: 2
+after a swallowed throw: true

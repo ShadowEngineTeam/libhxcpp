@@ -2,6 +2,7 @@
 #define HX_STACK_CONTEXT_H
 
 #include "QuickVec.h"
+#include <exception>
 
 #ifdef HXCPP_SINGLE_THREADED_APP
   #define HX_CTX_GET ::hx::gMainThreadContext
@@ -395,6 +396,19 @@ struct MarkChunk
 
 
 
+#ifdef HXCPP_STACK_TRACE
+// True while a C++ exception unwinds the stack, as it does when a destructor
+// calls back into Haxe during the unwinding
+inline bool hxExceptionUnwinding()
+{
+   #if (defined(_MSVC_LANG) && _MSVC_LANG >= 201703L) || __cplusplus >= 201703L
+   return std::uncaught_exceptions() > 0;
+   #else
+   return std::uncaught_exception();
+   #endif
+}
+#endif
+
 struct StackContext : public hx::ImmixAllocator
 {
    #ifdef HXCPP_STACK_IDS
@@ -406,6 +420,11 @@ struct StackContext : public hx::ImmixAllocator
       hx::QuickVec<hx::ExceptionStackFrame> mExceptionStack;
       // Updated only when a thrown exception unwinds the stack
       bool mIsUnwindingException;
+      // A frame entered from a destructor while an exception unwinds, as a
+      // native cleanup callback is: the depth to resume recording at, and
+      // the exception's stack, set aside meanwhile
+      int mUnwindResumeDepth;
+      hx::QuickVec<hx::ExceptionStackFrame> mOuterExceptionStack;
 
       #ifdef HXCPP_DEBUGGER
          DebuggerContext  *mDebugger;
@@ -479,7 +498,15 @@ struct StackContext : public hx::ImmixAllocator
          tlmSampleEnter(mTelemetry,inFrame);
       #endif
 
-      mIsUnwindingException = false;
+      if (mIsUnwindingException)
+      {
+         if (mUnwindResumeDepth<0 && hxExceptionUnwinding())
+         {
+            mUnwindResumeDepth = (int)mStackFrames.size();
+            mOuterExceptionStack.swap(mExceptionStack);
+         }
+         mIsUnwindingException = false;
+      }
       mStackFrames.push(inFrame);
 
       #ifdef HXCPP_DEBUGGER
@@ -502,6 +529,14 @@ struct StackContext : public hx::ImmixAllocator
       }
 
       mStackFrames.pop_back();
+
+      if (mUnwindResumeDepth==(int)mStackFrames.size())
+      {
+         mExceptionStack.swap(mOuterExceptionStack);
+         mOuterExceptionStack.clear();
+         mUnwindResumeDepth = -1;
+         mIsUnwindingException = true;
+      }
    }
 
    void getCurrentCallStackAsStrings(Array<String> result, bool skipLast);

@@ -196,6 +196,7 @@ StackContext::StackContext()
 {
    #ifdef HXCPP_STACK_TRACE
    mIsUnwindingException = false;
+   mUnwindResumeDepth = -1;
    #endif
 
    #if HXCPP_TELEMETRY

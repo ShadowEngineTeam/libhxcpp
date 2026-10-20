@@ -369,6 +369,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed telemetry unlocking its allocation mutex before locking it when it skips an allocation made inside a CFFI call; on Windows that left the mutex held and the next thread that tracked an allocation blocked forever
 * Fixed the CFFI val_ocallN taking three parameters against its four-parameter declaration, so every call passed the argument array's address as a single argument; it now passes the arguments it is given
 * Fixed Marshal.readLittleEndianPointer and readBigEndianPointer (Haxe 5) failing to compile when used: they read a pointer to a pointer; they read the pointer and swap its bytes when the order differs
+* Fixed a Haxe callback run by native cleanup while an exception unwinds (a C++ destructor) dropping the outer frames from CallStack.exceptionStack; the exception's stack is set aside during the callback and recording resumes when it returns
 
 ### Build tool and platforms
 

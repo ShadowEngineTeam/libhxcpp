@@ -1,0 +1,4 @@
+-m Main
+--cpp bin
+-D HXCPP_STACK_TRACE
+-D HXCPP_STACK_LINE
