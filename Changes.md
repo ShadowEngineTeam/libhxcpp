@@ -73,6 +73,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed IntMap keys packed as (x << 16) | y piling into a few buckets: a 512x512 grid of them built in 99 ms instead of the 7 ms dense keys take, and now in 8 ms. Dense and strided keys are unchanged
 * Sped up FileInput.readByte about 6.8x and readLine through it about 4x (1 MB: 61 ms to 9 ms, and 70 ms to 17 ms, on Windows) on regular files opened for reading: bytes come from a 4 KB read-ahead instead of one GC-free zone and fread call each. Pipes, stdin and files opened for writing read as before
 * Sped up successful dynamic field reads through FieldMapGet (cppia script class fields, toString lookups) about 1.7x by looking the name up once instead of twice: 2M reads 36 ms to 21 ms on Windows
+* Sped up growing the heap again after it was released: a new GC block takes a freed id from a list instead of searching the block table from the start, which was quadratic in the number of freed blocks (refilling 1 GB after Gc.compact: 753 ms to 643 ms)
 
 ### Garbage collector
 

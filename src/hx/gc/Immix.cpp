@@ -743,7 +743,8 @@ struct HoleRange
 
 
 hx::QuickVec<struct BlockDataInfo *> *gBlockInfo = 0;
-static int gBlockInfoEmptySlots = 0;
+// Ids of destroyed blocks, reused before gBlockInfo grows
+static hx::QuickVec<int> &gBlockInfoFreeIds = *new hx::QuickVec<int>();
 
 #define FRAG_THRESH 14
 
@@ -786,16 +787,10 @@ struct BlockDataInfo
 
    BlockDataInfo(int inGid, BlockData *inData)
    {
-      if (gBlockInfoEmptySlots)
+      if (!gBlockInfoFreeIds.empty())
       {
-         for(int i=0;i<gBlockInfo->size();i++)
-            if ( !(*gBlockInfo)[i] )
-            {
-               gBlockInfoEmptySlots--;
-               mId = i;
-               (*gBlockInfo)[i] = this;
-               break;
-            }
+         mId = gBlockInfoFreeIds.pop();
+         (*gBlockInfo)[mId] = this;
       }
       else
       {
@@ -906,7 +901,7 @@ struct BlockDataInfo
       GCLOG("  release block %d : %p\n",  mId, this );
       #endif
       (*gBlockInfo)[mId] = 0;
-      gBlockInfoEmptySlots++;
+      gBlockInfoFreeIds.push(mId);
       delete this;
    }
 
