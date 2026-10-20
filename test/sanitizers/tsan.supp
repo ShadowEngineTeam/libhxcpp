@@ -43,5 +43,11 @@ race_top:sys::thread::_Thread::HaxeThread_obj::create
 race_top:hx::Anon_obj::__Field
 race_top:hx::Anon_obj::__SetField
 
+# Strings cache their hash on first use without a lock: the value is written,
+# a release fence published, then the flag bit set; readers check the bit and
+# pair it with an acquire fence. Two threads hashing one string write the same
+# value.
+race_top:String::hash
+
 # SQLite's start-up checks whether it is initialised without a lock first.
 race:sqlite3Initialize
