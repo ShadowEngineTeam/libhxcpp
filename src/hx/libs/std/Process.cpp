@@ -602,9 +602,38 @@ Dynamic _hx_std_process_run( String cmd, Array<String> vargs, int inShowParam )
       close(output[0]);
       close(error[0]);
       close(status[0]);
-      dup2(input[0],0);
-      dup2(output[1],1);
-      dup2(error[1],2);
+      // A parent started without descriptor 0, 1 or 2 hands those numbers
+      // to the pipes, and a dup2 onto itself would keep close-on-exec, or
+      // one could overwrite another pipe end: move them all above 2 first
+      int stdFds[3] = { input[0], output[1], error[1] };
+      for(int i=0;i<3;i++)
+      {
+         if (stdFds[i] < 3)
+         {
+            #ifdef F_DUPFD_CLOEXEC
+            stdFds[i] = fcntl(stdFds[i], F_DUPFD_CLOEXEC, 3);
+            #else
+            stdFds[i] = fcntl(stdFds[i], F_DUPFD, 3);
+            if (stdFds[i] >= 0)
+               fcntl(stdFds[i], F_SETFD, FD_CLOEXEC);
+            #endif
+         }
+         if (stdFds[i] < 0)
+         {
+            int err = errno;
+            ssize_t unused = write(status[1], &err, sizeof(err));
+            (void)unused;
+            _exit(127);
+         }
+      }
+      for(int i=0;i<3;i++)
+         if (dup2(stdFds[i], i) < 0)
+         {
+            int err = errno;
+            ssize_t unused = write(status[1], &err, sizeof(err));
+            (void)unused;
+            _exit(127);
+         }
       // An ignored signal stays ignored across exec, so a host that ignores
       // SIGPIPE would pass that on, and a pipeline such as "cat big | head -1"
       // would get write errors instead of stopping quietly. Restore the

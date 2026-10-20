@@ -1,0 +1,3 @@
+parent fd 0 closed: got hello
+parent fd 1 closed: got hello
+parent fd 2 closed: got hello

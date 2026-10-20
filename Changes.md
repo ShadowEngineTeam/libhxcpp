@@ -289,6 +289,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed the first POSIX process launch replacing the host's SIGPIPE handler with SIG_IGN; SIGPIPE is blocked only in the thread writing to a child's stdin, for that write, which still throws EOF when the child has gone
 * Process pipe reads and writes of zero bytes return 0 at once, without touching the buffer or entering a GC-free zone
 * Fixed File.getContent and getBytes returning nothing for files that report a size of 0, such as Linux /proc files, and failing on unseekable inputs; they read to the end when the size is zero or unknown, and keep what was read when a file holds less than its size said
+* Fixed a POSIX child starting with its stdin, stdout or stderr closed when the parent had that descriptor closed: the pipe took the same number and kept close-on-exec through a dup2 onto itself
 
 ### Regular expressions, zlib and databases
 
