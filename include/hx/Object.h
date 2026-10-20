@@ -376,8 +376,10 @@ public:
       return mPtr->__compare(inRHS.mPtr);
    }
 
+   // Through Native's constructor from an ObjectPtr, which registers the
+   // offset of a @:nativeGen interface inside the object with the collector
    template<typename T>
-   operator hx::Native<T> () { return hx::Native<T>( mPtr ); }
+   operator hx::Native<T> () { return hx::Native<T>( *this ); }
 
    inline bool operator==(const null &inRHS) const { return mPtr==0; }
    inline bool operator!=(const null &inRHS) const { return mPtr!=0; }
