@@ -1619,36 +1619,28 @@ struct GlobalChunks
       processList = inChunk;
    }
 
-   void copyPointers( QuickVec<hx::Object *> &outPointers,bool andFree=false)
+   int markPointers(bool andFree)
    {
       int size{ 0 };
       for (MarkChunk* c{ processList }; c; c = c->next)
+      {
+         for(int i=0;i<c->count;i++)
+            ((unsigned char *)c->stack[i])[HX_ENDIAN_MARK_ID_BYTE] = gByteMarkID;
          size += c->count;
+      }
 
-      outPointers.setSize(size);
-      int idx = 0;
       if (andFree)
       {
          while(processList)
          {
             MarkChunk* c{ processList };
             processList = c->next;
-
-            for(int i=0;i<c->count;i++)
-               outPointers[idx++] = c->stack[i];
             c->count = 0;
             c->next = freeList;
             freeList = c;
          }
       }
-      else
-      {
-         for (MarkChunk* c{ processList }; c; c = c->next)
-         {
-            for(int i=0;i<c->count;i++)
-               outPointers[idx++] = c->stack[i];
-         }
-      }
+      return size;
    }
 
    int takeArrayJob(hx::Object **inPtr, int inLen)
@@ -5000,16 +4992,15 @@ public:
          }
       }
 
-      hx::QuickVec<hx::Object *> rememberedSet;
       generational = !inMajor && !inForceCompact && sGcMode == gcmGenerational;
       if (sGcMode==gcmGenerational)
       {
-         hx::sGlobalChunks.copyPointers(rememberedSet,!generational);
+         int remembered = hx::sGlobalChunks.markPointers(!generational);
          #ifdef SHOW_MEM_EVENTS
-         GCLOG("Patch remembered set marks %d\n", rememberedSet.size());
+         GCLOG("Patch remembered set marks %d\n", remembered);
+         #else
+         (void)remembered;
          #endif
-         for(int i=0;i<rememberedSet.size();i++)
-            ((unsigned char *)rememberedSet[i])[HX_ENDIAN_MARK_ID_BYTE] = gByteMarkID;
       }
       #endif
 
