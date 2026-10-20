@@ -2,6 +2,7 @@
 #include <hxMath.h>
 #include <hx/Memory.h>
 #include <hx/Thread.h>
+#include "FastMutex.h"
 
 #ifdef HX_WINDOWS
 #include <windows.h>
@@ -1013,7 +1014,7 @@ Dynamic __hxcpp_create_var_args(Dynamic &inArrayFunc)
 
 
 
-static std::mutex &sgFieldMapMutex = *new std::mutex();
+static hx::FastMutex &sgFieldMapMutex = *new hx::FastMutex();
 
 // Transparent comparator: lets find() take the raw char* without
 // constructing a std::string (a heap allocation) per lookup - val_id is
@@ -1047,7 +1048,7 @@ const String &__hxcpp_field_from_id( int f )
 
 int  __hxcpp_field_to_id( const char *inFieldName )
 {
-   std::lock_guard<std::mutex> lock(sgFieldMapMutex);
+   std::lock_guard<hx::FastMutex> lock(sgFieldMapMutex);
 
    if (!sgFieldToStringAlloc)
    {
