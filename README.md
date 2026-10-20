@@ -12,6 +12,15 @@ libhxcpp is the runtime for the C++ target of the [Haxe](https://haxe.org/) comp
 - **Broad CI.** Every change runs the test suites on Windows (32 and 64-bit), macOS (x86_64 and Arm64) and Linux (32 and 64-bit) with Haxe 4.3.7, runs the GC tests with big blocks, compiles the GC under 32 define configurations at both block sizes, and checks installing with haxelib. The same suites run against the Haxe nightly build once a day.
 - **Open development.** Issues and pull requests are welcome.
 
+## Performance
+
+The benchmark suite in [bench](bench) builds the same Haxe sources twice, once against libhxcpp and once against stock hxcpp 4.3.53 (the release Lime's CI builds with), with the same Haxe, C++ compiler and flags, and runs them one benchmark per process. The latest results:
+
+<!-- bench:start -->
+<!-- bench:end -->
+
+These numbers are from one Windows machine; Linux and macOS results are still to come. Where libhxcpp is still slower than stock hxcpp, that is a bug we are working on, and the [6.0.0 checklist](https://github.com/openfl/libhxcpp/issues/192) tracks it.
+
 ## Installing
 
 libhxcpp is a haxelib of its own, `libhxcpp`, that stands in for hxcpp. Install it, then run its setup once:
