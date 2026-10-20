@@ -75,6 +75,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Sped up successful dynamic field reads through FieldMapGet (cppia script class fields, toString lookups) about 1.7x by looking the name up once instead of twice: 2M reads 36 ms to 21 ms on Windows
 * Sped up growing the heap again after it was released: a new GC block takes a freed id from a list instead of searching the block table from the start, which was quadratic in the number of freed blocks (refilling 1 GB after Gc.compact: 753 ms to 643 ms)
 * Sped up releasing GC block groups: released blocks leave the address-ordered block list in one pass instead of one erase each, which was quadratic while threads are stopped (Gc.compact of 1 GB: 112 ms to 83 ms)
+* Shortened the large-allocation lock: a recycled large buffer is cleared after the lock is released, as a fresh one is, instead of stalling other threads' large allocations for the whole clear (4 threads allocating 12000 zeroed 1 MB buffers: about 15% faster)
 
 ### Garbage collector
 

@@ -3391,7 +3391,10 @@ public:
                break;
             }
          }
-         if (do_lock && !result)
+         // A recycled buffer is out of the shared list now, so it is cleared
+         // below without the lock, as a fresh one is; there is no safe point
+         // before it is published, so no collection can miss it
+         if (do_lock)
          {
             mLargeListLock.unlock();
             isLocked = false;
