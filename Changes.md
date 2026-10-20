@@ -79,6 +79,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed reserving room in an empty hash table allocating 2 buckets whatever the size asked for, so converting a map's value storage rehashed it over a dozen times; converting 300k IntMap entries is about 15% faster
 * Std.parseInt no longer measures the whole string to look for a hex prefix
 * Sped up toUpperCase and toLowerCase: a string with nothing to change comes back as it is, and one that changes is copied once from its first changed character (10000 unchanged 4 KB conversions: about 90 ms to 16 ms); substr and substring of a whole string return it without a copy
+* Bounded String.indexOf on repetitive text: when first-character candidates keep matching the start of a long needle it switches to Two-Way search, linear in the text (a 16 KB needle in 1 MB of the same character: 253 ms to under 1 ms); ordinary searches keep the memchr path
 
 ### Garbage collector
 

@@ -1567,6 +1567,104 @@ String String::createPermanent(const char *inUtf8, int length)
 
 
 
+// Two-Way search (Crochemore and Perrin): linear in the text whatever the
+// needle, for when first-unit candidates keep matching a long needle's start
+template<typename T>
+static int TMaxSuffix(const T *x, int m, int &outPeriod, bool inReverse)
+{
+   int ms = -1, j = 0, k = 1;
+   outPeriod = 1;
+   while(j + k < m)
+   {
+      T a = x[j + k];
+      T b = x[ms + k];
+      if (inReverse ? a > b : a < b)
+      {
+         j += k;
+         k = 1;
+         outPeriod = j - ms;
+      }
+      else if (a == b)
+      {
+         if (k != outPeriod)
+            k++;
+         else
+         {
+            j += outPeriod;
+            k = 1;
+         }
+      }
+      else
+      {
+         ms = j;
+         j = ms + 1;
+         k = outPeriod = 1;
+      }
+   }
+   return ms;
+}
+
+template<typename T>
+static int TTwoWayIndexOf(int s, const T *str, int strLen, const T *x, int m)
+{
+   const T *y = str + s;
+   int n = strLen - s;
+   int p, q;
+   int i = TMaxSuffix(x, m, p, false);
+   int j = TMaxSuffix(x, m, q, true);
+   int ell = i > j ? i : j;
+   int per = i > j ? p : q;
+
+   if (!memcmp(x, x + per, (ell + 1)*sizeof(T)))
+   {
+      int pos = 0, memory = -1;
+      while(pos <= n - m)
+      {
+         i = (ell > memory ? ell : memory) + 1;
+         while(i < m && x[i] == y[i + pos])
+            i++;
+         if (i >= m)
+         {
+            i = ell;
+            while(i > memory && x[i] == y[i + pos])
+               i--;
+            if (i <= memory)
+               return s + pos;
+            pos += per;
+            memory = m - per - 1;
+         }
+         else
+         {
+            pos += i - ell;
+            memory = -1;
+         }
+      }
+   }
+   else
+   {
+      per = (ell + 1 > m - ell - 1 ? ell + 1 : m - ell - 1) + 1;
+      int pos = 0;
+      while(pos <= n - m)
+      {
+         i = ell + 1;
+         while(i < m && x[i] == y[i + pos])
+            i++;
+         if (i >= m)
+         {
+            i = ell;
+            while(i >= 0 && x[i] == y[i + pos])
+               i--;
+            if (i < 0)
+               return s + pos;
+            pos += per;
+         }
+         else
+            pos += i - ell;
+      }
+   }
+   return -1;
+}
+
 template<typename T>
 static int TIndexOf(int s, const T *str, int strLen, const T *sought, int soughtLen)
 {
@@ -1595,6 +1693,8 @@ static int TIndexOf(int s, const T *str, int strLen, const T *sought, int sought
       {
          T first = *sought;
          int last = strLen - soughtLen;
+         int start = s;
+         long long compared = 0;
          while(s<=last)
          {
             const T *cand = (const T *)memchr(str+s, (unsigned char)first, last+1-s);
@@ -1603,6 +1703,11 @@ static int TIndexOf(int s, const T *str, int strLen, const T *sought, int sought
             s = (int)(cand-str);
             if (!memcmp(str+s, sought, soughtLen))
                return s;
+            // Candidates that keep matching the start cost a whole compare
+            // each: past twice the text scanned, finish in linear time
+            compared += soughtLen;
+            if (soughtLen>=32 && compared > 2LL*(s-start) + 4096)
+               return TTwoWayIndexOf(s, str, strLen, sought, soughtLen);
             s++;
          }
          return -1;
@@ -1610,6 +1715,8 @@ static int TIndexOf(int s, const T *str, int strLen, const T *sought, int sought
       // Skip to first-unit candidates before paying for the full compare
       T first = *sought;
       int last = strLen - soughtLen;
+      int start = s;
+      long long compared = 0;
       while(s<=last)
       {
          while(s<=last && str[s]!=first)
@@ -1618,6 +1725,9 @@ static int TIndexOf(int s, const T *str, int strLen, const T *sought, int sought
             break;
          if (!memcmp(str + s,sought,soughtLen*sizeof(T)))
             return s;
+         compared += soughtLen;
+         if (soughtLen>=32 && compared > 2LL*(s-start) + 4096)
+            return TTwoWayIndexOf(s, str, strLen, sought, soughtLen);
          s++;
       }
    }
