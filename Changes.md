@@ -246,6 +246,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed formatting a host address on macOS and the BSDs returning "[inet_ntoa error]" when several threads did it at once; it now uses inet_ntop into a buffer of its own
 * Added mbedTLS providers: in a static build, a library that bundles mbedTLS (Lime 8.4.0 does) can set hxcpp_mbedtls_provider to a file describing its copy, and sys.ssl is built on that copy instead of libhxcpp's own, so the app links one mbedTLS. docs/MbedTLSProvider.md describes it
 * Fixed a socket dropped without close keeping its descriptor open for the life of the process; a collected socket closes it. Close sockets explicitly for timely release
+* Fixed a positive socket timeout under a microsecond turning into no timeout on POSIX; it rounds up to one microsecond, as Windows already rounded sub-millisecond timeouts up
 
 ### Files, processes and the system
 

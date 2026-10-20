@@ -1145,6 +1145,9 @@ void _hx_std_socket_set_timeout( Dynamic o, Dynamic t )
    struct timeval time;
    time.tv_usec = (int)( (seconds - (int)seconds) * 1000000 );
    time.tv_sec = (int)seconds;
+   // Sub-microsecond must not round to 0 = block forever
+   if( seconds > 0 && time.tv_sec == 0 && time.tv_usec == 0 )
+      time.tv_usec = 1;
 #endif
 
    hx::EnterGCFreeZone();
