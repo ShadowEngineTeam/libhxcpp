@@ -21,47 +21,47 @@ The benchmark suite in [bench](bench) builds the same Haxe sources twice, once a
 
 | Benchmark | Unit | libhxcpp | hxcpp 4.3.53 | libhxcpp vs stock |
 | --- | --- | ---: | ---: | ---: |
-| alloc_small | objects/s | 583M ±1.1% | 594M ±0.6% | ~0.98x |
-| alloc_strings | strings/s | 52M ±0.3% | 23.6M ±0.2% | 2.2x |
-| alloc_arrays | arrays/s | 20.3M ±1% | 20.5M ±0.6% | ~0.99x |
-| gc_pauses | objects/s | 89.8M ±2.6% | 59.6M ±1.1% | 1.51x |
-| map_int | map operations/s | 62.6M ±0.6% | 124M ±0.6% | 0.5x |
-| map_string | map operations/s | 30.4M ±2.8% | 22.7M ±2.1% | 1.34x |
-| map_object | map operations/s | 8.3M ±3.4% | 9.7M ±4.8% | 0.86x |
-| string_build | appends/s | 65M ±2% | 40.9M ±1.8% | 1.59x |
-| string_index | indexOf calls/s | 2M ±1.5% | 213k ±0.6% | 9.51x |
-| string_substr | substr calls/s | 84.4M ±0.5% | 83.6M ±0.4% | ~1.01x |
-| string_split | split calls/s | 29.6k ±0.5% | 22.5k ±0.4% | 1.32x |
-| string_case | case conversions/s | 29.2M ±0.2% | 1.5M ±0.3% | 19.36x |
-| sort_int | elements/s | 3.9M ±4.2% | 3.1M ±0.8% | 1.25x |
-| sort_string | elements/s | 1.2M ±3.5% | 1.1M ±3% | ~1.06x |
-| sort_object | elements/s | 4.3M ±1.2% | 4.1M ±1% | 1.05x |
+| alloc_small | objects/s | 590M ±1% | 596M ±0.4% | ~0.99x |
+| alloc_strings | strings/s | 49.3M ±0.3% | 23.7M ±0.3% | 2.09x |
+| alloc_arrays | arrays/s | 20.8M ±0.5% | 20.5M ±0.8% | ~1.01x |
+| gc_pauses | objects/s | 87.6M ±3% | 59.3M ±1.4% | 1.48x |
+| map_int | map operations/s | 128M ±1% | 123M ±0.8% | 1.04x |
+| map_string | map operations/s | 30.2M ±2.7% | 21.8M ±3.2% | 1.38x |
+| map_object | map operations/s | 8.2M ±1.9% | 9.1M ±5.8% | ~0.91x |
+| string_build | appends/s | 65.1M ±1.4% | 41.1M ±2.9% | 1.59x |
+| string_index | indexOf calls/s | 1.9M ±1.2% | 212k ±0.8% | 9.03x |
+| string_substr | substr calls/s | 85.8M ±0.4% | 83.9M ±0.3% | 1.02x |
+| string_split | split calls/s | 29.7k ±0.7% | 22.9k ±0.3% | 1.3x |
+| string_case | case conversions/s | 29.2M ±0.3% | 1.5M ±0.2% | 19.36x |
+| sort_int | elements/s | 4.1M ±1.9% | 3.2M ±0.7% | 1.29x |
+| sort_string | elements/s | 1.3M ±1.8% | 1.2M ±2.6% | 1.15x |
+| sort_object | elements/s | 4.4M ±0.2% | 4.1M ±0.3% | 1.05x |
 
 **Collection pauses and memory** (lower is better)
 
 | Metric | Benchmark | libhxcpp | hxcpp 4.3.53 | stock / libhxcpp |
 | --- | --- | ---: | ---: | ---: |
-| Startup and exit | noop | 3.8 ms | 3.3 ms | 0.86x |
-| Work unit time, p99 | gc_pauses | 55.5 us | 68.4 us | 1.23x |
-| Work unit time, p99.9 | gc_pauses | 4.7 ms | 11.8 ms | 2.48x |
-| Work unit time, max | gc_pauses | 6.2 ms | 14.6 ms | 2.35x |
-| Peak memory | alloc_small | 26.3 MB | 24.9 MB | 0.95x |
+| Startup and exit | noop | 4.1 ms | 3.5 ms | 0.87x |
+| Work unit time, p99 | gc_pauses | 56.9 us | 70.1 us | 1.23x |
+| Work unit time, p99.9 | gc_pauses | 4.8 ms | 11.8 ms | 2.48x |
+| Work unit time, max | gc_pauses | 6.6 ms | 14.2 ms | 2.15x |
+| Peak memory | alloc_small | 26.3 MB | 24.9 MB | 0.94x |
 | Peak memory | alloc_strings | 26.3 MB | 24.8 MB | 0.94x |
 | Peak memory | alloc_arrays | 29.5 MB | 28.3 MB | 0.96x |
-| Peak memory | gc_pauses | 137 MB | 131 MB | 0.95x |
-| Peak memory | map_int | 32.4 MB | 30.6 MB | 0.95x |
+| Peak memory | gc_pauses | 136 MB | 131 MB | 0.96x |
+| Peak memory | map_int | 32.2 MB | 30.6 MB | 0.95x |
 | Peak memory | map_string | 134 MB | 110 MB | 0.82x |
-| Peak memory | map_object | 73 MB | 68.7 MB | 0.94x |
+| Peak memory | map_object | 72.9 MB | 68.7 MB | 0.94x |
 | Peak memory | string_build | 30.7 MB | 228 MB | 7.43x |
 | Peak memory | string_index | 10.9 MB | 8.4 MB | 0.78x |
-| Peak memory | string_substr | 26.3 MB | 24.9 MB | 0.95x |
+| Peak memory | string_substr | 26.3 MB | 24.9 MB | 0.94x |
 | Peak memory | string_split | 70 MB | 72.4 MB | 1.03x |
 | Peak memory | string_case | 26.3 MB | 24.9 MB | 0.95x |
-| Peak memory | sort_int | 33 MB | 27.7 MB | 0.84x |
+| Peak memory | sort_int | 32.7 MB | 27.7 MB | 0.85x |
 | Peak memory | sort_string | 38.9 MB | 30.3 MB | 0.78x |
-| Peak memory | sort_object | 29.3 MB | 27.9 MB | 0.95x |
+| Peak memory | sort_object | 29.4 MB | 27.9 MB | 0.95x |
 
-Windows, AMD Ryzen 9 9950X 16-Core Processor; MSVC 194435213, 64-bit; Haxe 4.3.7; libhxcpp 3a4895ca; 3 processes x 10 samples per benchmark; 2026-10-20 00:57:56.
+Windows, AMD Ryzen 9 9950X 16-Core Processor; MSVC 194435213, 64-bit; Haxe 4.3.7; libhxcpp b2456986; 3 processes x 10 samples per benchmark; 2026-10-20 01:21:37.
 Reproduce with `cd bench && haxe --run Run`. Ratios above 1 favour libhxcpp; "~" marks a difference within the run-to-run spread.
 <!-- bench:end -->
 
