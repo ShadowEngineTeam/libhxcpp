@@ -95,12 +95,14 @@ void __hxcpp_collect(bool inMajor)
 }
 
 
+namespace hx { size_t InternalCompactBytes(); }
+
 void __hxcpp_gc_compact()
 {
-   size_t mem = hx::InternalCollectBytes(true,true);
+   size_t mem = hx::InternalCompactBytes();
    while(true)
    {
-      size_t compact = hx::InternalCollectBytes(true,true);
+      size_t compact = hx::InternalCompactBytes();
       if (compact+16384>=mem)
          break;
       mem = compact;

@@ -446,6 +446,13 @@ static void ReleaseFromSafe(LocalAllocator *inAlloc);
 static void ClearPooledAlloc(LocalAllocator *inAlloc);
 static void CollectFromThisThread(bool inMajor,bool inForceCompact);
 
+// Non-zero while Gc.compact() is collecting. Only then are all empty groups given
+// back to the system. Gc.run(true) asks for the same major+compact collection, but
+// callers use it to collect, not to shrink: releasing there meant the next work had
+// to commit and fault the whole heap back in (#231, #233). Stock hxcpp releases
+// nothing on either call in the non-moving build.
+static std::atomic_int sReleaseAllRequests{0};
+
 namespace hx
 {
 std::atomic_uint gPauseForCollect{ 0x00000000 };
@@ -5298,12 +5305,14 @@ public:
          size_t targetMem = std::max( mem + targetFree, hx::sgMinimumWorkingMemory) +
                                (2<<(IMMIX_BLOCK_GROUP_BITS+IMMIX_BLOCK_BITS));
          size_t allowExtra = std::max(size_t{ 8 } * 1024 * 1024, targetMem / 4);
-         // Only an explicit Gc.compact/Gc.run(true) (major + compact) gives everything
-         // back. The allocator also forces a compacting collection when mFreeBlocks has
-         // no room for another group (it can't realloc while other threads read it);
-         // releasing then threw away the groups it was about to reuse, so the heap
-         // never grew past one free-list reserve and collected ~4x as often (#230).
-         if (inForceCompact && inMajor)
+         // Only an explicit Gc.compact() gives everything back. Gc.run(true) passes the
+         // same major+compact flags, but keeps the normal target so the heap it just
+         // grew stays committed (#231, #233). The allocator also forces a compacting
+         // collection when mFreeBlocks has no room for another group (it can't realloc
+         // while other threads read it); releasing then threw away the groups it was
+         // about to reuse, so the heap never grew past one free-list reserve and
+         // collected ~4x as often (#230).
+         if (inForceCompact && inMajor && sReleaseAllRequests.load() > 0)
          {
             targetMem = 0;
             allowExtra = 0;
@@ -6841,6 +6850,15 @@ size_t InternalCollectBytes(bool inMajor,bool inCompact)
 int InternalCollect(bool inMajor,bool inCompact)
 {
    return (int)std::min(InternalCollectBytes(inMajor, inCompact), (size_t)0x7fffffff);
+}
+
+// Gc.compact(): a major compacting collection that also returns every empty group.
+size_t InternalCompactBytes()
+{
+   sReleaseAllRequests++;
+   size_t result = InternalCollectBytes(true, true);
+   sReleaseAllRequests--;
+   return result;
 }
 
 inline unsigned int ObjectSize(void *inData)
