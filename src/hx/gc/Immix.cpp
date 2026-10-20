@@ -4106,29 +4106,32 @@ public:
          }
       }
 
-      // Release blocks
-      for(int i=0; i<mAllBlocks.size();  )
+      // Release blocks, keeping the survivors in address order in one pass:
+      // erasing each one moved the rest of the list every time
+      int kept = 0;
+      for(int i=0; i<mAllBlocks.size(); i++)
       {
-         if (!gAllocGroups[mAllBlocks[i]->mGroupId].alloc)
+         BlockDataInfo *info = mAllBlocks[i];
+         if (!gAllocGroups[info->mGroupId].alloc)
          {
             outStats.emptyBlocks--;
             released++;
-            mAllBlocks[i]->destroy();
-            mAllBlocks.erase(i);
+            info->destroy();
          }
          else
          {
             #ifdef HXCPP_GC_VERIFY
             for(int g=0;g<releasedGids.size();g++)
-               if (mAllBlocks[i]->mGroupId == releasedGids[g])
+               if (info->mGroupId == releasedGids[g])
                {
-                  printf("Group %d should be released.\n", mAllBlocks[i]->mGroupId);
+                  printf("Group %d should be released.\n", info->mGroupId);
                   DebuggerTrap();
                }
             #endif
-            i++;
+            mAllBlocks[kept++] = info;
          }
       }
+      mAllBlocks.setSize(kept);
 
       #ifdef HXCPP_GC_VERIFY
       for(int i=0;i<mAllBlocks.size();i++)
