@@ -20,6 +20,7 @@ libhxcpp 6.0.0 (unreleased)
 * The build tool stops with a clear error when a file group lists files whose names differ only in case, such as the Texpr.cpp and TExpr.cpp that classes Texpr and TExpr generate: on Windows and macOS they are one file and one object file, and the build failed with unrelated errors (libhxcpp #70). Rename one of the classes
 * Fixed the heap not growing to its working target without the moving collector: when the allocator filled its free list it forced a compacting collection, and that released every empty block group, so the heap stayed near 5 MB and collected about four times as often as hxcpp 4.3 (3x slower small allocations). Only Gc.compact now gives all empty groups back (libhxcpp #230)
 * Fixed Gc.run(true) giving the whole heap back to the system like Gc.compact, so the next work had to commit and fault it in again; map lookups and iteration after a major collection were up to 2x slower than hxcpp 4.3. Gc.run(true) now keeps memory up to the normal working target, as in hxcpp 4.3, and only Gc.compact releases every empty group (libhxcpp #231, #233)
+* Fixed maps shrinking their bucket array as soon as they fell to half full, so a map that lost and regained keys around that size shrank and grew again on every swing; removing 100,000 of 200,000 Int keys took 1.9 ms against hxcpp 4.3's 0.26 ms. A map now shrinks once it is a quarter full, and removing those keys takes 0.9 ms (libhxcpp #225)
 
 libhxcpp 6.0.0-rc.1
 ------------------------------------------------------------

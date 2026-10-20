@@ -532,7 +532,11 @@ struct Hash : public HashBase< typename ELEMENT::Key >
          {
             *head = el.next;
             size--;
-            if (bucketCount>8 && size < (bucketCount>>1) )
+            // Shrink only once a quarter full. Growth doubles (or quadruples)
+            // past size == bucketCount, so shrinking at half full meant a map
+            // just past a growth step shrank after a few removes and grew again
+            // when keys came back (#225). After compact() the load is <= 0.5.
+            if (bucketCount>8 && size < (bucketCount>>2) )
                compact();
             return true;
          }
