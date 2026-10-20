@@ -185,6 +185,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed haxe.Utf8 keeping only the low 16 bits of characters above U+FFFF, and writing invalid code points as they were; they become U+FFFD. Without smart strings it also read past the requested range
 * Fixed toUpperCase and toLowerCase on a non-ASCII string returning a string that did not equal the same ASCII text: "\u0131".toUpperCase() == "I" was false, so map lookups and switches on it missed
 * Fixed substr and substring replacing half of a split surrogate pair with U+FFFD, so s.substr(0, 2) + s.substr(2) did not give back s; the halves are kept, as JavaScript keeps them, and still encode to UTF-8 as U+FFFD
+* Fixed Reflect.hasField returning false for every field of a fixed anonymous object (@:fixed, up to 5 fields) that Reflect.field and Reflect.fields found
 
 ### Arrays and Bytes
 

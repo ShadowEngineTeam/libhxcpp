@@ -199,6 +199,11 @@ public:
        outFields->push(name0);
     }
 
+   bool __HasField(const String &inField) HXCPP_OVERRIDE
+   {
+      return inField.__s==name0.__s || inField.eq(name0);
+   }
+
    String toString() { return StringFromAnonFields(this); }
 };
 
@@ -289,6 +294,11 @@ public:
        outFields->push(name0);
        outFields->push(name1);
     }
+
+   bool __HasField(const String &inField) HXCPP_OVERRIDE
+   {
+      return inField.__s==name0.__s || inField.eq(name0) || inField.__s==name1.__s || inField.eq(name1);
+   }
 
    String toString() HXCPP_OVERRIDE { return StringFromAnonFields(this); }
 
@@ -406,6 +416,11 @@ public:
        outFields->push(name1);
        outFields->push(name2);
     }
+
+   bool __HasField(const String &inField) HXCPP_OVERRIDE
+   {
+      return inField.__s==name0.__s || inField.eq(name0) || inField.__s==name1.__s || inField.eq(name1) || inField.__s==name2.__s || inField.eq(name2);
+   }
 
    String toString() HXCPP_OVERRIDE { return StringFromAnonFields(this); }
 };
@@ -548,6 +563,11 @@ public:
        outFields->push(name2);
        outFields->push(name3);
     }
+
+   bool __HasField(const String &inField) HXCPP_OVERRIDE
+   {
+      return inField.__s==name0.__s || inField.eq(name0) || inField.__s==name1.__s || inField.eq(name1) || inField.__s==name2.__s || inField.eq(name2) || inField.__s==name3.__s || inField.eq(name3);
+   }
 
    String toString() { return StringFromAnonFields(this); }
 };
@@ -718,6 +738,11 @@ public:
        outFields->push(name3);
        outFields->push(name4);
     }
+
+   bool __HasField(const String &inField) HXCPP_OVERRIDE
+   {
+      return inField.__s==name0.__s || inField.eq(name0) || inField.__s==name1.__s || inField.eq(name1) || inField.__s==name2.__s || inField.eq(name2) || inField.__s==name3.__s || inField.eq(name3) || inField.__s==name4.__s || inField.eq(name4);
+   }
 
    String toString() { return StringFromAnonFields(this); }
 };
