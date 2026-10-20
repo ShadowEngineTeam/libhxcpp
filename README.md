@@ -17,6 +17,52 @@ libhxcpp is the runtime for the C++ target of the [Haxe](https://haxe.org/) comp
 The benchmark suite in [bench](bench) builds the same Haxe sources twice, once against libhxcpp and once against stock hxcpp 4.3.53 (the release Lime's CI builds with), with the same Haxe, C++ compiler and flags, and runs them one benchmark per process. The latest results:
 
 <!-- bench:start -->
+**Speed** (higher is better)
+
+| Benchmark | Unit | libhxcpp | hxcpp 4.3.53 | libhxcpp vs stock |
+| --- | --- | ---: | ---: | ---: |
+| alloc_small | objects/s | 534M ±1% | 594M ±0.3% | 0.9x |
+| alloc_strings | strings/s | 49.9M ±0.4% | 23.4M ±0.6% | 2.13x |
+| alloc_arrays | arrays/s | 19.1M ±1.1% | 20.2M ±1.5% | 0.94x |
+| gc_pauses | objects/s | 87.3M ±2.3% | 57.1M ±2.2% | 1.53x |
+| map_int | map operations/s | 54.8M ±1.2% | 124M ±0.7% | 0.44x |
+| map_string | map operations/s | 25.6M ±2.7% | 21.7M ±1.7% | 1.18x |
+| map_object | map operations/s | 7.3M ±2.2% | 9.2M ±2.8% | 0.8x |
+| string_build | appends/s | 59.6M ±0.5% | 40.9M ±1% | 1.46x |
+| string_index | indexOf calls/s | 2M ±1.7% | 212k ±0.8% | 9.34x |
+| string_substr | substr calls/s | 80.9M ±0.7% | 82.8M ±0.4% | 0.98x |
+| string_split | split calls/s | 27.2k ±0.4% | 22.7k ±0.4% | 1.2x |
+| string_case | case conversions/s | 28.1M ±0.4% | 1.5M ±0.7% | 18.75x |
+| sort_int | elements/s | 3.8M ±1.3% | 3.1M ±0.5% | 1.23x |
+| sort_string | elements/s | 1.3M ±1.9% | 1.2M ±1% | 1.1x |
+| sort_object | elements/s | 4.1M ±0.8% | 4.1M ±0.4% | 1.02x |
+
+**Collection pauses and memory** (lower is better)
+
+| Metric | Benchmark | libhxcpp | hxcpp 4.3.53 | stock / libhxcpp |
+| --- | --- | ---: | ---: | ---: |
+| Startup and exit | noop | 4 ms | 3.3 ms | 0.81x |
+| Work unit time, p99 | gc_pauses | 56.7 us | 73.8 us | 1.3x |
+| Work unit time, p99.9 | gc_pauses | 4.9 ms | 12.2 ms | 2.51x |
+| Work unit time, max | gc_pauses | 5.7 ms | 13.6 ms | 2.4x |
+| Peak memory | alloc_small | 26.5 MB | 24.9 MB | 0.94x |
+| Peak memory | alloc_strings | 26.5 MB | 24.8 MB | 0.94x |
+| Peak memory | alloc_arrays | 29.5 MB | 28.3 MB | 0.96x |
+| Peak memory | gc_pauses | 137 MB | 131 MB | 0.95x |
+| Peak memory | map_int | 33.4 MB | 30.6 MB | 0.92x |
+| Peak memory | map_string | 136 MB | 110 MB | 0.81x |
+| Peak memory | map_object | 73.9 MB | 68.7 MB | 0.93x |
+| Peak memory | string_build | 30.7 MB | 228 MB | 7.43x |
+| Peak memory | string_index | 10.9 MB | 8.4 MB | 0.78x |
+| Peak memory | string_substr | 26.3 MB | 24.9 MB | 0.95x |
+| Peak memory | string_split | 70 MB | 72.4 MB | 1.03x |
+| Peak memory | string_case | 26.3 MB | 24.9 MB | 0.95x |
+| Peak memory | sort_int | 33 MB | 27.7 MB | 0.84x |
+| Peak memory | sort_string | 38.9 MB | 30.3 MB | 0.78x |
+| Peak memory | sort_object | 29.4 MB | 27.9 MB | 0.95x |
+
+Windows, AMD Ryzen 9 9950X 16-Core Processor; MSVC 194435213, 64-bit; Haxe 4.3.7; libhxcpp 7dc9e0ee; 3 processes x 10 samples per benchmark; 2026-10-19 21:33:15.
+Reproduce with `cd bench && haxe --run Run`. Ratios above 1 favour libhxcpp; "~" marks a difference within the run-to-run spread.
 <!-- bench:end -->
 
 These numbers are from one Windows machine; Linux and macOS results are still to come. Where libhxcpp is still slower than stock hxcpp, that is a bug we are working on, and the [6.0.0 checklist](https://github.com/openfl/libhxcpp/issues/192) tracks it.

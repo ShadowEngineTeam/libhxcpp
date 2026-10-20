@@ -407,7 +407,7 @@ class Run {
 				lowerRow("Peak memory", r.name, [for (rt in runtimes) rt.name => r.byRuntime.get(rt.name).peakRss], mb);
 
 		var env = runtimes[0].env;
-		b.add('\n${report.host}; ${env.compiler}, ${env.pointerBits}-bit; ${report.haxe}; '
+		b.add('\n${report.host}; ${env.compiler}, ${env.pointerBits}-bit; Haxe ${report.haxe}; '
 			+ 'libhxcpp ${report.libhxcpp}; ${runs} processes x ${samples} samples per benchmark; ${report.date}.\n');
 		b.add("Reproduce with `cd bench && haxe --run Run`. Ratios above 1 favour libhxcpp; "
 			+ "\"~\" marks a difference within the run-to-run spread.\n");
