@@ -111,6 +111,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed Sys.exit destroying the GC's containers and locks while other threads could still allocate
 * Fixed a rare race where a thread starting while another thread collects could be handed rows that other threads are also given, so two live objects shared memory
 * Fixed the GC freeing an object that a thread paused for a collection, or in a GC-free zone, held only in a register, on 32-bit Windows: the pausing function had saved that register below the scanned stack. Every target now copies the pausing frame along with the registers, as Windows x64 already did
+* Fixed a weak map emptied by the GC keeping, and scanning on every collection, the bucket array of the size it had reached (2 MB after 100k keys); the array is dropped once the last key is collected
 
 ### Threads
 

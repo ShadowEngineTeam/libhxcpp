@@ -431,6 +431,15 @@ struct Hash : public HashBase< typename ELEMENT::Key >
                   headPtr = &el.next;
             }
          }
+         // Nothing left: let the bucket array go rather than keep, and scan,
+         // the size it reached. Only references change here, as nothing may
+         // be allocated during a collection; the next set allocates again
+         if (size==0 && bucket)
+         {
+            bucket = 0;
+            bucketCount = 0;
+            mask = 0;
+         }
       }
    }
 
