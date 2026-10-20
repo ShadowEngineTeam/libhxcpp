@@ -19,6 +19,19 @@ class TestGC extends Test {
 		return Gc.getNextZombie();
 	}
 
+	function gcAfter(job:Void->Void):Dynamic {
+		sys.thread.Thread.create(job);
+		var deadline = haxe.Timer.stamp() + 10;
+		while (haxe.Timer.stamp() < deadline) {
+			var zombie = gc();
+			if (zombie != null)
+				return zombie;
+			Sys.sleep(0.01);
+		}
+		Assert.fail("no zombie within 10s of starting the thread");
+		return null;
+	}
+
 	/**
 		For avoiding the simple call being optimized in some way.
 	*/
@@ -37,16 +50,14 @@ class TestGC extends Test {
    // NOTE : previously the objects below were created in the same thread as the assertions and the clear
    // stack function above attempted to remove references to it so it was eligable for collection.
    // With the callable changes it seems clang can do some more aggressive optimisations which broke these tests,
-   // so now the objects are created on a separate thread and we sleep for 1s to give time for the threads to exit and unregister from the GC.
+   // so now the objects are created on a separate thread and we collect until the zombie appears, once the thread has exited and unregistered from the GC.
 
 	function createAbc():Void {
 		var object = { test: "abc" };
 		Gc.doNotKill(object);
 	}
 	public function testObject():Void {
-		sys.thread.Thread.create(createAbc);
-		Sys.sleep(1);
-		var zombie:Dynamic = gc();
+		var zombie:Dynamic = gcAfter(createAbc);
 		Assert.notNull(zombie);
 		Assert.equals("abc", zombie.test);
 		Assert.isNull(gc());
@@ -73,9 +84,7 @@ class TestGC extends Test {
 		Gc.doNotKill(object);
 	};
 	public function testFunc():Void {
-		sys.thread.Thread.create(createFunction);
-		Sys.sleep(1);
-		var zombie:Dynamic = gc();
+		var zombie:Dynamic = gcAfter(createFunction);
 		Assert.notNull(zombie);
 		Assert.equals("abc", zombie());
 		Assert.isNull(gc());
@@ -86,9 +95,7 @@ class TestGC extends Test {
 		Gc.doNotKill(object);
 	};
 	public function testCustomObject():Void {
-		sys.thread.Thread.create(createCustom);
-		Sys.sleep(1);
-		var zombie = gc();
+		var zombie = gcAfter(createCustom);
 		Assert.notNull(zombie);
 		Assert.isOfType(zombie, CustomObject);
 		Assert.isNull(gc());
@@ -99,9 +106,7 @@ class TestGC extends Test {
 		Gc.doNotKill(object);
 	};
 	public function testBytes():Void {
-		sys.thread.Thread.create(createBytes);
-		Sys.sleep(1);
-		var zombie = gc();
+		var zombie = gcAfter(createBytes);
 		Assert.notNull(zombie);
 		Assert.isOfType(zombie, Bytes);
 		Assert.isNull(gc());
