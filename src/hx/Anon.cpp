@@ -312,7 +312,8 @@ Anon_obj *Anon_obj::Add(const String &inName,const Dynamic &inValue,bool inSetTh
    return this;
 }
 
-static int _hx_toString_depth = 0;
+// Per thread: formatting on another thread is not recursion
+static thread_local int _hx_toString_depth = 0;
 String Anon_obj::toString()
 {
    if (!mFields.mPtr && !mFixedFields)
