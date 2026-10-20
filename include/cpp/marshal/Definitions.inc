@@ -8,7 +8,7 @@ namespace cpp
     {
         /// <summary>
         /// Templated class to hold a non GC object on the heap.
-        /// If T has a destructor a finaliser is added so it is called when this object is collected.
+        /// If T has a non trivial destructor a finaliser is added so it is called when this object is collected.
         /// </summary>
         template<class T>
         class Boxed_obj final : public ::hx::Object
