@@ -1,5 +1,8 @@
 #include <hxcpp.h>
 #undef RegisterClass
+
+bool __string_hash_query(Dynamic &ioHash,const String &inKey,Dynamic &outValue);
+
 namespace hx
 {
 
@@ -10,10 +13,7 @@ bool FieldMapGet(FieldMap *inMap, const String &inName, Dynamic &outValue)
    if (!inMap || !inMap->mPtr)
       return false;
 
-   if (!__string_hash_exists(*inMap,inName))
-      return false;
-   outValue = __string_hash_get(*inMap, inName);
-   return true;
+   return __string_hash_query(*inMap,inName,outValue);
 }
 
 
@@ -22,11 +22,7 @@ bool FieldMapGet(FieldMap *inMap, int inId, Dynamic &outValue)
    if (!inMap || !inMap->mPtr)
       return false;
 
-   const String &key = __hxcpp_field_from_id(inId);
-   if (!__string_hash_exists(*inMap,key))
-      return false;
-   outValue = __string_hash_get(*inMap, key);
-   return true;
+   return __string_hash_query(*inMap,__hxcpp_field_from_id(inId),outValue);
 }
 
 

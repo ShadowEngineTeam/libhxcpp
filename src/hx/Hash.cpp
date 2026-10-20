@@ -855,6 +855,15 @@ cpp::Int64 __string_hash_get_int64(Dynamic inHash,String inKey)
    return result;
 }
 
+// Presence and value in one lookup; outValue is left alone when absent
+bool  __string_hash_query(Dynamic &ioHash,const String &inKey,Dynamic &outValue)
+{
+   StringHashBase *hash = static_cast<StringHashBase *>(ioHash.GetPtr());
+   if (!hash)
+      return false;
+   return hash->query(inKey,outValue);
+}
+
 bool  __string_hash_exists(Dynamic &ioHash,String inKey)
 {
    StringHashBase *hash = static_cast<StringHashBase *>(ioHash.GetPtr());
