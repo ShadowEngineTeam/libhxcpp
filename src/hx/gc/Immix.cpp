@@ -4687,6 +4687,9 @@ public:
    double tMarked;
    void MarkAll(bool inGenerational)
    {
+      mLargeIndexReady = false;
+      mLargeLookups = 0;
+
       if (!inGenerational)
       {
          hx::gPrevByteMarkID = hx::gByteMarkID;
@@ -5164,6 +5167,9 @@ public:
 
       int idx = 0;
       int l0 = mLargeList.size();
+      // Bounds of the survivors, so a past burst does not keep them wide
+      size_t largeMin = (size_t)-1;
+      size_t largeMax = 0;
       while(idx<mLargeList.size())
       {
          unsigned int *blob = mLargeList[idx];
@@ -5184,8 +5190,17 @@ public:
             mLargeList.qerase(idx);
          }
          else
+         {
+            size_t objPtr = (size_t)(blob+2);
+            if (objPtr < largeMin)
+               largeMin = objPtr;
+            if (objPtr > largeMax)
+               largeMax = objPtr;
             idx++;
+         }
       }
+      mLargeMin = largeMin;
+      mLargeMax = largeMax;
       mRecycleSize.store((int)largeObjectRecycle.size(), std::memory_order_relaxed);
 
       int l1 = mLargeList.size();
@@ -5666,6 +5681,20 @@ public:
       if (p < mLargeMin || p > mLargeMax)
          return memUnmanaged;
 
+      // Only the collector looks up while marking, with the list fixed, so once
+      // a collection has seen several candidates in range it sorts the bases
+      // and searches them instead of scanning the list for each
+      if (!mLargeIndexReady && mLargeList.size()>64 && ++mLargeLookups>8)
+      {
+         uintptr_t *index = mLargeIndex.setSize(mLargeList.size());
+         for(int i=0;i<mLargeList.size();i++)
+            index[i] = reinterpret_cast<uintptr_t>(mLargeList[i] + 2);
+         std::sort(index, index + mLargeList.size());
+         mLargeIndexReady = true;
+      }
+      if (mLargeIndexReady)
+         return std::binary_search(&mLargeIndex[0], &mLargeIndex[0] + mLargeIndex.size(), inPtr) ? memLarge : memUnmanaged;
+
       for(int i=0;i<mLargeList.size();i++)
       {
          uintptr_t blob{ reinterpret_cast<uintptr_t>(mLargeList[i] + 2) };
@@ -5685,6 +5714,9 @@ public:
    std::atomic_size_t mLargeAllocated;
    size_t mLargeMin;
    size_t mLargeMax;
+   hx::QuickVec<uintptr_t> mLargeIndex;
+   bool mLargeIndexReady = false;
+   int mLargeLookups = 0;
    size_t mTotalAfterLastCollect;
    size_t mAllBlocksCount;
    double mGenerationalRetainEstimate;

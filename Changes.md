@@ -87,6 +87,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Bounded String.indexOf on repetitive text: when first-character candidates keep matching the start of a long needle it switches to Two-Way search, linear in the text (a 16 KB needle in 1 MB of the same character: 253 ms to under 1 ms); ordinary searches keep the memchr path
 * Generational collections set the remembered set's marks straight from its chunks instead of first copying every pointer into a temporary array
 * Array<String>.sort boxes each String once instead of boxing both arguments on every comparison
+* Conservative stack scanning no longer scans the whole large-object list for every stack word in its address range: after several such words in a collection it searches a sorted index, and the range shrinks back when large objects are freed. With 40000 large buffers, a collection with native frames on the stack fell from 2.4-4.6 ms to 0.8 ms
 
 ### Garbage collector
 
