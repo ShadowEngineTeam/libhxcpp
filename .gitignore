@@ -449,3 +449,6 @@ FodyWeavers.xsd
 
 # hxcpp compile cache used by CI
 /.hxcpp-cache/
+
+# Benchmark builds and per-runtime haxelib repositories
+/bench/.work/
