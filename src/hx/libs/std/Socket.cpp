@@ -80,6 +80,25 @@ struct SocketWrapper : public hx::Object
    SOCKET socket;
 
    int __GetType() const HXCPP_OVERRIDE { return socketType; }
+
+   // A socket that is dropped without close still releases its descriptor
+   static void finalize(Dynamic inObj)
+   {
+      SocketWrapper *wrap = (SocketWrapper *)inObj.mPtr;
+      if (wrap->socket != INVALID_SOCKET)
+      {
+         closesocket(wrap->socket);
+         wrap->socket = INVALID_SOCKET;
+      }
+   }
+
+   static SocketWrapper *create(SOCKET inSocket)
+   {
+      SocketWrapper *wrap = new SocketWrapper();
+      wrap->socket = inSocket;
+      _hx_set_finalizer(wrap, finalize);
+      return wrap;
+   }
 };
 
 
@@ -234,9 +253,7 @@ Dynamic _hx_std_socket_new( bool udp, bool ipv6 )
       if( old >= 0 ) fcntl(s,F_SETFD,old|FD_CLOEXEC);
    #endif
 
-   SocketWrapper *wrap = new SocketWrapper();
-   wrap->socket = s;
-   return wrap;
+   return SocketWrapper::create(s);
 }
 
 /**
@@ -1047,9 +1064,7 @@ Dynamic _hx_std_socket_accept( Dynamic o )
    #endif
    hx::ExitGCFreeZone();
 
-   SocketWrapper *wrap = new SocketWrapper();
-   wrap->socket = s;
-   return wrap;
+   return SocketWrapper::create(s);
 }
 
 /**

@@ -1,0 +1,2 @@
+explicit close growth: 0
+collected sockets closed: true
