@@ -231,6 +231,8 @@ class HXCPP_EXTERN_CLASS_ATTRIBUTES AutoGCFreeZone
 public:
 	AutoGCFreeZone() : locked(true) { EnterGCFreeZone(); }
 	~AutoGCFreeZone() { if (locked) ExitGCFreeZone(); }
+	AutoGCFreeZone(const AutoGCFreeZone &) = delete;
+	AutoGCFreeZone &operator=(const AutoGCFreeZone &) = delete;
 
 	void close() { if (locked) ExitGCFreeZone(); locked = false; }
 

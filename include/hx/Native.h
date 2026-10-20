@@ -159,6 +159,8 @@ namespace hx
          {
             detach();
          }
+         NativeAttach(const NativeAttach &) = delete;
+         NativeAttach &operator=(const NativeAttach &) = delete;
          void attach()
          {
             if (!isAttached)

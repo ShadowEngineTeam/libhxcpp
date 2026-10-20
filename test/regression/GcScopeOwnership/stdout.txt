@@ -1,0 +1,4 @@
+NativeAttach does not copy
+AutoGCFreeZone does not copy
+2 0
+zone ok
