@@ -21,6 +21,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <vector>
 #include <string>
 #if !defined(HX_WINRT) && !defined(EPPC) && !defined(NEKO_WINDOWS) && !defined(__EMSCRIPTEN__) && !defined(HXCPP_SINGLE_THREADED_APP)
@@ -767,6 +768,13 @@ void _hx_std_process_stdin_close( Dynamic handle )
    p->iwrite = HANDLE_INIT;
 }
 
+// The status is lost, as when the host reaps its children itself: that is
+// not a clean exit
+static void exitStatusLost(const String &inReason)
+{
+   hx::Throw(HX_CSTRING("process_exit: ") + inReason);
+}
+
 #ifndef NEKO_WINDOWS
 // Once reaped, the pid may belong to another process, so the status is kept
 static int reapStatus(vprocess *p, int inStatus)
@@ -813,10 +821,12 @@ Dynamic _hx_std_process_exit( Dynamic handle, bool block )
       DWORD waitResult = WaitForSingleObject(p->pinf.hProcess,wait);
       hx::ExitGCFreeZone();
 
+      if (waitResult == WAIT_FAILED)
+         exitStatusLost(HX_CSTRING("wait failed"));
       if (!block && waitResult == WAIT_TIMEOUT)
          return null();
       if( !GetExitCodeProcess(p->pinf.hProcess,&rval) )
-         return block ? Dynamic(0) : Dynamic(null());
+         exitStatusLost(HX_CSTRING("GetExitCodeProcess failed"));
       return (int)rval;
    }
    #else
@@ -839,8 +849,9 @@ Dynamic _hx_std_process_exit( Dynamic handle, bool block )
          return null();
       }
 
+      int err = errno;
       hx::ExitGCFreeZone();
-      return 0;
+      exitStatusLost(String(strerror(err)));
    }
    hx::ExitGCFreeZone();
    return reapStatus(p, rval);
@@ -859,11 +870,13 @@ int _hx_std_process_exit( Dynamic handle )
    #ifdef NEKO_WINDOWS
    {
       DWORD rval = 0;
-      WaitForSingleObject(p->pinf.hProcess,INFINITE);
+      DWORD waitResult = WaitForSingleObject(p->pinf.hProcess,INFINITE);
       hx::ExitGCFreeZone();
 
+      if (waitResult == WAIT_FAILED)
+         exitStatusLost(HX_CSTRING("wait failed"));
       if( !GetExitCodeProcess(p->pinf.hProcess,&rval) )
-         return 0;
+         exitStatusLost(HX_CSTRING("GetExitCodeProcess failed"));
       return rval;
    }
    #else
@@ -873,8 +886,9 @@ int _hx_std_process_exit( Dynamic handle )
    {
       if( ret == -1 && errno == EINTR )
          continue;
+      int err = errno;
       hx::ExitGCFreeZone();
-      return 0;
+      exitStatusLost(String(strerror(err)));
    }
    hx::ExitGCFreeZone();
    return reapStatus(p, rval);

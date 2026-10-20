@@ -272,6 +272,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed a negative time with milliseconds landing on the wrong second: Date.fromTime(-500) was 1970-01-01 00:00:00 UTC instead of 1969-12-31 23:59:59
 * Fixed FileOutput.close and File.saveContent reporting success when the final write fails at close (a full disk, /dev/full); close throws file_close, as the other file operations do
 * Fixed files opened through sys.io.File leaking into child processes on POSIX: they are opened close-on-exec, as sockets and process pipes already are
+* Fixed Process.exitCode returning 0 when the child's status cannot be read (the host reaped it, or the wait failed); it throws process_exit with the reason, on POSIX and Windows
 
 ### Regular expressions, zlib and databases
 
