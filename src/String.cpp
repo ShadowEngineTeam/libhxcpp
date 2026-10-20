@@ -1296,13 +1296,23 @@ static String hxNarrowIfAscii(char16_t *inWide, int inLength)
 }
 #endif
 
+// Case conversion returns the string itself when nothing changes, and
+// otherwise copies the unchanged start and converts the rest
 String String::toUpperCase() const
 {
+   if (!__s)
+      return String::emptyString;
    #ifdef HX_SMART_STRINGS
    if (isUTF16Encoded())
    {
+      int first = 0;
+      while(first<length && unicase_toupper(__w[first])==__w[first])
+         first++;
+      if (first==length)
+         return *this;
       char16_t *result = String::allocChar16Ptr(length);
-      for(int i=0;i<length;i++)
+      memcpy(result, __w, first*sizeof(char16_t));
+      for(int i=first;i<length;i++)
       {
          // Surrogates should already may to themselves - no need to check
          result[i] = unicase_toupper( __w[i] );
@@ -1311,16 +1321,28 @@ String String::toUpperCase() const
    }
    // Byte strings are ASCII in smart-strings mode: a branchless transform is
    // correct and vectorizable, avoiding the per-char locale-dependent toupper.
+   int first = 0;
+   while(first<length && !(__s[first]>='a' && __s[first]<='z'))
+      first++;
+   if (first==length)
+      return *this;
    char *result = hx::NewString(length);
-   for(int i=0;i<length;i++)
+   memcpy(result, __s, first);
+   for(int i=first;i<length;i++)
    {
       char c = __s[i];
       result[i] = (c>='a' && c<='z') ? (char)(c - ('a'-'A')) : c;
    }
    return String(result,length);
    #else
+   int first = 0;
+   while(first<length && toupper(__s[first])==__s[first])
+      first++;
+   if (first==length)
+      return *this;
    char *result = hx::NewString(length);
-   for(int i=0;i<length;i++)
+   memcpy(result, __s, first);
+   for(int i=first;i<length;i++)
       result[i] = toupper( __s[i] );
    return String(result,length);
    #endif
@@ -1328,27 +1350,45 @@ String String::toUpperCase() const
 
 String String::toLowerCase() const
 {
+   if (!__s)
+      return String::emptyString;
    #ifdef HX_SMART_STRINGS
    if (isUTF16Encoded())
    {
+      int first = 0;
+      while(first<length && unicase_tolower(__w[first])==__w[first])
+         first++;
+      if (first==length)
+         return *this;
       char16_t *result = String::allocChar16Ptr(length);
-      for(int i=0;i<length;i++)
-      {
+      memcpy(result, __w, first*sizeof(char16_t));
+      for(int i=first;i<length;i++)
          result[i] = unicase_tolower( __w[i] );
-      }
       return hxNarrowIfAscii(result,length);
    }
    // Byte strings are ASCII in smart-strings mode: branchless, vectorizable.
+   int first = 0;
+   while(first<length && !(__s[first]>='A' && __s[first]<='Z'))
+      first++;
+   if (first==length)
+      return *this;
    char *result = hx::NewString(length);
-   for(int i=0;i<length;i++)
+   memcpy(result, __s, first);
+   for(int i=first;i<length;i++)
    {
       char c = __s[i];
       result[i] = (c>='A' && c<='Z') ? (char)(c + ('a'-'A')) : c;
    }
    return String(result,length);
    #else
+   int first = 0;
+   while(first<length && tolower(__s[first])==__s[first])
+      first++;
+   if (first==length)
+      return *this;
    char *result = hx::NewString(length);
-   for(int i=0;i<length;i++)
+   memcpy(result, __s, first);
+   for(int i=first;i<length;i++)
       result[i] = tolower( __s[i] );
    return String(result,length);
    #endif
@@ -2521,6 +2561,8 @@ String String::substr(int inFirst, Dynamic inLen) const
    if ((len+inFirst > length) ) len = length - inFirst;
    if (len==0)
       return String::emptyString;
+   if (inFirst==0 && len==length)
+      return *this;
 
 
    #ifdef HX_SMART_STRINGS

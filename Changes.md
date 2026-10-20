@@ -78,6 +78,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Shortened the large-allocation lock: a recycled large buffer is cleared after the lock is released, as a fresh one is, instead of stalling other threads' large allocations for the whole clear (4 threads allocating 12000 zeroed 1 MB buffers: about 15% faster)
 * Fixed reserving room in an empty hash table allocating 2 buckets whatever the size asked for, so converting a map's value storage rehashed it over a dozen times; converting 300k IntMap entries is about 15% faster
 * Std.parseInt no longer measures the whole string to look for a hex prefix
+* Sped up toUpperCase and toLowerCase: a string with nothing to change comes back as it is, and one that changes is copied once from its first changed character (10000 unchanged 4 KB conversions: about 90 ms to 16 ms); substr and substring of a whole string return it without a copy
 
 ### Garbage collector
 
