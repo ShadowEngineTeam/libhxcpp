@@ -11,6 +11,7 @@
 #   include <memory.h>
 #   include <errno.h>
 #   include <signal.h>
+#   include <pthread.h>
 #   include <fcntl.h>
 #   if defined(ANDROID) || defined(BLACKBERRY) || defined(__EMSCRIPTEN__) || defined(NEKO_BSD)
 #      include <sys/wait.h>
@@ -523,15 +524,6 @@ Dynamic _hx_std_process_run( String cmd, Array<String> vargs, int inShowParam )
    }
    #else // not windows ...
    {
-   // Writing to a dead child's stdin must surface as an error, not raise
-   // SIGPIPE whose default action kills the whole host process
-   static bool sigpipeIgnored = false;
-   if (!sigpipeIgnored)
-   {
-      sigpipeIgnored = true;
-      signal(SIGPIPE, SIG_IGN);
-   }
-
    // The child writes exec's errno to status; a successful exec closes it
    int input[2], output[2], error[2], status[2];
    if( pipe(input) )
@@ -613,10 +605,10 @@ Dynamic _hx_std_process_run( String cmd, Array<String> vargs, int inShowParam )
       dup2(input[0],0);
       dup2(output[1],1);
       dup2(error[1],2);
-      // An ignored signal stays ignored across exec, so without this every
-      // child would inherit the SIGPIPE ignore above, and a pipeline such as
-      // "cat big | head -1" would get write errors instead of stopping
-      // quietly.  Restore the default, as Python's subprocess does.
+      // An ignored signal stays ignored across exec, so a host that ignores
+      // SIGPIPE would pass that on, and a pipeline such as "cat big | head -1"
+      // would get write errors instead of stopping quietly. Restore the
+      // default, as Python's subprocess does.
       signal(SIGPIPE, SIG_DFL);
       execvp(argv[0],(char* const*)&argv[0]);
       // Only async-signal-safe calls here, as the parent is multithreaded.
@@ -751,6 +743,41 @@ int _hx_std_process_stderr_read( Dynamic handle, Array<unsigned char> buf, int p
    process stdin is closed.
    </doc>
 **/
+#ifndef NEKO_WINDOWS
+// A write to a pipe whose reader has gone raises SIGPIPE, whose default action
+// ends the host. It is blocked in this thread for the write, and the one the
+// write raised is taken, so the host's own handler and any SIGPIPE already
+// pending are left alone.
+static ssize_t writeNoSigpipe(int inFd, const void *inData, size_t inLen)
+{
+   sigset_t pipeSet, oldSet, pending;
+   sigemptyset(&pipeSet);
+   sigaddset(&pipeSet, SIGPIPE);
+   pthread_sigmask(SIG_BLOCK, &pipeSet, &oldSet);
+   sigpending(&pending);
+   bool wasPending = sigismember(&pending, SIGPIPE);
+
+   ssize_t result;
+   do
+      result = write(inFd, inData, inLen);
+   while (result < 0 && errno == EINTR);
+   int err = errno;
+
+   if (result < 0 && err == EPIPE && !wasPending)
+   {
+      sigpending(&pending);
+      if (sigismember(&pending, SIGPIPE))
+      {
+         int sig;
+         sigwait(&pipeSet, &sig);
+      }
+   }
+   pthread_sigmask(SIG_SETMASK, &oldSet, 0);
+   errno = err;
+   return result;
+}
+#endif
+
 int _hx_std_process_stdin_write( Dynamic handle, Array<unsigned char> buf, int pos, int len )
 {
    if( pos < 0 || len < 0 || pos > buf->length || len > buf->length - pos )
@@ -771,13 +798,10 @@ int _hx_std_process_stdin_write( Dynamic handle, Array<unsigned char> buf, int p
       hx::Throw(HX_CSTRING("EOF"));
    }
    #else
-   POSIX_LABEL(stdin_write_again);
-   int nbytes = write(p->iwrite,src+pos,len);
+   int nbytes = (int)writeNoSigpipe(p->iwrite,src+pos,len);
    if( nbytes < 0 )
    {
-      HANDLE_EINTR(stdin_write_again);
       hx::ExitGCFreeZone();
-      // EPIPE arrives here now that SIGPIPE is ignored
       hx::Throw(HX_CSTRING("EOF"));
    }
    #endif
