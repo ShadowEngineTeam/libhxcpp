@@ -147,6 +147,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed the Windows main and natively attached thread objects holding GetCurrentThread's pseudo-handle, so setName and getName called from another thread named that thread instead; and fixed Scratch's copy assignment (Haxe 5) keeping its old view and release function and freeing the malloc path twice
 * Made hx::NativeAttach and hx::AutoGCFreeZone non-copyable: a copy duplicated the guard's ownership, so one scope detached the thread or left the GC-free zone twice
 * Fixed values stored in a ThreadLocal staying alive for the life of every thread that set them after the ThreadLocal itself was collected
+* Fixed hx::thread::Scratch (Haxe 5) handing out a live buffer again after allocations were released out of order, and placing reference counters and data at unaligned offsets
 
 ### Strings, numbers, Dynamic and reflection
 

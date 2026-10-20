@@ -20,6 +20,8 @@ namespace hx
 		class ThreadImpl_obj final : public Thread_obj
 		{
 			int cursor = 0;
+			// Start of the newest pooled scratch allocation, or -1
+			int scratchTop = -1;
 			Array<uint8_t> scratch;
 			Array<Dynamic> slots;
 			// ThreadLocal values, apart from the legacy __hxcpp_tls_* slots

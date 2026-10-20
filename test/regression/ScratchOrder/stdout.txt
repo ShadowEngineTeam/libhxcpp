@@ -1,0 +1,1 @@
+scratch allocations stay separate and aligned: true
