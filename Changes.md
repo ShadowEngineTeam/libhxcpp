@@ -205,6 +205,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed shrinking an array with unmanaged data to zero handing that memory to the GC
 * Fixed Array.sort crashing, corrupting the heap or hanging when the comparator is inconsistent (one returning random results to shuffle, for example) or changes the array it sorts: both sorts use a stable merge sort that stays in range whatever the comparator returns
 * Fixed copying an array crashing with telemetry's allocation tracking on: the tracker read the type of an object whose constructor had not run
+* Fixed Array.filter called through reflection or a Dynamic keeping the value a predicate wrote into the slot instead of the value it was given, so it disagreed with a direct call
 
 ### Sockets and TLS
 

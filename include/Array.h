@@ -1414,8 +1414,12 @@ Array<ELEM_> Array_obj<ELEM_>::filter(FilterFunc inFunc)
 {
    Array_obj *result = new Array_obj(0,0);
    for(int i=0;i<length;i++)
-      if (inFunc(__unsafe_get(i)))
-         result->push(__unsafe_get(i));
+   {
+      // The value the predicate saw, even if it changed the slot
+      ELEM_ value = __unsafe_get(i);
+      if (inFunc(value))
+         result->push(value);
+   }
    return result;
 }
 
