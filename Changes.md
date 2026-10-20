@@ -121,6 +121,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed the GC freeing an object that a thread paused for a collection, or in a GC-free zone, held only in a register, on 32-bit Windows: the pausing function had saved that register below the scanned stack. Every target now copies the pausing frame along with the registers, as Windows x64 already did
 * Fixed a weak map emptied by the GC keeping, and scanning on every collection, the bucket array of the size it had reached (2 MB after 100k keys); the array is dropped once the last key is collected
 * Fixed an object held only through a @:nativeGen interface being freed: converting an object to the interface directly went through ObjectPtr's conversion operator, which skipped registering the interface's offset with the collector
+* Fixed weak references to a method wrapped in a callable adapter (Haxe 5 signature adapters) being cleared while the method's receiver was still alive; the collector now follows the adapter chain to the receiver
 
 ### Threads
 

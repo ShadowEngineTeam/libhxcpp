@@ -2654,21 +2654,34 @@ bool IsWeakRefValid(hx::Object *inPtr)
       return true;
    unsigned char mark = ((unsigned char *)inPtr)[HX_ENDIAN_MARK_ID_BYTE];
 
-    // Special case of member closure - check if the 'this' pointer is still alive
+    // Special case of member closure - check if the 'this' pointer is still alive.
+    // Adapters return the callable they wrap, so follow the chain to the receiver.
     bool isCurrent = mark==gByteMarkID;
     if ( !isCurrent && inPtr->__GetType()==vtFunction)
     {
-        hx::Object *thiz = (hx::Object *)inPtr->__GetHandle();
-        if (thiz)
+        enum { MAX_HOPS = 16 };
+        hx::Object *chain[MAX_HOPS];
+        int hops = 0;
+        hx::Object *fn = inPtr;
+        while(hops<MAX_HOPS)
         {
+            chain[hops++] = fn;
+            hx::Object *thiz = (hx::Object *)fn->__GetHandle();
+            if (!thiz)
+               break;
             mark = ((unsigned char *)thiz)[HX_ENDIAN_MARK_ID_BYTE];
-            if (mark==gByteMarkID)
+            if ( (((unsigned int *)thiz)[-1] & HX_GC_CONST_ALLOC_BIT) || mark==gByteMarkID)
             {
-               // The object is still alive, so mark the closure and continue
-               MarkAlloc(inPtr,0);
+               // The object is still alive, so mark the closures and continue
+               for(int i=0;i<hops;i++)
+                  MarkAlloc(chain[i],0);
                return true;
             }
-         }
+            // A String's member closures hand back its characters, not an object
+            if (!(((unsigned int *)thiz)[-1] & IMMIX_ALLOC_IS_CONTAINER) || thiz->__GetType()!=vtFunction)
+               break;
+            fn = thiz;
+        }
     }
     return isCurrent;
 }
