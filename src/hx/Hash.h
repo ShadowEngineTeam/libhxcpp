@@ -554,12 +554,9 @@ struct Hash : public HashBase< typename ELEMENT::Key >
          // cost; quadrupling halves the number of expensive late rehashes, at
          // the price of a little more bucket-array slack on the few big maps.
          enum { QUAD_GROW_BUCKETS = 4096 };
-         int newCount = bucketCount;
-         if (newCount==0)
-            newCount = 2;
-         else
-            while( inSize > (newCount<<LOG_ELEMS_PER_BUCKET) )
-               newCount <<= (newCount < QUAD_GROW_BUCKETS ? 1 : 2);
+         int newCount = bucketCount ? bucketCount : 2;
+         while( inSize > (newCount<<LOG_ELEMS_PER_BUCKET) )
+            newCount <<= (newCount < QUAD_GROW_BUCKETS ? 1 : 2);
          if (newCount!=bucketCount)
             rebucket(newCount);
       }
