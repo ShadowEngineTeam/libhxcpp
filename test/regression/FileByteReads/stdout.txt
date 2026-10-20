@@ -1,0 +1,9 @@
+li tell 2
+ne 0
+lin tell 10
+after seek 5000 true
+seek back 4998 true
+3000 lines, last line 2999, eof true
+end 2999
+true
+eof loop read 28889, threw true, eof true

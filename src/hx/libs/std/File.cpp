@@ -2,6 +2,10 @@
 #include <stdio.h>
 #include <string.h>
 #include <vector>
+#include <atomic>
+#ifndef HXCPP_SINGLE_THREADED_APP
+#include <thread>
+#endif
 
 #include <hx/OS.h>
 
@@ -12,6 +16,7 @@
 #   include <fcntl.h>
 #   include <unistd.h>
 #   include <errno.h>
+#   include <sys/stat.h>
 #endif
 
 /**
@@ -70,15 +75,39 @@ struct fio : public hx::Object
    String name;
    FILE   *io;
    bool   closeIo;
+   // A regular file opened only for reading: readByte takes bytes from
+   // ahead, refilled a block at a time, instead of entering a GC-free zone
+   // and calling fread for each one
+   bool   readAhead;
+   unsigned char *ahead;
+   int    aheadPos;
+   int    aheadLen;
+   // The refill reached the end with no read failing there yet, which is
+   // when feof was still false for a byte at a time
+   bool   aheadAtEnd;
+   std::atomic_flag aheadBusy;
 
-   void create(FILE *inFile, String inName, bool inClose)
+   void create(FILE *inFile, String inName, bool inClose, bool inReadAhead = false)
    {
       name = inName;
       HX_OBJ_WB_GET(this,name.raw_ref());
       io = inFile;
       closeIo = inClose;
+      readAhead = inReadAhead;
+      ahead = 0;
+      aheadPos = aheadLen = 0;
+      aheadAtEnd = false;
+      aheadBusy.clear();
 
       _hx_set_finalizer(this, finalize);
+   }
+
+   void releaseAhead()
+   {
+      free(ahead);
+      ahead = 0;
+      aheadPos = aheadLen = 0;
+      aheadAtEnd = false;
    }
 
    void destroy(bool inForceClose = false)
@@ -87,6 +116,7 @@ struct fio : public hx::Object
          fclose(io);
       io = 0;
       name = String();
+      releaseAhead();
    }
 
    void __Mark(hx::MarkContext *__inCtx) HXCPP_OVERRIDE { HX_MARK_MEMBER(name); }
@@ -102,6 +132,48 @@ struct fio : public hx::Object
    String toString() HXCPP_OVERRIDE { return HX_CSTRING("fio:") + name; }
 
 };
+
+// Handles shared by threads: the second waits in a GC-free zone, so a
+// collection never waits on it
+struct AheadLock
+{
+   fio *f;
+   AheadLock(fio *inF) : f(inF && inF->readAhead ? inF : 0)
+   {
+      #ifndef HXCPP_SINGLE_THREADED_APP
+      if (f && f->aheadBusy.test_and_set(std::memory_order_acquire))
+      {
+         hx::EnterGCFreeZone();
+         while (f->aheadBusy.test_and_set(std::memory_order_acquire))
+            std::this_thread::yield();
+         hx::ExitGCFreeZone();
+      }
+      #endif
+   }
+   ~AheadLock()
+   {
+      #ifndef HXCPP_SINGLE_THREADED_APP
+      if (f)
+         f->aheadBusy.clear(std::memory_order_release);
+      #endif
+   }
+   int unread() const { return f ? f->aheadLen - f->aheadPos : 0; }
+};
+
+static const int READ_AHEAD = 4096;
+
+static bool isRegularFile(FILE *inFile)
+{
+   #if defined(HX_WINRT)
+   return false;
+   #elif defined(NEKO_WINDOWS)
+   HANDLE h = (HANDLE)_get_osfhandle(_fileno(inFile));
+   return h != INVALID_HANDLE_VALUE && GetFileType(h) == FILE_TYPE_DISK;
+   #else
+   struct stat st;
+   return fstat(fileno(inFile), &st) == 0 && S_ISREG(st.st_mode);
+   #endif
+}
 
 fio *getFio(Dynamic handle, bool inRequireFile=true)
 {
@@ -145,10 +217,12 @@ Dynamic _hx_std_file_open( String fname, String r )
 #endif
    if (!file)
       file_error("file_open",fname);
+   const char *mode = r.utf8_str(&buf1);
+   bool readAhead = mode[0]=='r' && !strchr(mode,'+') && isRegularFile(file);
    hx::ExitGCFreeZone();
 
    fio *f = new fio;
-   f->create(file,fname,true);
+   f->create(file,fname,true,readAhead);
    return f;
 }
 
@@ -164,6 +238,7 @@ void _hx_std_file_close( Dynamic handle )
    String name = f->name;
    f->io = 0;
    f->name = String();
+   f->releaseAhead();
    hx::EnterGCFreeZone();
    if (fclose(io) != 0)
       file_error("file_close",name);
@@ -300,9 +375,23 @@ int _hx_std_file_read( Dynamic handle, Array<unsigned char> buf, int p, int n )
    if( p < 0 || len < 0 || p > buf_len || p + len > buf_len )
       return 0;
 
-   hx::EnterGCFreeZone();
+   AheadLock lock(f);
    // Attempt to increase the chances of pinning on the stack...
    unsigned char *bufPtr = &buf[0];
+   int unread = lock.unread();
+   if (unread > 0)
+   {
+      int take = unread < len ? unread : len;
+      memcpy(bufPtr + p, f->ahead + f->aheadPos, take);
+      f->aheadPos += take;
+      p += take;
+      len -= take;
+      if (len == 0)
+         return n;
+   }
+   f->aheadAtEnd = false;
+
+   hx::EnterGCFreeZone();
    while( len > 0 )
    {
       POSIX_LABEL(file_read_again);
@@ -352,6 +441,29 @@ int _hx_std_file_read_char( Dynamic handle )
 {
    fio *f = getFio(handle);
 
+   if (f->readAhead)
+   {
+      AheadLock lock(f);
+      if (f->aheadPos < f->aheadLen)
+         return f->ahead[f->aheadPos++];
+      if (!f->ahead)
+         f->ahead = (unsigned char *)malloc(READ_AHEAD);
+      hx::EnterGCFreeZone();
+      POSIX_LABEL(read_ahead_again);
+      int got = f->ahead ? (int)fread(f->ahead,1,READ_AHEAD,f->io) : 0;
+      if( got <= 0 )
+      {
+         HANDLE_FINTR(f->io,read_ahead_again);
+         f->aheadAtEnd = false;
+         file_error("file_read_char",f->name);
+      }
+      hx::ExitGCFreeZone();
+      f->aheadPos = 1;
+      f->aheadLen = got;
+      f->aheadAtEnd = got < READ_AHEAD;
+      return f->ahead[0];
+   }
+
    unsigned char cc = 0;
    hx::EnterGCFreeZone();
    POSIX_LABEL(read_char_again);
@@ -371,6 +483,11 @@ int _hx_std_file_read_char( Dynamic handle )
 void _hx_std_file_seek( Dynamic handle, int pos, int kind )
 {
    fio *f = getFio(handle);
+   AheadLock lock(f);
+   if (kind == SEEK_CUR)
+      pos -= lock.unread();
+   f->aheadPos = f->aheadLen = 0;
+   f->aheadAtEnd = false;
    hx::EnterGCFreeZone();
    if( fseek(f->io,pos,kind) != 0 )
       file_error("file_seek",f->name);
@@ -384,12 +501,13 @@ void _hx_std_file_seek( Dynamic handle, int pos, int kind )
 int _hx_std_file_tell( Dynamic handle )
 {
    fio *f = getFio(handle);
+   AheadLock lock(f);
    hx::EnterGCFreeZone();
    int p = ftell(f->io);
    if( p == -1 )
       file_error("file_tell",f->name);
    hx::ExitGCFreeZone();
-   return p;
+   return p - lock.unread();
 }
 
 /**
@@ -399,7 +517,8 @@ int _hx_std_file_tell( Dynamic handle )
 bool _hx_std_file_eof( Dynamic handle )
 {
    fio *f = getFio(handle);
-   return feof(f->io);
+   AheadLock lock(f);
+   return lock.unread() == 0 && !f->aheadAtEnd && feof(f->io);
 }
 
 /**

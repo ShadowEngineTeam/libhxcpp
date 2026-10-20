@@ -71,6 +71,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Sped up Poll on Windows with many sockets: ready sockets are found in one walk instead of a search of the set per registered socket, which grew with the square of the connection count
 * Fixed catastrophic IntMap collisions for keys with low-bit structure (pointers, aligned/strided ids) by mixing integer hashes; up to ~280x faster lookups for such keys with no regression for dense keys
 * Fixed IntMap keys packed as (x << 16) | y piling into a few buckets: a 512x512 grid of them built in 99 ms instead of the 7 ms dense keys take, and now in 8 ms. Dense and strided keys are unchanged
+* Sped up FileInput.readByte about 6.8x and readLine through it about 4x (1 MB: 61 ms to 9 ms, and 70 ms to 17 ms, on Windows) on regular files opened for reading: bytes come from a 4 KB read-ahead instead of one GC-free zone and fread call each. Pipes, stdin and files opened for writing read as before
 
 ### Garbage collector
 
