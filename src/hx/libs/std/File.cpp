@@ -555,6 +555,48 @@ static long long file_length64(FILE *file)
 #endif
 }
 
+// For a size that is zero or unknown, as for /proc files and pipes: read to
+// the end. 0 when done, else the error to report
+static const char *readToEnd(FILE *inFile, std::vector<char> &outData)
+{
+   char chunk[16384];
+   while(true)
+   {
+      size_t got = fread(chunk,1,sizeof(chunk),inFile);
+      if (got)
+      {
+         if (outData.size() + got > 0x7ffffff0)
+            return "file_too_large";
+         outData.insert(outData.end(), chunk, chunk+got);
+      }
+      if (got < sizeof(chunk))
+      {
+         if (!ferror(inFile))
+            return 0;
+         #ifndef NEKO_WINDOWS
+         if (errno==EINTR)
+         {
+            clearerr(inFile);
+            continue;
+         }
+         #endif
+         return "file_contents";
+      }
+   }
+}
+
+static String stringFromUtf8(char *inData, int inLength)
+{
+   // Non-ASCII content still needs the utf16 conversion pass
+   #ifdef HX_SMART_STRINGS
+   const unsigned char *c = (const unsigned char *)inData;
+   for(int i=0;i<inLength;i++)
+      if (c[i]>127)
+         return _hx_utf8_to_utf16(c, inLength, false);
+   #endif
+   return String(inData, inLength);
+}
+
 String _hx_std_file_contents_string( String name )
 {
    hx::strbuf buf;
@@ -569,18 +611,26 @@ String _hx_std_file_contents_string( String name )
       file_error("file_contents",name);
 
    long long len64 = file_length64(file);
-   if (len64<0 || len64>0x7ffffff0)
+   if (len64>0x7ffffff0)
    {
       fclose(file);
-      file_error(len64<0 ? "file_ftell" : "file_too_large",name);
+      file_error("file_too_large",name);
+   }
+   if (len64<=0)
+   {
+      std::vector<char> data;
+      const char *err = readToEnd(file, data);
+      fclose(file);
+      if (err)
+         file_error(err,name);
+      hx::ExitGCFreeZone();
+      if (data.empty())
+         return String::emptyString;
+      char *dest = hx::NewString((int)data.size());
+      memcpy(dest, &data[0], data.size());
+      return stringFromUtf8(dest, (int)data.size());
    }
    int len = (int)len64;
-   if (len==0)
-   {
-      fclose(file);
-      hx::ExitGCFreeZone();
-      return String::emptyString;
-   }
 
    fseek(file,0,SEEK_SET);
    // Read straight into the GC string buffer - the old std::vector staging
@@ -597,6 +647,9 @@ String _hx_std_file_contents_string( String name )
       if( d <= 0 )
       {
          HANDLE_FINTR(file,file_contents);
+         // The size was only an estimate: keep what was there
+         if (feof(file))
+            break;
          fclose(file);
          file_error("file_contents",name);
       }
@@ -605,16 +658,14 @@ String _hx_std_file_contents_string( String name )
    }
    fclose(file);
    hx::ExitGCFreeZone();
+   if (p < total)
+   {
+      dest[p] = 0;
+      total = p;
+   }
 
-   // dest is already a GC string buffer - wrap it without re-copying.
-   // Non-ASCII content still needs the utf16 conversion pass.
-   #ifdef HX_SMART_STRINGS
-   const unsigned char *c = (const unsigned char *)dest;
-   for(int i=0;i<total;i++)
-      if (c[i]>127)
-         return _hx_utf8_to_utf16(c, total, false);
-   #endif
-   return String(dest, total);
+   // dest is already a GC string buffer - wrap it without re-copying
+   return stringFromUtf8(dest, total);
 }
 
 
@@ -637,10 +688,23 @@ Array<unsigned char> _hx_std_file_contents_bytes( String name )
       file_error("file_contents",name);
 
    long long len64 = file_length64(file);
-   if (len64<0 || len64>0x7ffffff0)
+   if (len64>0x7ffffff0)
    {
       fclose(file);
-      file_error(len64<0 ? "file_ftell" : "file_too_large",name);
+      file_error("file_too_large",name);
+   }
+   if (len64<=0)
+   {
+      std::vector<char> data;
+      const char *err = readToEnd(file, data);
+      fclose(file);
+      if (err)
+         file_error(err,name);
+      hx::ExitGCFreeZone();
+      Array<unsigned char> buffer = Array_obj<unsigned char>::__new((int)data.size(),(int)data.size());
+      if (!data.empty())
+         memcpy(&buffer[0], &data[0], data.size());
+      return buffer;
    }
    int len = (int)len64;
 
@@ -661,11 +725,20 @@ Array<unsigned char> _hx_std_file_contents_bytes( String name )
          if( d <= 0 )
          {
             HANDLE_FINTR(file,file_contents1);
+            if (feof(file))
+               break;
             fclose(file);
             file_error("file_contents",name);
          }
          p += d;
          len -= d;
+      }
+      if (len > 0)
+      {
+         fclose(file);
+         hx::ExitGCFreeZone();
+         buffer->__SetSize(p);
+         return buffer;
       }
    }
    fclose(file);
