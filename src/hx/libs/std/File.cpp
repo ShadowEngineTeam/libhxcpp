@@ -117,8 +117,16 @@ Dynamic _hx_std_file_open( String fname, String r )
 **/
 void _hx_std_file_close( Dynamic handle )
 {
-   fio *fio = getFio(handle);
-   fio->destroy(true);
+   fio *f = getFio(handle);
+   // fclose releases the stream even when its final write fails
+   FILE *io = f->io;
+   String name = f->name;
+   f->io = 0;
+   f->name = String();
+   hx::EnterGCFreeZone();
+   if (fclose(io) != 0)
+      file_error("file_close",name);
+   hx::ExitGCFreeZone();
 }
 
 /**
