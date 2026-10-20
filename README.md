@@ -14,58 +14,12 @@ libhxcpp is the runtime for the C++ target of the [Haxe](https://haxe.org/) comp
 
 ## Performance
 
-The benchmark suite in [bench](bench) builds the same Haxe sources twice, once against libhxcpp and once against stock hxcpp 4.3.53 (the release Lime's CI builds with), with the same Haxe, C++ compiler and flags, and runs them one benchmark per process. The latest results:
+The benchmark suite in [bench](bench) builds the same Haxe sources twice, once against libhxcpp and once against stock hxcpp 4.3.53 (the release Lime's CI builds with), with the same Haxe, C++ compiler and flags. The key measures from the latest run:
 
 <!-- bench:start -->
-**Speed** (higher is better)
-
-| Benchmark | Unit | libhxcpp | hxcpp 4.3.53 | libhxcpp vs stock |
-| --- | --- | ---: | ---: | ---: |
-| alloc_small | objects/s | 590M ±1% | 596M ±0.4% | ~0.99x |
-| alloc_strings | strings/s | 49.3M ±0.3% | 23.7M ±0.3% | 2.09x |
-| alloc_arrays | arrays/s | 20.8M ±0.5% | 20.5M ±0.8% | ~1.01x |
-| gc_pauses | objects/s | 87.6M ±3% | 59.3M ±1.4% | 1.48x |
-| map_int | map operations/s | 128M ±1% | 123M ±0.8% | 1.04x |
-| map_string | map operations/s | 30.2M ±2.7% | 21.8M ±3.2% | 1.38x |
-| map_object | map operations/s | 8.2M ±1.9% | 9.1M ±5.8% | ~0.91x |
-| string_build | appends/s | 65.1M ±1.4% | 41.1M ±2.9% | 1.59x |
-| string_index | indexOf calls/s | 1.9M ±1.2% | 212k ±0.8% | 9.03x |
-| string_substr | substr calls/s | 85.8M ±0.4% | 83.9M ±0.3% | 1.02x |
-| string_split | split calls/s | 29.7k ±0.7% | 22.9k ±0.3% | 1.3x |
-| string_case | case conversions/s | 29.2M ±0.3% | 1.5M ±0.2% | 19.36x |
-| sort_int | elements/s | 4.1M ±1.9% | 3.2M ±0.7% | 1.29x |
-| sort_string | elements/s | 1.3M ±1.8% | 1.2M ±2.6% | 1.15x |
-| sort_object | elements/s | 4.4M ±0.2% | 4.1M ±0.3% | 1.05x |
-
-**Collection pauses and memory** (lower is better)
-
-| Metric | Benchmark | libhxcpp | hxcpp 4.3.53 | stock / libhxcpp |
-| --- | --- | ---: | ---: | ---: |
-| Startup and exit | noop | 4.1 ms | 3.5 ms | 0.87x |
-| Work unit time, p99 | gc_pauses | 56.9 us | 70.1 us | 1.23x |
-| Work unit time, p99.9 | gc_pauses | 4.8 ms | 11.8 ms | 2.48x |
-| Work unit time, max | gc_pauses | 6.6 ms | 14.2 ms | 2.15x |
-| Peak memory | alloc_small | 26.3 MB | 24.9 MB | 0.94x |
-| Peak memory | alloc_strings | 26.3 MB | 24.8 MB | 0.94x |
-| Peak memory | alloc_arrays | 29.5 MB | 28.3 MB | 0.96x |
-| Peak memory | gc_pauses | 136 MB | 131 MB | 0.96x |
-| Peak memory | map_int | 32.2 MB | 30.6 MB | 0.95x |
-| Peak memory | map_string | 134 MB | 110 MB | 0.82x |
-| Peak memory | map_object | 72.9 MB | 68.7 MB | 0.94x |
-| Peak memory | string_build | 30.7 MB | 228 MB | 7.43x |
-| Peak memory | string_index | 10.9 MB | 8.4 MB | 0.78x |
-| Peak memory | string_substr | 26.3 MB | 24.9 MB | 0.94x |
-| Peak memory | string_split | 70 MB | 72.4 MB | 1.03x |
-| Peak memory | string_case | 26.3 MB | 24.9 MB | 0.95x |
-| Peak memory | sort_int | 32.7 MB | 27.7 MB | 0.85x |
-| Peak memory | sort_string | 38.9 MB | 30.3 MB | 0.78x |
-| Peak memory | sort_object | 29.4 MB | 27.9 MB | 0.95x |
-
-Windows, AMD Ryzen 9 9950X 16-Core Processor; MSVC 194435213, 64-bit; Haxe 4.3.7; libhxcpp b2456986; 3 processes x 10 samples per benchmark; 2026-10-20 01:21:37.
-Reproduce with `cd bench && haxe --run Run`. Ratios above 1 favour libhxcpp; "~" marks a difference within the run-to-run spread.
 <!-- bench:end -->
 
-These numbers are from one Windows machine; Linux and macOS results are still to come. Where libhxcpp is still slower than stock hxcpp, that is a bug we are working on, and the [6.0.0 checklist](https://github.com/openfl/libhxcpp/issues/192) tracks it.
+[BENCHMARKS.md](BENCHMARKS.md) has every benchmark, with absolute numbers, collection pause percentiles, peak memory for each benchmark and how the comparison works. These numbers are from one Windows machine; Linux and macOS results are still to come. Where libhxcpp is still slower than stock hxcpp, that is a bug we are working on, and the [6.0.0 checklist](https://github.com/openfl/libhxcpp/issues/192) tracks it.
 
 ## Installing
 

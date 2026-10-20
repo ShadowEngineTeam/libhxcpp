@@ -33,15 +33,39 @@ using StringTools;
 	  --warmup <n>          untimed samples per process (default 2)
 	  --no-build            reuse the existing builds
 	  --out <file>          results JSON (default .work/results.json)
-	  --readme              also write the tables into README.md
+	  --readme              publish the results: the full tables go into
+	                        BENCHMARKS.md and a summary of the key measures into
+	                        README.md. Needs every benchmark, both runtimes and a
+	                        committed tree, so the numbers name the commit they
+	                        were measured on.
 
 	Exits non-zero if any build fails, any process fails, or two runs of a
 	benchmark disagree on the checksum, which means one did different work.
 **/
 class Run {
 	static inline var STARTUP_RUNS = 20;
-	static inline var README_START = "<!-- bench:start -->";
-	static inline var README_END = "<!-- bench:end -->";
+	static inline var BLOCK_START = "<!-- bench:start -->";
+	static inline var BLOCK_END = "<!-- bench:end -->";
+
+	/**
+		The README summary: the measures that matter to most programs, one row
+		each. Everything else is in BENCHMARKS.md. "rate" compares the
+		benchmark's speed, "p999" its 99.9th percentile work unit time,
+		"startup" the noop start-to-exit time, and "memory" peak memory across
+		every benchmark (the median, plus the worst so a gap can't hide).
+	**/
+	static final SUMMARY:Array<{area:String, what:String, bench:String, measure:String}> = [
+		{area: "Allocation", what: "Small objects", bench: "alloc_small", measure: "rate"},
+		{area: "Allocation", what: "Strings", bench: "alloc_strings", measure: "rate"},
+		{area: "Collection pauses", what: "Slowest 0.1% of work units", bench: "gc_pauses", measure: "p999"},
+		{area: "Maps", what: "Int keys", bench: "map_int", measure: "rate"},
+		{area: "Maps", what: "String keys", bench: "map_string", measure: "rate"},
+		{area: "Maps", what: "Object keys", bench: "map_object", measure: "rate"},
+		{area: "Strings", what: "Building with StringBuf", bench: "string_build", measure: "rate"},
+		{area: "Sorting", what: "Objects with a comparator", bench: "sort_object", measure: "rate"},
+		{area: "Startup", what: "Start and exit", bench: "noop", measure: "startup"},
+		{area: "Memory", what: "Peak memory, all benchmarks", bench: "", measure: "memory"},
+	];
 
 	static var benchDir:String;
 	static var rootDir:String;
@@ -67,6 +91,15 @@ class Run {
 		parseArgs(Sys.args());
 		if (outFile == null)
 			outFile = workDir + "/results.json";
+		if (writeReadme) {
+			// Published numbers must be complete and must name the commit they came from
+			if (only != null)
+				fail("--readme publishes the results, so it runs every benchmark; drop --only");
+			if (runtimeNames.indexOf("libhxcpp") < 0 || runtimeNames.indexOf("stock") < 0)
+				fail("--readme compares libhxcpp with stock hxcpp, so it needs both runtimes");
+			if (inDir(rootDir, () -> commandOutput("git", ["status", "--porcelain", "--untracked-files=no"])) != "")
+				fail("--readme needs a committed tree, so the results name the commit they were measured on; commit or stash first");
+		}
 
 		var runtimes = [for (name in runtimeNames) new Runtime(name, label(name), workDir + "/" + name)];
 		for (rt in runtimes) {
@@ -118,8 +151,14 @@ class Run {
 
 		var tables = markdown(report, runtimes, startup, results);
 		Sys.println(tables);
-		if (writeReadme)
-			updateReadme(tables);
+		if (writeReadme) {
+			var lib = runtimes.filter(rt -> rt.name == "libhxcpp")[0];
+			var stock = runtimes.filter(rt -> rt.name == "stock")[0];
+			var brief = summary(report, lib, stock, startup, results);
+			Sys.println(brief);
+			updateDoc("BENCHMARKS.md", tables);
+			updateDoc("README.md", brief);
+		}
 
 		if (failures > 0) {
 			Sys.println('$failures benchmark(s) failed');
@@ -414,23 +453,73 @@ class Run {
 		return b.toString();
 	}
 
-	static function updateReadme(tables:String) {
-		var path = rootDir + "/README.md";
+	/** The short README table: one ratio per key measure, from the same run as BENCHMARKS.md. **/
+	static function summary(report:Dynamic, lib:Runtime, stock:Runtime, startup:Map<String, Float>, results:Array<BenchResult>):String {
+		var byName = [for (r in results) if (r.error == null) r.name => r];
+		var b = new StringBuf();
+		b.add('| Area | Benchmark | libhxcpp vs ${stock.label} |\n| --- | --- | ---: |\n');
+		for (row in SUMMARY) {
+			// A benchmark that failed or was renamed drops out of the summary rather than breaking it
+			if ((row.measure == "rate" || row.measure == "p999") && !byName.exists(row.bench))
+				continue;
+			var cell = switch (row.measure) {
+				case "startup":
+					ratio(startup[stock.name], startup[lib.name], 0);
+				case "memory":
+					// stock / libhxcpp, so above 1 means libhxcpp uses less
+					var ratios = [
+						for (r in byName)
+							if (r.byRuntime.get(lib.name).peakRss > 0 && r.byRuntime.get(stock.name).peakRss > 0)
+								{name: r.name, value: r.byRuntime.get(stock.name).peakRss / r.byRuntime.get(lib.name).peakRss}
+					];
+					if (ratios.length == 0)
+						"n/a";
+					else {
+						ratios.sort((a, b) -> Reflect.compare(a.value, b.value));
+						'${ratioText(median([for (r in ratios) r.value]))} median, ${ratioText(ratios[0].value)} worst (`${ratios[0].name}`)';
+					}
+				default:
+					var r = byName[row.bench];
+					var l = r.byRuntime.get(lib.name);
+					var s = r.byRuntime.get(stock.name);
+					if (row.measure == "p999")
+						ratio(s.latency.p999, l.latency.p999, 0);
+					else
+						ratio(l.rate, s.rate, Math.max(l.spread, s.spread));
+			}
+			var bench = row.bench == "" ? "" : ' (`${row.bench}`)';
+			b.add('| ${row.area} | ${row.what}$bench | $cell |\n');
+		}
+		var env = lib.env;
+		b.add('\nAbove 1 favours libhxcpp; "~" marks a difference within the run-to-run spread. '
+			+ '${report.host}; ${env.compiler}, ${env.pointerBits}-bit; Haxe ${report.haxe}; libhxcpp ${report.libhxcpp}; ${report.date}.\n');
+		return b.toString();
+	}
+
+	/** Replaces the generated block in a file at the repository root. **/
+	static function updateDoc(file:String, content:String) {
+		var path = rootDir + "/" + file;
+		if (!FileSystem.exists(path))
+			fail('$file is missing');
 		var text = File.getContent(path);
-		var start = text.indexOf(README_START);
-		var end = text.indexOf(README_END);
+		var start = text.indexOf(BLOCK_START);
+		var end = text.indexOf(BLOCK_END);
 		if (start < 0 || end < start)
-			fail('README.md has no $README_START ... $README_END block');
-		File.saveContent(path, text.substr(0, start + README_START.length) + "\n" + tables + text.substr(end));
-		Sys.println("README.md updated");
+			fail('$file has no $BLOCK_START ... $BLOCK_END block');
+		File.saveContent(path, text.substr(0, start + BLOCK_START.length) + "\n" + content + text.substr(end));
+		Sys.println('$file updated');
 	}
 
 	static function ratio(better:Float, worse:Float, spread:Float):String {
 		var r = better / worse;
+		return (Math.abs(r - 1) <= spread * 2 ? "~" : "") + ratioText(r);
+	}
+
+	static function ratioText(r:Float):String {
 		var s = Std.string(Math.round(r * 100) / 100);
 		if (s.indexOf(".") < 0)
 			s += ".0";
-		return (Math.abs(r - 1) <= spread * 2 ? "~" : "") + s + "x";
+		return s + "x";
 	}
 
 	static function formatRate(rate:Float, unit:Null<String>):String {
