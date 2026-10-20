@@ -5298,7 +5298,12 @@ public:
          size_t targetMem = std::max( mem + targetFree, hx::sgMinimumWorkingMemory) +
                                (2<<(IMMIX_BLOCK_GROUP_BITS+IMMIX_BLOCK_BITS));
          size_t allowExtra = std::max(size_t{ 8 } * 1024 * 1024, targetMem / 4);
-         if (inForceCompact)
+         // Only an explicit Gc.compact/Gc.run(true) (major + compact) gives everything
+         // back. The allocator also forces a compacting collection when mFreeBlocks has
+         // no room for another group (it can't realloc while other threads read it);
+         // releasing then threw away the groups it was about to reuse, so the heap
+         // never grew past one free-list reserve and collected ~4x as often (#230).
+         if (inForceCompact && inMajor)
          {
             targetMem = 0;
             allowExtra = 0;
