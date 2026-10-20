@@ -12,7 +12,6 @@
 race_top:GlobalAllocator::GetNextFree
 race_top:GlobalAllocator::GetFreeBlock
 race_top:GlobalAllocator::AllocMoreBlocks
-race_top:GlobalAllocator::AllocLarge
 race_top:GlobalAllocator::ThreadLoop
 
 # GC: WaitForSafe, inlined into Collect, clears a running thread's allocation

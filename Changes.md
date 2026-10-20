@@ -125,6 +125,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed an object held only through a @:nativeGen interface being freed: converting an object to the interface directly went through ObjectPtr's conversion operator, which skipped registering the interface's offset with the collector
 * Fixed weak references to a method wrapped in a callable adapter (Haxe 5 signature adapters) being cleared while the method's receiver was still alive; the collector now follows the adapter chain to the receiver
 * Fixed _hx_gc_freeze duplicating objects referenced more than once, recursing forever on cycles, and crashing in generational builds (it misread the size of nursery allocations)
+* Fixed data races in the large-allocation path: the collection trigger, the large-allocation budget and the recycle hint were read and written by several threads without synchronization, and freeing a large buffer checked the recycle list outside its lock
 
 ### Threads
 

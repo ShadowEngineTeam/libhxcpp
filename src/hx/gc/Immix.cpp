@@ -3317,6 +3317,15 @@ public:
       }
    }
 
+   // Mutators raise it unlocked, so it only ever grows
+   void growLargeAllocSpace(size_t inSpace)
+   {
+      size_t space = mLargeAllocSpace.load(std::memory_order_relaxed);
+      while(inSpace > space && !mLargeAllocSpace.compare_exchange_weak(space, inSpace, std::memory_order_relaxed))
+      {
+      }
+   }
+
    void FreeLarge(void *inLarge)
    {
 #ifdef HXCPP_TELEMETRY
@@ -3324,35 +3333,29 @@ public:
 #endif
 
       ((unsigned char *)inLarge)[HX_ENDIAN_MARK_ID_BYTE] = 0;
-      // AllocLarge will not lock this list unless it decides there is a suitable
-      //  value, so we can't doa realloc without potentially crashing it.
-      if (largeObjectRecycle.hasExtraCapacity(1))
+      mLargeListLock.lock();
+      // With no room to recycle it, the sweep frees it instead
+      if (!largeObjectRecycle.hasExtraCapacity(1))
       {
-         unsigned int *blob = ((unsigned int *)inLarge) - 2;
-         unsigned int size = *blob;
-         mLargeListLock.lock();
-         mLargeAllocated -= size;
-         // Search from the end - the realloc-growth path frees the buffer it
-         // just allocated, which is the most recently pushed entry, so the
-         // common case finds it immediately instead of scanning the whole
-         // list (qerase does not preserve order, so direction is free)
-         for(int i=mLargeList.size()-1;i>=0;i--)
-            if (mLargeList[i]==blob)
-            {
-               mLargeList.qerase(i);
-               break;
-            }
-         // We could maybe free anyhow?
-         if (!largeObjectRecycle.hasExtraCapacity(1))
-         {
-            mLargeListLock.unlock();
-            HxFree(blob);
-            return;
-         }
-         largeObjectRecycle.push(blob);
-         mRecycleSize = largeObjectRecycle.size();
          mLargeListLock.unlock();
+         return;
       }
+      unsigned int *blob = ((unsigned int *)inLarge) - 2;
+      unsigned int size = *blob;
+      mLargeAllocated -= size;
+      // Search from the end - the realloc-growth path frees the buffer it
+      // just allocated, which is the most recently pushed entry, so the
+      // common case finds it immediately instead of scanning the whole
+      // list (qerase does not preserve order, so direction is free)
+      for(int i=mLargeList.size()-1;i>=0;i--)
+         if (mLargeList[i]==blob)
+         {
+            mLargeList.qerase(i);
+            break;
+         }
+      largeObjectRecycle.push(blob);
+      mRecycleSize.store((int)largeObjectRecycle.size(), std::memory_order_relaxed);
+      mLargeListLock.unlock();
    }
 
    void *AllocLarge(size_t inSize, bool inClear, bool inContainer=false)
@@ -3372,8 +3375,7 @@ public:
 
       inSize = (inSize + 3) & ~size_t{ 3 };
 
-      if (inSize<<1 > mLargeAllocSpace)
-         mLargeAllocSpace = inSize<<1;
+      growLargeAllocSpace(inSize<<1);
 
       unsigned int* result{};
       #ifndef HXCPP_SINGLE_THREADED_APP
@@ -3387,7 +3389,7 @@ public:
       // Probe the count only - scanning the vector itself unlocked raced
       // with concurrent push/qerase under the lock (and the old recheck
       // 'continue' skipped the entry swapped into the current slot)
-      if (mRecycleSize)
+      if (mRecycleSize.load(std::memory_order_relaxed))
       {
          if (do_lock && !isLocked)
          {
@@ -3400,7 +3402,7 @@ public:
             {
                result = largeObjectRecycle[i];
                largeObjectRecycle.qerase(i);
-               mRecycleSize = largeObjectRecycle.size();
+               mRecycleSize.store((int)largeObjectRecycle.size(), std::memory_order_relaxed);
                break;
             }
          }
@@ -3491,8 +3493,7 @@ public:
 
          int rounded = (inDelta +3) & ~3;
    
-         if (rounded<<1 > mLargeAllocSpace)
-            mLargeAllocSpace = rounded<<1;
+         growLargeAllocSpace((size_t)rounded<<1);
       }
 
       #ifndef HXCPP_SINGLE_THREADED_APP
@@ -5183,7 +5184,7 @@ public:
          else
             idx++;
       }
-      mRecycleSize = largeObjectRecycle.size();
+      mRecycleSize.store((int)largeObjectRecycle.size(), std::memory_order_relaxed);
 
       int l1 = mLargeList.size();
 
@@ -5352,8 +5353,7 @@ public:
 
       // Large alloc target
       size_t blockSize =  GetWorkingMemory();
-      if (blockSize > mLargeAllocSpace)
-         mLargeAllocSpace = blockSize;
+      growLargeAllocSpace(blockSize);
       mLargeAllocForceRefresh = mLargeAllocated + mLargeAllocSpace;
 
       mTotalAfterLastCollect = MemUsage();
@@ -5674,9 +5674,10 @@ public:
 
    size_t mRowsInUse;
    size_t mCurrentRowsInUse;
-   size_t mLargeAllocSpace;
+   std::atomic_size_t mLargeAllocSpace;
    size_t mLargeAllocForceRefresh;
-   size_t mLargeAllocated;
+   // Read unlocked to decide on a collection, changed under mLargeListLock
+   std::atomic_size_t mLargeAllocated;
    size_t mLargeMin;
    size_t mLargeMax;
    size_t mTotalAfterLastCollect;
@@ -5700,7 +5701,7 @@ public:
    hx::QuickVec<unsigned int *> largeObjectRecycle;
    // Lock-free probe for AllocLarge - only read unlocked, maintained under
    // mLargeListLock (or stop-the-world in the sweep)
-   volatile int mRecycleSize;
+   std::atomic_int mRecycleSize;
 };
 
 
