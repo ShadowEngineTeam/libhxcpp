@@ -8,6 +8,10 @@
 #ifdef NEKO_WINDOWS
 #   include <windows.h>
 #   include <io.h>
+#else
+#   include <fcntl.h>
+#   include <unistd.h>
+#   include <errno.h>
 #endif
 
 /**
@@ -21,6 +25,43 @@
 
 namespace
 {
+
+#ifndef NEKO_WINDOWS
+// fopen with the descriptor close-on-exec from the start, so a child that
+// another thread starts meanwhile does not inherit it
+static FILE *hxFopen(const char *inPath, const char *inMode)
+{
+   bool update = strchr(inMode,'+')!=0;
+   int flags = 0;
+   switch(inMode[0])
+   {
+      case 'r': flags = update ? O_RDWR : O_RDONLY; break;
+      case 'w': flags = (update ? O_RDWR : O_WRONLY) | O_CREAT | O_TRUNC; break;
+      case 'a': flags = (update ? O_RDWR : O_WRONLY) | O_CREAT | O_APPEND; break;
+      default: errno = EINVAL; return 0;
+   }
+   #ifdef O_CLOEXEC
+   flags |= O_CLOEXEC;
+   #endif
+   int fd;
+   do
+      fd = open(inPath, flags, 0666);
+   while (fd<0 && errno==EINTR);
+   if (fd<0)
+      return 0;
+   #ifndef O_CLOEXEC
+   fcntl(fd, F_SETFD, FD_CLOEXEC);
+   #endif
+   FILE *file = fdopen(fd, inMode);
+   if (!file)
+   {
+      int err = errno;
+      close(fd);
+      errno = err;
+   }
+   return file;
+}
+#endif
 
 struct fio : public hx::Object
 {
@@ -100,7 +141,7 @@ Dynamic _hx_std_file_open( String fname, String r )
    file = _wfopen(fname.wchar_str(&buf0),r.wchar_str(&buf1));
 #else
    hx::EnterGCFreeZone();
-   file = fopen(fname.utf8_str(&buf0),r.utf8_str(&buf1));
+   file = hxFopen(fname.utf8_str(&buf0),r.utf8_str(&buf1));
 #endif
    if (!file)
       file_error("file_open",fname);
@@ -403,7 +444,7 @@ String _hx_std_file_contents_string( String name )
    FILE *file = _wfopen(name.wchar_str(&buf), L"rb");
 #else
    hx::EnterGCFreeZone();
-   FILE *file = fopen(name.utf8_str(&buf), "rb");
+   FILE *file = hxFopen(name.utf8_str(&buf), "rb");
 #endif
    if(!file)
       file_error("file_contents",name);
@@ -471,7 +512,7 @@ Array<unsigned char> _hx_std_file_contents_bytes( String name )
    FILE *file = _wfopen(name.wchar_str(&buf), L"rb");
 #else
    hx::EnterGCFreeZone();
-   FILE *file = fopen(name.utf8_str(&buf), "rb");
+   FILE *file = hxFopen(name.utf8_str(&buf), "rb");
 #endif
    if(!file)
       file_error("file_contents",name);
