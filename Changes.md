@@ -273,6 +273,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed FileOutput.close and File.saveContent reporting success when the final write fails at close (a full disk, /dev/full); close throws file_close, as the other file operations do
 * Fixed files opened through sys.io.File leaking into child processes on POSIX: they are opened close-on-exec, as sockets and process pipes already are
 * Fixed Process.exitCode returning 0 when the child's status cannot be read (the host reaped it, or the wait failed); it throws process_exit with the reason, on POSIX and Windows
+* Fixed a POSIX process that fails to start (missing, or not executable) being created anyway and exiting 127; the constructor fails with the system's reason, as on Windows, and a program that really exits 127 is unaffected. Pipe and fork failures report their reason too
 
 ### Regular expressions, zlib and databases
 

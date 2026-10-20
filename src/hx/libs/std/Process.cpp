@@ -369,6 +369,13 @@ static String quoteString(String v)
       default = 1 = SHOW_WINDOW
    </doc>
 **/
+#ifndef NEKO_WINDOWS
+static void startFailed(int inErr)
+{
+   hx::Throw(HX_CSTRING("Could not start process: ") + String(strerror(inErr)));
+}
+#endif
+
 Dynamic _hx_std_process_run( String cmd, Array<String> vargs, int inShowParam )
 {
    #if defined(APPLETV) || defined(HX_APPLEWATCH)
@@ -525,19 +532,30 @@ Dynamic _hx_std_process_run( String cmd, Array<String> vargs, int inShowParam )
       signal(SIGPIPE, SIG_IGN);
    }
 
-   int input[2], output[2], error[2];
+   // The child writes exec's errno to status; a successful exec closes it
+   int input[2], output[2], error[2], status[2];
    if( pipe(input) )
-      return null();
+      startFailed(errno);
    if( pipe(output) )
    {
+      int err = errno;
       do_close(input[0]); do_close(input[1]);
-      return null();
+      startFailed(err);
    }
    if( pipe(error) )
    {
+      int err = errno;
       do_close(input[0]); do_close(input[1]);
       do_close(output[0]); do_close(output[1]);
-      return null();
+      startFailed(err);
+   }
+   if( pipe(status) )
+   {
+      int err = errno;
+      do_close(input[0]); do_close(input[1]);
+      do_close(output[0]); do_close(output[1]);
+      do_close(error[0]); do_close(error[1]);
+      startFailed(err);
    }
 
    // Close-on-exec: without it a concurrent spawn's child inherits these
@@ -549,6 +567,7 @@ Dynamic _hx_std_process_run( String cmd, Array<String> vargs, int inShowParam )
       fcntl(input[i], F_SETFD, FD_CLOEXEC);
       fcntl(output[i], F_SETFD, FD_CLOEXEC);
       fcntl(error[i], F_SETFD, FD_CLOEXEC);
+      fcntl(status[i], F_SETFD, FD_CLOEXEC);
    }
 
    hx::strbuf buf;
@@ -573,20 +592,15 @@ Dynamic _hx_std_process_run( String cmd, Array<String> vargs, int inShowParam )
    for(int i=0;i<values.size();i++)
       argv[i] = values[i].c_str();
 
-   // Built before fork: the child of a multithreaded process may only use
-   // async-signal-safe calls - the old GC allocation here could deadlock
-   // on a lock some other thread held at fork time
-   std::string execFailed = "Command not found : ";
-   execFailed += values[isRaw ? 2 : 0];
-   execFailed += "\n";
-
    int pid = fork();
    if( pid == -1 )
    {
+      int err = errno;
       do_close(input[0]); do_close(input[1]);
       do_close(output[0]); do_close(output[1]);
       do_close(error[0]); do_close(error[1]);
-      return null();
+      do_close(status[0]); do_close(status[1]);
+      startFailed(err);
    }
 
    // child
@@ -595,6 +609,7 @@ Dynamic _hx_std_process_run( String cmd, Array<String> vargs, int inShowParam )
       close(input[1]);
       close(output[0]);
       close(error[0]);
+      close(status[0]);
       dup2(input[0],0);
       dup2(output[1],1);
       dup2(error[1],2);
@@ -604,11 +619,12 @@ Dynamic _hx_std_process_run( String cmd, Array<String> vargs, int inShowParam )
       // quietly.  Restore the default, as Python's subprocess does.
       signal(SIGPIPE, SIG_DFL);
       execvp(argv[0],(char* const*)&argv[0]);
-      ssize_t unused = write(2, execFailed.c_str(), execFailed.size());
+      // Only async-signal-safe calls here, as the parent is multithreaded.
+      // _exit: exit() would run the parent's atexit handlers and flush its
+      // duplicated stdio buffers
+      int err = errno;
+      ssize_t unused = write(status[1], &err, sizeof(err));
       (void)unused;
-      // _exit: exit() would run the parent's atexit handlers and flush
-      // its duplicated stdio buffers; 127 is the shell convention for
-      // command-not-found, distinguishable from the program's own 1
       _exit(127);
    }
 
@@ -616,6 +632,28 @@ Dynamic _hx_std_process_run( String cmd, Array<String> vargs, int inShowParam )
    do_close(input[0]);
    do_close(output[1]);
    do_close(error[1]);
+   do_close(status[1]);
+
+   int execError = 0;
+   hx::EnterGCFreeZone();
+   ssize_t got;
+   do
+      got = read(status[0], &execError, sizeof(execError));
+   while (got < 0 && errno == EINTR);
+   do_close(status[0]);
+   if (got == (ssize_t)sizeof(execError))
+   {
+      int r;
+      do
+         r = waitpid(pid, 0, 0);
+      while (r < 0 && errno == EINTR);
+      do_close(input[1]);
+      do_close(output[0]);
+      do_close(error[0]);
+      hx::ExitGCFreeZone();
+      startFailed(execError);
+   }
+   hx::ExitGCFreeZone();
 
    p = new vprocess;
    p->create();
