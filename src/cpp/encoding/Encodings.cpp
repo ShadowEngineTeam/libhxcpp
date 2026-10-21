@@ -88,6 +88,34 @@ namespace
         }
         return true;
     }
+
+    // UTF-16 units in valid UTF-8: one for each byte that is not a
+    // continuation byte (10xxxxxx), and a second for each four-byte lead
+    // (11110xxx). Bit 7 of each byte holds the test, so eight bytes go at once
+    int64_t utf16Units(const View<uint8_t>& buffer)
+    {
+        const uint64_t high = 0x8080808080808080ull;
+        const uint64_t ones = 0x0101010101010101ull;
+        auto bytes = buffer.ptr.ptr;
+        auto units = int64_t{ 0 };
+        auto i     = int64_t{ 0 };
+
+        for (; i + 8 <= buffer.length; i += 8)
+        {
+            uint64_t w;
+            std::memcpy(&w, bytes + i, sizeof(w));
+            auto continuation = w & ~(w << 1) & high;
+            auto fourByteLead = w & (w << 1) & (w << 2) & (w << 3) & high;
+            units += 8 - static_cast<int64_t>(((continuation >> 7) * ones) >> 56);
+            units += static_cast<int64_t>(((fourByteLead >> 7) * ones) >> 56);
+        }
+        for (; i < buffer.length; i++)
+        {
+            units += (bytes[i] & 0xC0) != 0x80;
+            units += bytes[i] >= 0xF0;
+        }
+        return units;
+    }
 }
 
 int cpp::encoding::Utf8::getByteCount(const null&)
@@ -343,10 +371,9 @@ String cpp::encoding::Utf8::decode(const cpp::marshal::View<uint8_t>& buffer)
         return Ascii::decode(buffer);
     }
 #if defined(HX_SMART_STRINGS)
-    auto estimated_length = buffer.length * sizeof(char16_t);
-
-    auto temp   = ::hx::InternalNew(estimated_length, false);
-    auto output = View<char16_t>(temp, estimated_length).reinterpret<uint8_t>();
+    auto bytes  = utf16Units(buffer) * sizeof(char16_t);
+    auto exact  = static_cast<char16_t*>(::hx::InternalNew(bytes + sizeof(char16_t), false));
+    auto output = View<uint8_t>(reinterpret_cast<uint8_t*>(exact), bytes);
     int64_t k   = 0;
     int64_t i   = 0;
 
@@ -360,7 +387,6 @@ String cpp::encoding::Utf8::decode(const cpp::marshal::View<uint8_t>& buffer)
 
     auto chars = static_cast<int>(k / sizeof(char16_t));
 
-    auto exact = static_cast<char16_t*>(::hx::InternalRealloc(estimated_length, temp, k + sizeof(char16_t)));
     ((unsigned int*)exact)[-1] |= HX_GC_STRING_CHAR16_T;
     exact[chars] = 0;
 

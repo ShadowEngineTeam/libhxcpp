@@ -148,4 +148,17 @@ class TestUtf8 extends Test {
 	public function test_decode_empty_view() {
 		Assert.equals("",Utf8.decode(ViewExtensions.empty()));
 	}
+
+	public function test_decode_long_string() {
+		// The output is sized from a count of UTF-16 units taken eight bytes at a time
+		for (s in ['héllo wörld, ça va très bien', 'ψυχή ώρα και φως', '日本語のテキストです', 'a😀bc🎉defg𝄳hijklmn😀', 'ok 😀😀😀😀😀😀😀😀 ok']) {
+			Assert.equals(s, Utf8.decode(Bytes.ofString(s).asView()));
+		}
+	}
+
+	public function test_decode_malformed_string() {
+		for (hex in ['61626364656667f09d84', '6162636465666768c3', 'e3833061', '616263646566676880', 'eda080', 'c0af']) {
+			Assert.raises(() -> Utf8.decode(Bytes.ofHex(hex).asView()));
+		}
+	}
 }

@@ -92,6 +92,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Programs no longer load user32.dll at startup on Windows, which made starting and exiting about 1.1 ms slower than stock hxcpp: the critical-error dialog now looks MessageBoxA up when it is needed
 * cppia safe casts to Int, Float, Bool or String skip their type check when the value's static type already passes it: the check boxed every value and called out of the JIT, so Float array code ran at a fifth of its speed
 * cppia sets object fields directly again, except host fields at API level 500, which can hold typed functions: since HaxeFoundation/hxcpp#1324 every object field store went through a named lookup, and script allocation and virtual calls ran at a third to a sixth of hxcpp 4.3.53's speed in the JIT
+* cpp.encoding.Utf8.decode allocates its result once at the exact size: it counts the UTF-16 units first, eight bytes at a time, instead of decoding into a buffer twice the input's size and copying out of it. That allocates 4x less for CJK text and 3x less for Greek; throughput is 15% higher on short strings, 3% on mostly-ASCII text and 5% to 9% lower on text with no ASCII (libhxcpp #196)
 
 ### Garbage collector
 
