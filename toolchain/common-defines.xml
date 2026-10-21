@@ -21,6 +21,13 @@
  <flag value="-DHXCPP_GC_BIG_BLOCKS" if="HXCPP_GC_BIG_BLOCKS" tag="gc" />
  <flag value="-DHXCPP_GC_SUMMARY" if="HXCPP_GC_SUMMARY" tag="gc" />
  <flag value="-DHXCPP_GC_DYNAMIC_SIZE" if="HXCPP_GC_DYNAMIC_SIZE" tag="gc" />
+ <!-- GC debugging aids, which otherwise meant editing Immix.cpp -->
+ <flag value="-DSHOW_MEM_EVENTS" if="HXCPP_GC_SHOW_MEM_EVENTS" tag="gc" />
+ <flag value="-DSHOW_FRAGMENTATION" if="HXCPP_GC_SHOW_FRAGMENTATION" tag="gc" />
+ <flag value="-DPROFILE_COLLECT" if="HXCPP_GC_PROFILE_COLLECT" tag="gc" />
+ <flag value="-DHX_GC_FIXED_BLOCKS" if="HXCPP_GC_FIXED_BLOCKS" tag="gc" />
+ <flag value="-DHX_WATCH" if="HXCPP_GC_WATCH" tag="gc" />
+ <flag value="-DHX_WATCH_ADDRESS=${HXCPP_GC_WATCH}" if="HXCPP_GC_WATCH" tag="gc" />
  <flag value="-DHXCPP_GC_CHECK_POINTER" if="HXCPP_GC_CHECK_POINTER" tag="haxe" />
  <flag value="-DHXCPP_GC_DEBUG_ALWAYS_MOVE" if="HXCPP_GC_DEBUG_ALWAYS_MOVE" tag="haxe" />
  <flag value="-DHXCPP_GC_GENERATIONAL" if="HXCPP_GC_GENERATIONAL" tag="haxe" />

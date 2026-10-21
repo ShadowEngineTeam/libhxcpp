@@ -110,6 +110,10 @@ void DebuggerTrap()
 {
    static bool triggeredOnce = false;
 
+   // The report printed before the trap would otherwise die in the buffer
+   fflush(stdout);
+   fflush(stderr);
+
    if (!triggeredOnce)
    {
       triggeredOnce = true;
@@ -197,8 +201,11 @@ static size_t sgMaximumFreeSpace  = 1024*1024*1024;
 
 
 #ifdef HX_WATCH
+#ifndef HX_WATCH_ADDRESS
+#define HX_WATCH_ADDRESS 0x0000000100000200
+#endif
 uintptr_t hxWatchList[] = {
-  uintptr_t{ 0x0000000100000200 },
+  uintptr_t{ HX_WATCH_ADDRESS },
   uintptr_t{ 0 }
 };
 bool hxInWatchList(uintptr_t watch)
@@ -1462,6 +1469,13 @@ static_assert(IMMIX_USEFUL_LINES <= std::numeric_limits<decltype(BlockDataInfo::
               "BlockDataInfo::mFraggedRows must hold IMMIX_USEFUL_LINES");
 static_assert(MAX_HOLES <= std::numeric_limits<decltype(BlockDataInfo::mHoles)>::max(),
               "BlockDataInfo::mHoles must hold MAX_HOLES");
+static_assert((IMMIX_USEFUL_LINES<<IMMIX_LINE_BITS) <= std::numeric_limits<decltype(BlockDataInfo::mUsedBytes)>::max(),
+              "BlockDataInfo::mUsedBytes must hold a block's useful bytes");
+static_assert((IMMIX_USEFUL_LINES<<IMMIX_LINE_BITS) <= std::numeric_limits<decltype(BlockDataInfo::mMaxHoleSize)>::max(),
+              "BlockDataInfo::mMaxHoleSize must hold a block's useful bytes");
+static_assert((IMMIX_LINES<<IMMIX_LINE_BITS)-1 <= std::numeric_limits<decltype(HoleRange::start)>::max() &&
+              (IMMIX_USEFUL_LINES<<IMMIX_LINE_BITS) <= std::numeric_limits<decltype(HoleRange::length)>::max(),
+              "HoleRange must hold offsets and lengths within a block");
 
 static bool SmallestFreeFirst(BlockDataInfo *inA, BlockDataInfo *inB)
 {
@@ -4074,7 +4088,7 @@ public:
       }
 
       #ifdef SHOW_FRAGMENTATION
-      GCLOG("Moved %d objects (%d/%d blocks)\n", moveObjs, clearedBlocks, mAllBlocks.size());
+      GCLOG("Moved %d objects (%d/%d blocks)\n", moveObjs, clearedBlocks, (int)mAllBlocks.size());
       #endif
 
       if (moveObjs)
@@ -4883,8 +4897,9 @@ public:
       #endif
 
       #ifdef HX_WATCH
-      for (uintptr_t watch : hxWatchList)
+      for (uintptr_t *w = hxWatchList; *w; w++)
       {
+         uintptr_t watch = *w;
          GCLOG("********* Watch mark : %p %08x\n", reinterpret_cast<void*>(watch), (reinterpret_cast<unsigned int*>(watch))[-1]);
          GCLOG(" ******** is marked  : %d\n", (reinterpret_cast<unsigned char*>(watch)[HX_ENDIAN_MARK_ID_BYTE] == gByteMarkID));
       }
@@ -5178,11 +5193,11 @@ public:
       {
          GCLOG("  active bytes   : %s\n", formatBytes(stats.bytesInUse).c_str());
          GCLOG("  active ratio   : %f\n", (double)stats.bytesInUse/( mRowsInUse*IMMIX_LINE_LEN));
-         GCLOG("  fragged blocks : %d (%.1f%%)\n", stats.fraggedBlocks, stats.fraggedBlocks*100.0/mAllBlocks.size() );
+         GCLOG("  fragged blocks : %d (%.1f%%)\n", (int)stats.fraggedBlocks, stats.fraggedBlocks*100.0/mAllBlocks.size() );
          GCLOG("  fragged score  : %f\n", (double)stats.fragScore/mAllBlocks.size() );
       }
       GCLOG("  large size   : %s\n", formatBytes(mLargeAllocated).c_str());
-      GCLOG("  empty blocks : %d (%.1f%%)\n", stats.emptyBlocks, stats.emptyBlocks*100.0/mAllBlocks.size());
+      GCLOG("  empty blocks : %d (%.1f%%)\n", (int)stats.emptyBlocks, stats.emptyBlocks*100.0/mAllBlocks.size());
       #endif
 
       size_t bytesInUse = mRowsInUse<<IMMIX_LINE_BITS;
@@ -5345,8 +5360,8 @@ public:
                GCLOG("  total memory : %s\n", formatBytes(GetWorkingMemory()).c_str() );
                GCLOG("  total needed : %s\n", formatBytes((size_t)mRowsInUse*IMMIX_LINE_LEN).c_str() );
                GCLOG("  for bytes    : %s\n", formatBytes(bytesInUse).c_str() );
-               GCLOG("  empty blocks : %d (%.1f%%)\n", stats.emptyBlocks, stats.emptyBlocks*100.0/mAllBlocks.size());
-               GCLOG("  fragged blocks : %d (%.1f%%)\n", stats.fraggedBlocks, stats.fraggedBlocks*100.0/mAllBlocks.size() );
+               GCLOG("  empty blocks : %d (%.1f%%)\n", (int)stats.emptyBlocks, stats.emptyBlocks*100.0/mAllBlocks.size());
+               GCLOG("  fragged blocks : %d (%.1f%%)\n", (int)stats.fraggedBlocks, stats.fraggedBlocks*100.0/mAllBlocks.size() );
                #endif
             }
 

@@ -30,7 +30,12 @@ Defines affecting how the code is compiled.  These can be on the command line wh
 | *HXCPP_GC_SUMMARY*      | Print small profiling summary at end of program |
 | *HXCPP_GC_DYNAMIC_SIZE* | Monitor GC times and expand memory working space if required |
 | *HXCPP_GC_BIG_BLOCKS*   | Allow working memory greater than 1 Gig |
-| *HXCPP_GC_DEBUG_LEVEL*  | Number 1-4 indicating additional debugging in GC |
+| *HXCPP_GC_DEBUG_LEVEL*  | Number 1-4 indicating additional debugging in GC. Any level marks on one thread and recursively, which changes the timing and can hide a race; to watch a collection without that, use the defines below |
+| *HXCPP_GC_SHOW_MEM_EVENTS* | Log the heap's size, use and decisions at each collection |
+| *HXCPP_GC_SHOW_FRAGMENTATION* | Log fragmentation and the blocks a moving collection frees |
+| *HXCPP_GC_PROFILE_COLLECT* | Log mark and sweep times and object counts for each collection |
+| *HXCPP_GC_FIXED_BLOCKS* | Reserve the heap at a fixed address on 64-bit Windows, so objects land at the same addresses from run to run |
+| *HXCPP_GC_WATCH*        | An address, such as 0x100000200, whose header and mark the collector logs at each collection, and when the conservative scan finds it or a move takes it; usually with HXCPP_GC_FIXED_BLOCKS |
 | *HXCPP_GC_VERIFY*       | Check the heap's consistency around every collection and stop on the first error. Slow; for debugging the GC |
 | *HXCPP_GC_DEBUG_ALWAYS_MOVE* | Implies HXCPP_GC_MOVING and moves every movable object at each collection, to flush out native code that keeps raw pointers. Slow; for debugging |
 | *HXCPP_CATCH_SEGV*      | Turn a segmentation fault into a Haxe exception (a signal handler, or an SEH translator with MSVC), set up on each thread |
