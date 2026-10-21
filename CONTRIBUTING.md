@@ -21,6 +21,8 @@ haxe compile.hxml
 
 `test/haxelib/check.sh` checks the setup itself: installing, setup, an update and `off`, in a haxelib repository of its own.
 
+C++ formatting is in `.clang-format`. Format the lines you change (for example with your editor's format-selection command or `git clang-format`), not whole files: much of the existing code predates it, and reformatting a file buries the change that matters. Code under `project/thirdparty` keeps its upstream formatting.
+
 ## Tests
 
 Each suite builds against the checkout haxelib points at. Use `-D HXCPP_M32`, `-D HXCPP_M64` or `-D HXCPP_ARM64` for the architecture.

@@ -1,0 +1,17 @@
+# libhxcpp's own C++ (include/, src/, project/libs): three-space indents and
+# braces on their own lines. Format the code you change rather than whole files.
+BasedOnStyle: LLVM
+IndentWidth: 3
+TabWidth: 3
+UseTab: Never
+BreakBeforeBraces: Allman
+ColumnLimit: 0
+AccessModifierOffset: -3
+IndentCaseLabels: true
+NamespaceIndentation: None
+PointerAlignment: Right
+SortIncludes: Never
+AllowShortFunctionsOnASingleLine: All
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+SpaceBeforeParens: ControlStatements
