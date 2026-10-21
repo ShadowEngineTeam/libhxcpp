@@ -478,7 +478,8 @@ DECLARE_FAST_TLS_DATA(StackContext, tlsStackContext);
 
 #ifdef HXCPP_SCRIPTABLE
 extern void scriptMarkStack(hx::MarkContext *);
-extern void scriptMarkModules(hx::MarkContext *);
+extern void scriptMarkModules(hx::MarkContext *, bool inGenerational);
+extern void scriptFreeModules();
 #ifdef HXCPP_VISIT_ALLOCS
 extern void scriptVisitModules(hx::VisitContext *);
 #endif
@@ -4753,7 +4754,7 @@ public:
 
       hx::MarkClassStatics(&mMarker);
       #if defined(HXCPP_SCRIPTABLE) && defined(HXCPP_GC_GENERATIONAL)
-      hx::scriptMarkModules(&mMarker);
+      hx::scriptMarkModules(&mMarker, inGenerational);
       #endif
 
       {
@@ -4831,6 +4832,11 @@ public:
       MarkWeakHashValues();
 
       hx::RunFinalizers();
+
+      // Finalizers and weak reference checks may still look at dead script objects
+      #ifdef HXCPP_SCRIPTABLE
+      hx::scriptFreeModules();
+      #endif
 
       #ifdef HXCPP_GC_VERIFY
       for(int i=0;i<mAllBlocks.size();i++)
@@ -5736,6 +5742,8 @@ public:
    hx::QuickVec<LocalAllocator *> mLocalAllocs;
    LocalAllocator *mLocalPool[LOCAL_POOL_SIZE];
    hx::QuickVec<unsigned int *> largeObjectRecycle;
+
+   void ForEachStackContext(void (*inFunc)(hx::StackContext *, void *), void *inData);
    // Lock-free probe for AllocLarge - only read unlocked, maintained under
    // mLargeListLock (or stop-the-world in the sweep)
    std::atomic_int mRecycleSize;
@@ -6691,6 +6699,24 @@ void MarkLocalAlloc(LocalAllocator *inAlloc,hx::MarkContext *__inCtx)
 void ClearPooledAlloc(LocalAllocator *inAlloc)
 {
    inAlloc->Reset();
+}
+
+void GlobalAllocator::ForEachStackContext(void (*inFunc)(hx::StackContext *, void *), void *inData)
+{
+   for(int i=0;i<mLocalAllocs.size();i++)
+      inFunc(mLocalAllocs[i], inData);
+   for(int i=0;i<LOCAL_POOL_SIZE;i++)
+      if (mLocalPool[i])
+         inFunc(mLocalPool[i], inData);
+}
+
+namespace hx
+{
+// Only while collecting, with every thread stopped
+void GCForEachStackContext(void (*inFunc)(StackContext *, void *), void *inData)
+{
+   sGlobalAlloc->ForEachStackContext(inFunc, inData);
+}
 }
 
 #ifdef HXCPP_VISIT_ALLOCS

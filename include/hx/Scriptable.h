@@ -185,7 +185,7 @@ public:
    virtual void boot() = 0;
    virtual ::hx::Class resolveClass( ::String inName) = 0;
    // Unregisters the module's classes and resources and clears its statics.
-   // Its code stays loaded, so objects and closures it made keep working.
+   // Its code is freed once nothing from it is in use (docs/CppiaModuleRelease.md).
    virtual void release() { }
 };
 typedef ::hx::ObjectPtr<CppiaLoadedModule_obj> CppiaLoadedModule;
@@ -200,6 +200,8 @@ void __scriptable_load_cppia(String inCode);
 ::hx::CppiaLoadedModule __scriptable_cppia_from_data(Array<unsigned char> inBytes);
 void __scriptable_load_neko_bytes(Array<unsigned char> inBytes);
 void __scriptable_load_abc(Array<unsigned char> inBytes);
+// Modules whose native memory has not been freed yet
+int __scriptable_cppia_live_modules();
 
 #define HX_SCRIPTABLE_REGISTER_INTERFACE(name,class) \
    ::hx::ScriptableRegisterInterface( HX_CSTRING(name), __scriptableFunctions, & class##_scriptable )

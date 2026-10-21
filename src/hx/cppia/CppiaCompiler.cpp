@@ -1565,6 +1565,7 @@ public:
 
 void CppiaCompiler::freeCompiled(CppiaFunc inFunc)
 {
+   sljit_free_code((void *)inFunc);
 }
 
 CppiaCompiler *CppiaCompiler::create(int inFrameSize)

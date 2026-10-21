@@ -1727,12 +1727,8 @@ struct NewExpr : public CppiaDynamicExpr
 
                // sJitReturnReg = buffer
 
-               // buffer[-1] = size | container
-
-               if (info->containsPointers)
-                  compiler->move( sJitReturnReg.star(etInt,-sizeof(int)), (int)( size | IMMIX_ALLOC_IS_CONTAINER) );
-               else
-                  compiler->move( sJitReturnReg.star(etInt,-sizeof(int)), (int)( size ) );
+               // buffer[-1] = size | container: marking an instance marks its module
+               compiler->move( sJitReturnReg.star(etInt,-sizeof(int)), (int)( size | IMMIX_ALLOC_IS_CONTAINER) );
 
                // Set class vtable
                compiler->move(sJitReturnReg.star(jtPointer), (void *) info->getHaxeBaseVTable() );

@@ -4,3 +4,4 @@ alignment:*/include/hx/Scriptable.h
 alignment:*/include/hx/StackContext.h
 alignment:*/include/hxString.h
 alignment:*/src/String.cpp
+alignment:*/src/Dynamic.cpp

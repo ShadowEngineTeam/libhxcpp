@@ -154,7 +154,20 @@ typedef std::map<int,CppiaStackVar *> CppiaStackVarMap;
 
 extern String sInvalidArgCount;
 
-struct CppiaExpr
+// Native objects a module creates while it loads come from its arena and go when it is freed.
+// Deleting one runs its destructor; its memory stays with the module.
+void *cppiaAlloc(size_t inSize, void (*inDestroy)(void *));
+void cppiaFree(void *inPtr);
+
+template<typename T>
+struct CppiaOwned
+{
+   static void destroy(void *inPtr) { static_cast<T *>(inPtr)->~T(); }
+   static void *operator new(size_t inSize) { return cppiaAlloc(inSize, destroy); }
+   static void operator delete(void *inPtr) { cppiaFree(inPtr); }
+};
+
+struct CppiaExpr : public CppiaOwned<CppiaExpr>
 {
    int line;
    const char *filename;
@@ -275,8 +288,11 @@ struct ScriptCallable : public CppiaDynamicExpr
    std::vector<CppiaConst>    initVals;
    CppiaExpr *body;
    CppiaModule *data;
+   // Static functions and main store their module in the frame's this slot, so running code keeps it
+   bool staticEntry;
    #ifdef CPPIA_JIT
    CppiaFunc compiled;
+   bool ownsCompiled;
    #endif
 
    #ifdef HXCPP_STACK_SCRIPTABLE
@@ -310,6 +326,7 @@ struct ScriptCallable : public CppiaDynamicExpr
    #ifdef CPPIA_JIT
    void compile();
    void genDefaults(CppiaCompiler *compiler);
+   void genModuleAnchor(CppiaCompiler *compiler);
    void genArgs(CppiaCompiler *compiler, CppiaExpr *inThis, Expressions &inArgs, const JitVal &inThisVal);
    void genCode(CppiaCompiler *compiler,const JitVal &inDest=JitVal(),ExprType type=etNull) HXCPP_OVERRIDE;
    #endif
@@ -346,7 +363,7 @@ hx::Object *createEnumClosure(struct CppiaEnumConstructor &inContructor);
 hx::Object *DynamicToArrayType(hx::Object *obj, ArrayType arrayType);
 
 
-struct TypeData
+struct TypeData : public CppiaOwned<TypeData>
 {
    String              name;
    hx::Class           haxeClass;
@@ -391,9 +408,18 @@ public:
    ScriptCallable                  *main;
    std::vector< hx::Resource >     resources;
 
+   // The module's CppiaObject: what keeps it alive once released
+   hx::Object                      *owner;
+   bool                            released;
+
+   struct ArenaChunk { char *base; size_t size; size_t used; };
+   std::vector<ArenaChunk>         arena;
+
    CppiaModule();
    ~CppiaModule();
 
+   void *arenaAlloc(size_t inSize);
+   bool ownsMemory(const void *inPtr) const;
    void release();
 
    void link();
@@ -437,7 +463,7 @@ struct ArgInfo
 };
 
 
-struct CppiaFunction
+struct CppiaFunction : public CppiaOwned<CppiaFunction>
 {
    CppiaModule          &cppia;
    int                  nameId;
@@ -462,7 +488,7 @@ struct CppiaFunction
 
 
 
-struct CppiaStackVar
+struct CppiaStackVar : public CppiaOwned<CppiaStackVar>
 {
    int      nameId;
    int      id;
@@ -508,7 +534,7 @@ void LinkExpressions(Expressions &ioExpressions, CppiaModule &data);
 
 CppiaExpr *createEnumField(CppiaStream &stream,bool inWithArgs);
 
-struct CppiaVar
+struct CppiaVar : public CppiaOwned<CppiaVar>
 {
    enum Access { accNormal, accNo, accResolve, accCall, accRequire, accCallNative } ;
 
@@ -641,7 +667,7 @@ void runFunExprDynamicVoid(CppiaCtx *ctx, ScriptCallable *inFunExpr, hx::Object 
 hx::Class_obj *createCppiaClass(CppiaClassInfo *);
 
 
-class CppiaClassInfo
+class CppiaClassInfo : public CppiaOwned<CppiaClassInfo>
 {
 public:
 
