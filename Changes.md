@@ -405,6 +405,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * cpp.marshal boxes of trivially destructible native values (scalars, pointers, plain structs) no longer register a GC finalizer that did no work
 * hx::Throw, hx::Rethrow and the debugger's checked throw helpers are declared [[noreturn]], so native code that ends a function in a throw no longer needs a dummy return (MSVC error C4716)
 * Updated the Tracy client to v0.14.1, with fixes for UTF-8 zone, plot and frame names, TRACY_ON_DEMAND, deep call stacks off Windows and Android, threads ending with undeclared small deallocations, and named frame marks (HaxeFoundation/hxcpp#1429 by @EliteMasterEric, with named frame marks by Cameron Taylor)
+* Fixed 32-bit Linux builds with HXCPP_TRACY aborting at startup: Tracy 0.14 sign-extended pointers above 2 GB into its tagged message addresses, and as root it asserted on the 64-bit kernel's /proc/kcore
 
 ### Build tool and platforms
 

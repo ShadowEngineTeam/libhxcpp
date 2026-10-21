@@ -24,7 +24,8 @@ KCore::KCore()
     elf_ehdr ehdr;
     if( read( m_fd, &ehdr, sizeof( ehdr ) ) != sizeof( ehdr ) ) goto err;
 
-    TRACY_ASSERT( ehdr.e_phentsize == sizeof( elf_phdr ) );
+    // A 32-bit process reads the 64-bit kernel's image
+    if( ehdr.e_phentsize != sizeof( elf_phdr ) ) goto err;
 
     for( elf_half i=0; i<ehdr.e_phnum; i++ )
     {

@@ -500,7 +500,7 @@ public:
 
         auto ptr = (char*)tracy_malloc( txtLength );
         memcpy( ptr, txt, txtLength );
-        TaggedUserlandAddress taggedPtr{ (uint64_t)ptr, MakeMessageMetadata( source, severity ) };
+        TaggedUserlandAddress taggedPtr{ (uint64_t)(uintptr_t)ptr, MakeMessageMetadata( source, severity ) };
 
         if( color != 0 )
         {
@@ -533,7 +533,7 @@ public:
             tracy::GetProfiler().SendCallstack( callstack_depth );
         }
 
-        TaggedUserlandAddress taggedPtr{ (uint64_t)txt, MakeMessageMetadata( source, severity ) };
+        TaggedUserlandAddress taggedPtr{ (uint64_t)(uintptr_t)txt, MakeMessageMetadata( source, severity ) };
 
         if( color != 0 )
         {
@@ -560,7 +560,7 @@ public:
         TRACY_ASSERT( size < (std::numeric_limits<uint16_t>::max)() );
         auto ptr = (char*)tracy_malloc( size );
         memcpy( ptr, txt, size );
-        TaggedUserlandAddress taggedPtr{ (uint64_t)ptr, MakeMessageMetadata( MessageSourceType::User, MessageSeverity::Info ) };
+        TaggedUserlandAddress taggedPtr{ (uint64_t)(uintptr_t)ptr, MakeMessageMetadata( MessageSourceType::User, MessageSeverity::Info ) };
 
         TracyLfqPrepare( QueueType::MessageAppInfo );
         MemWrite( &item->messageFat.time, GetTime() );
