@@ -51,7 +51,7 @@ void CommonInitAlloc()
 
    #if !defined(HX_WINRT) && !defined(__SNC__) && !defined(__ORBIS__)
    const char *minimumWorking{ getenv("HXCPP_MINIMUM_WORKING_MEMORY") };
-   if (minimumWorking)
+   if (minimumWorking && *minimumWorking)
    {
        if (1 != std::sscanf(minimumWorking, "%zu", &sgMinimumWorkingMemory))
        {
@@ -60,7 +60,7 @@ void CommonInitAlloc()
    }
 
    const char* minimumFreeSpace{ getenv("HXCPP_MINIMUM_FREE_SPACE") };
-   if (minimumFreeSpace)
+   if (minimumFreeSpace && *minimumFreeSpace)
    {
        if (1 != std::sscanf(minimumFreeSpace, "%zu", &sgMinimumFreeSpace))
        {
@@ -69,7 +69,7 @@ void CommonInitAlloc()
    }
 
    const char* targetFree{ getenv("HXCPP_TARGET_FREE_SPACE") };
-   if (targetFree)
+   if (targetFree && *targetFree)
    {
        if (1 != std::sscanf(targetFree, "%zu", &sgTargetFreeSpacePercentage))
        {
