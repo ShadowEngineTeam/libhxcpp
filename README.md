@@ -19,18 +19,20 @@ The benchmark suite in [bench](bench) builds the same Haxe sources twice, once a
 <!-- bench:start -->
 | Area | Benchmark | libhxcpp vs hxcpp 4.3.53 |
 | --- | --- | ---: |
-| Allocation | Small objects (`alloc_small`) | ~0.99x |
-| Allocation | Strings (`alloc_strings`) | 2.09x |
-| Collection pauses | Slowest 0.1% of work units (`gc_pauses`) | 2.53x |
-| Maps | Int keys (`map_int`) | 1.03x |
-| Maps | String keys (`map_string`) | 1.41x |
-| Maps | Object keys (`map_object`) | ~0.99x |
+| Allocation | Small objects (`alloc_small`) | ~1.0x |
+| Allocation | Strings (`alloc_strings`) | 2.13x |
+| Collection pauses | Slowest 0.1% of work units (`gc_pauses`) | 2.51x |
+| Maps | Int keys (`map_int`) | ~1.04x |
+| Maps | String keys (`map_string`) | 1.29x |
+| Maps | Object keys (`map_object`) | ~1.06x |
 | Strings | Building with StringBuf (`string_build`) | 1.56x |
-| Sorting | Objects with a comparator (`sort_object`) | ~1.03x |
-| Startup | Start and exit (`noop`) | 0.99x |
-| Memory | Peak memory, all benchmarks | 1.03x median, 0.83x worst (`map_string`) |
+| Sorting | Objects with a comparator (`sort_object`) | 1.06x |
+| CPPIA | Virtual calls in the JIT (`cppia_jit_virtual_call`) | ~1.0x |
+| CPPIA | Object allocation in the JIT (`cppia_jit_alloc_objects`) | 0.97x |
+| Startup | Start and exit (`noop`) | 0.94x |
+| Memory | Peak memory, all benchmarks | 1.04x median, 0.83x worst (`map_string`) |
 
-Above 1 favours libhxcpp; "~" marks a difference within the run-to-run spread. Windows, AMD Ryzen 9 9950X 16-Core Processor; MSVC 194435213, 64-bit; Haxe 4.3.7; libhxcpp c653b135; 2026-10-21 11:05:06.
+Above 1 favours libhxcpp; "~" marks a difference within the run-to-run spread. Windows, AMD Ryzen 9 9950X 16-Core Processor; MSVC 194435213, 64-bit; Haxe 4.3.7; libhxcpp 6b740dcc; 2026-10-21 11:13:39.
 <!-- bench:end -->
 
 [BENCHMARKS.md](BENCHMARKS.md) has every benchmark, with absolute numbers, collection pause percentiles, peak memory for each benchmark and how the comparison works. These numbers are from one Windows machine; Linux and macOS results are still to come. Where libhxcpp is still slower than stock hxcpp, that is a bug we are working on, and the [6.0.0 checklist](https://github.com/openfl/libhxcpp/issues/192) tracks it.
