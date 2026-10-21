@@ -429,6 +429,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed x86_64 Android builds producing arm64 code when they ask for HXCPP_X86_64 without HXCPP_M64, as Lime does
 * Fixed toggling a define such as HXCPP_TELEMETRY, HXCPP_GC_BIG_BLOCKS or HXCPP_M64 not recompiling the runtime and hxcpp's libraries, which left objects built both ways and could fail to link
 * Fixed Emscripten builds running --spill-pointers without --profiling-funcs when the detected emscripten version was below 6 or misread, which failed to find the stack pointer or lost GC roots; the two always go together
+* Removed the Visual Studio 2013 and older toolchain setup, which could no longer build libhxcpp, and HXCPP_MSVC_VER values that name them now stop the build with an error (HaxeFoundation/hxcpp#1428 by @tobil4sk)
 
 
 4.3.xx
