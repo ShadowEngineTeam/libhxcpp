@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <float.h>
 #include <set>
 #include <string>
 #include "hx/Hash.h"
@@ -1039,6 +1040,93 @@ static const char *_hx_non_finite_str(double v)
    return 0;
 }
 
+// Rounds inValue to inCount significant digits and returns what they read
+// back as. outExp is the decimal exponent of the first digit
+static double hxRoundDigits(double inValue, int inCount, char *outDigits, int &outExp)
+{
+   char buf[40];
+   HX_SNPRINTF_C(buf,40,"%.*e",inCount-1,inValue);
+   const char *p = buf;
+   for(int n=0; *p!='e'; p++)
+      if (*p>='0' && *p<='9')
+         outDigits[n++] = *p;
+   outExp = atoi(p+1);
+   return hxStrtodC(buf,0);
+}
+
+static char *hxWriteExponent(char *out, int inExp)
+{
+   *out++ = 'e';
+   *out++ = inExp<0 ? '-' : '+';
+   int mag = inExp<0 ? -inExp : inExp;
+   if (mag>=100)
+      *out++ = '0' + mag/100;
+   if (mag>=10)
+      *out++ = '0' + mag/10%10;
+   *out++ = '0' + mag%10;
+   return out;
+}
+
+static double hxReadDigits(const char *inDigits, int inCount, int inExp)
+{
+   char buf[40];
+   memcpy(buf,inDigits,inCount);
+   *hxWriteExponent(buf+inCount,inExp-inCount+1) = '\0';
+   return hxStrtodC(buf,0);
+}
+
+static int hxTrimZeros(const char *inDigits, int inCount)
+{
+   while(inCount>1 && inDigits[inCount-1]=='0')
+      inCount--;
+   return inCount;
+}
+
+// The fewest significant digits that read back as inValue, which is finite
+// and positive, choosing the nearest such digits, like std::to_chars
+static int hxShortestDigits(double inValue, char *outDigits, int &outExp)
+{
+   int binExp;
+   bool powerOfTwo = inValue>DBL_MIN && frexp(inValue,&binExp)==0.5;
+   if (inValue>=DBL_MIN && !powerOfTwo)
+   {
+      // 15 digits tell normal doubles apart, so if the nearest 15 read back,
+      // they are the shortest digits padded with zeros
+      for(int count=15; count<17; count++)
+         if (hxRoundDigits(inValue,count,outDigits,outExp)==inValue)
+            return hxTrimZeros(outDigits,count);
+   }
+   else
+   {
+      // Denormals can need fewer than 15 digits, and the doubles either side
+      // of a power of two are not equally far from it, so the nearest digits
+      // can miss when the next ones up still read back
+      for(int count=1; count<17; count++)
+      {
+         double back = hxRoundDigits(inValue,count,outDigits,outExp);
+         if (back==inValue)
+            return hxTrimZeros(outDigits,count);
+         if (powerOfTwo && back<inValue)
+         {
+            int i = count-1;
+            while(i>=0 && outDigits[i]=='9')
+               outDigits[i--] = '0';
+            if (i<0)
+            {
+               outDigits[0] = '1';
+               outExp++;
+            }
+            else
+               outDigits[i]++;
+            if (hxReadDigits(outDigits,count,outExp)==inValue)
+               return hxTrimZeros(outDigits,count);
+         }
+      }
+   }
+   hxRoundDigits(inValue,17,outDigits,outExp);
+   return hxTrimZeros(outDigits,17);
+}
+
 String::String(const double &inRHS)
 {
    const char *nonFinite = _hx_non_finite_str(inRHS);
@@ -1055,31 +1143,53 @@ String::String(const double &inRHS)
    }
    else
    {
-      // Emit the shortest %g representation that round-trips. 17 significant
-      // digits always suffice to round-trip a double, but try fewer first so
-      // simple values stay short ("0.1", not "0.10000000000000001"). This makes
-      // String<->parseFloat lossless and matches other Haxe targets, which the
-      // previous fixed "%.15g" did not (e.g. 0.1+0.2 printed "0.3").
-      for(int prec=15; prec<=17; prec++)
+      // The shortest digits that read back, laid out like "%.15g", or "%.16g"
+      // and "%.17g" when more digits are needed, with the exponent trimmed to
+      // its significant digits ("1e-7") as on other Haxe targets
+      char *out = buf;
+      if (signbit(inRHS))
+         *out++ = '-';
+      double value = fabs(inRHS);
+      char digits[17];
+      int exp = 0;
+      int count = 1;
+      if (value==0)
+         digits[0] = '0';
+      else
+         count = hxShortestDigits(value,digits,exp);
+      int precision = count>15 ? count : 15;
+      if (exp<-4 || exp>=precision)
       {
-         HX_SNPRINTF_C(buf,100,"%.*g",prec,inRHS);
-         if (hxStrtodC(buf,0)==inRHS)
-            break;
+         *out++ = digits[0];
+         if (count>1)
+         {
+            *out++ = '.';
+            memcpy(out,digits+1,count-1);
+            out += count-1;
+         }
+         out = hxWriteExponent(out,exp);
       }
-      buf[99]='\0';
-      // Normalize the exponent to minimal digits: C printf emits at least two
-      // ("1e-07", or "1e-007" on old MSVC), whereas other Haxe targets emit
-      // "1e-7". Strip leading zeros from the exponent (value is unchanged).
-      char *e = strchr(buf,'e');
-      if (e)
+      else if (exp>=0)
       {
-         char *p = e+1;
-         if (*p=='+' || *p=='-') p++;
-         char *q = p;
-         while (q[0]=='0' && q[1]>='0' && q[1]<='9') q++;
-         if (q!=p)
-            memmove(p,q,strlen(q)+1);
+         for(int i=0; i<=exp; i++)
+            *out++ = i<count ? digits[i] : '0';
+         if (count>exp+1)
+         {
+            *out++ = '.';
+            memcpy(out,digits+exp+1,count-exp-1);
+            out += count-exp-1;
+         }
       }
+      else
+      {
+         *out++ = '0';
+         *out++ = '.';
+         for(int i=-1; i>exp; i--)
+            *out++ = '0';
+         memcpy(out,digits,count);
+         out += count;
+      }
+      *out = '\0';
    }
    buf[99]='\0';
    __s = GCStringDup(buf,-1,&length);

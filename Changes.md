@@ -182,7 +182,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed Std.parseInt undefined behaviour passing non-ASCII chars to isspace, and made overflow behaviour platform-independent (decimal values saturate to the Int range instead of depending on the platform's long size)
 * Fixed String(unsigned int) appending a literal "d" (from a "%ud" format) for raw unsigned ints formatted via the runtime
 * Fixed Std.string of NaN/Infinity to match other targets ("NaN", "Infinity", "-Infinity") instead of platform printf output ("-nan(ind)", "inf")
-* Fixed Std.string(Float) losing precision: now emits the shortest representation that round-trips (e.g. 0.1+0.2 prints "0.30000000000000004"), so String<->parseFloat is lossless and matches other targets
+* Fixed Std.string(Float) losing precision: it now prints the fewest digits that read back as the same Float (0.1+0.2 prints "0.30000000000000004", the smallest denormal "5e-324"), so String<->parseFloat is lossless and matches other targets
 * Fixed out-of-bounds read when deleting a fixed field of an anonymous object (Reflect.deleteField)
 * Fixed String.indexOf with a negative start index reading out of bounds and returning a bogus negative result (now clamps to 0, matching other targets)
 * Fixed String.lastIndexOf with a negative start index returning -1 instead of matching at index 0 (now clamps to 0, matching other targets)
