@@ -83,6 +83,39 @@ These numbers are from one Windows machine; Linux and macOS results are still to
 | `sort_object` | Objects sorted by an Int field, with repeated keys |
 | `noop` | Starting the program and exiting at once (startup time, measured 20 times per runtime) |
 
+### CPPIA
+
+Each workload below has two benchmark names, `cppia_interp_<workload>` and
+`cppia_jit_<workload>`. A full run includes both modes on both runtimes. The
+driver also checks that the interpreter and JIT return the same checksum.
+
+| Workload | What it measures |
+| --- | --- |
+| `int_loop` | Integer arithmetic, bit operations and branches in a script loop |
+| `float_array` | Float arithmetic, typed array reads and writes, and Float-to-Int conversion |
+| `alloc_objects` | 125,000 script objects per call, with Int and object fields and a bounded live graph |
+| `virtual_call` | Virtual calls alternating between two script implementations |
+| `closure_call` | Script calls to a closure that updates a captured variable |
+| `native_call` | Script-to-native calls with an Int argument and result |
+| `native_callback` | A native loop calling a script closure that updates a captured variable |
+
+The native timing harness loads one script module per process. Loading, linking,
+booting and JIT compilation happen in `setup()`, outside the timed samples.
+These measure execution after loading, not module startup or reload. Each sample
+repeats its workload enough times to keep timer overhead small, and the operation
+count includes every repetition.
+
+The script classes live in `bench/cppia/Script.hx` and are compiled only to
+CPPIA. `bench/cppia/shared` defines the interface and native bridge exported by
+the host and imported by the script with `dll_export` and `dll_import`. The host
+uses `scriptable` and `--dce no`, like the CPPIA tests. It is a separate executable
+so those flags do not change the native benchmarks. Peak memory for these cases
+includes the host, loaded module and any JIT code. The `noop` startup row still
+measures the native executable.
+
+The published results above predate the CPPIA cases. A fresh complete run from a
+committed tree is needed to publish comparable numbers for them.
+
 ## Running it yourself
 
 You need Haxe 4.3, the C++ compiler hxcpp uses on your platform, and curl.
@@ -91,6 +124,7 @@ You need Haxe 4.3, the C++ compiler hxcpp uses on your platform, and curl.
 cd bench
 haxe --run Run                       # every benchmark, both runtimes
 haxe --run Run --only map_int,sort_int
+haxe --run Run --only cppia_interp_native_call,cppia_jit_native_call
 haxe --run Run --no-build            # reuse the last builds
 haxe --run Run --readme              # publish: this page and the README summary
 ```
@@ -99,7 +133,7 @@ haxe --run Run --readme              # publish: this page and the README summary
 
 ## Adding a benchmark
 
-1. Add the class to [bench/src](bench/src) and register it in `Main.hx`.
+1. Add the class to [bench/src](bench/src) and register it in `Main.hx`. For a CPPIA workload, add its script implementation in `bench/cppia/Script.hx` and register both modes in `CppiaBenchmarks.all()`.
 2. Add a row to the table above.
 3. If it covers something most programs depend on, add it to `SUMMARY` in `Run.hx` so it also shows in the README. Keep that table short; everything else belongs here.
 4. Run `haxe --run Run --readme` from a committed tree and commit the result, so this page and the README stay current.

@@ -41,6 +41,9 @@ using StringTools;
 
 	Exits non-zero if any build fails, any process fails, or two runs of a
 	benchmark disagree on the checksum, which means one did different work.
+	CPPIA benchmarks also have to agree between the interpreter and JIT.
+	A full run builds a separate scriptable host and the same CPPIA workloads
+	for each runtime; --only with native names skips those extra builds.
 **/
 class Run {
 	static inline var STARTUP_RUNS = 20;
@@ -110,11 +113,20 @@ class Run {
 			if (!FileSystem.exists(rt.exe))
 				fail('${rt.label}: ${rt.exe} is missing; run without --no-build');
 			rt.env = readEnv(rt);
+			if (needsCppia()) {
+				if (!FileSystem.exists(rt.cppiaExe) || !FileSystem.exists(rt.dir + "/cppia/workloads.cppia"))
+					fail('${rt.label}: CPPIA build is missing; run without --no-build');
+				rt.cppiaEnv = readEnv(rt, true);
+				if (rt.cppiaEnv.compiler != rt.env.compiler || rt.cppiaEnv.pointerBits != rt.env.pointerBits)
+					fail('${rt.label}: native and CPPIA hosts used different compilers or word sizes');
+			}
 			Sys.println('${rt.label}: ${rt.env.compiler}, ${rt.env.pointerBits}-bit, API level ${rt.env.apiLevel}');
 		}
 		checkComparable(runtimes);
 
 		var names = listBenchmarks(runtimes[0]);
+		if (needsCppia())
+			names = names.concat(listBenchmarks(runtimes[0], true));
 		if (only != null) {
 			for (n in only)
 				if (names.indexOf(n) < 0)
@@ -125,9 +137,18 @@ class Run {
 		var failures = 0;
 		var startup = measureStartup(runtimes);
 		var results:Array<BenchResult> = [];
+		var cppiaChecksums = new Map<String, Int>();
 		for (name in names) {
 			Sys.print('$name ');
 			var r = runBenchmark(name, runtimes);
+			if (r.error == null && name.startsWith("cppia_")) {
+				var prefix = name.startsWith("cppia_interp_") ? "cppia_interp_" : "cppia_jit_";
+				var workload = name.substr(prefix.length);
+				if (cppiaChecksums.exists(workload) && cppiaChecksums[workload] != r.checksum)
+					r.error = 'CPPIA interpreter and JIT checksums differ for $workload';
+				else
+					cppiaChecksums[workload] = r.checksum;
+			}
 			if (r.error != null) {
 				failures++;
 				Sys.println('FAILED: ${r.error}');
@@ -141,7 +162,7 @@ class Run {
 			host: hostInfo(),
 			haxe: commandOutput("haxe", ["-version"]),
 			libhxcpp: gitDescribe(),
-			runtimes: [for (rt in runtimes) {name: rt.name, label: rt.label, env: rt.env}],
+			runtimes: [for (rt in runtimes) {name: rt.name, label: rt.label, env: rt.env, cppiaEnv: rt.cppiaEnv}],
 			settings: {runs: runs, samples: samples, warmup: warmup},
 			startup: [for (rt in runtimes) {name: rt.name, seconds: startup[rt.name]}],
 			benchmarks: [for (r in results) r.toJson()],
@@ -281,10 +302,34 @@ class Run {
 			Sys.println(log.slice(log.length > 40 ? log.length - 40 : 0).join("\n"));
 			fail('${rt.label}: build failed');
 		}
+		if (needsCppia()) {
+			Sys.println('Building ${rt.label} CPPIA host and script (log: ${rt.dir}/cppia-build.log)');
+			var host = 'haxe -cp "${benchDir}/src" -cp "${benchDir}/cppia/shared" -main Main -cpp cppia'
+				+ ' -D bench_cppia -D scriptable -D dll_export=cppia-host.info --dce no$flags';
+			var script = 'haxe -cp "${benchDir}/cppia" -cp "${benchDir}/cppia/shared" -main Script'
+				+ ' -D dll_import=cppia-host.info --cppia cppia/workloads.cppia';
+			for (command in [host, script]) {
+				var redirect = command == host ? ">" : ">>";
+				if (inDir(rt.dir, () -> Sys.command('$command $redirect cppia-build.log 2>&1')) != 0) {
+					var log = File.getContent(rt.dir + "/cppia-build.log").split("\n");
+					Sys.println(log.slice(log.length > 40 ? log.length - 40 : 0).join("\n"));
+					fail('${rt.label}: CPPIA build failed');
+				}
+			}
+		}
 	}
 
-	static function readEnv(rt:Runtime):Dynamic {
-		var out = benchProcess(rt, ["env"]);
+	static function needsCppia():Bool {
+		if (only == null)
+			return true;
+		for (name in only)
+			if (name.startsWith("cppia_"))
+				return true;
+		return false;
+	}
+
+	static function readEnv(rt:Runtime, cppia = false):Dynamic {
+		var out = benchProcess(rt, ["env"], cppia);
 		for (line in out.split("\n"))
 			if (line.startsWith("BENCH_ENV "))
 				return Json.parse(line.substr(10));
@@ -302,8 +347,8 @@ class Run {
 		}
 	}
 
-	static function listBenchmarks(rt:Runtime):Array<String> {
-		return [for (l in benchProcess(rt, ["list"]).split("\n")) if (l.trim() != "") l.trim()];
+	static function listBenchmarks(rt:Runtime, cppia = false):Array<String> {
+		return [for (l in benchProcess(rt, ["list"], cppia).split("\n")) if (l.trim() != "") l.trim()];
 	}
 
 	// --- Measuring -------------------------------------------------------
@@ -584,8 +629,9 @@ class Run {
 	// --- Processes -------------------------------------------------------
 
 	/** Runs the benchmark executable and returns its stdout; throws if it fails. **/
-	static function benchProcess(rt:Runtime, args:Array<String>):String {
-		var p = new Process(rt.exe, args);
+	static function benchProcess(rt:Runtime, args:Array<String>, cppia = false):String {
+		var exe = cppia || args[0].startsWith("cppia_") ? rt.cppiaExe : rt.exe;
+		var p = new Process(exe, args);
 		var out = p.stdout.readAll().toString();
 		var err = p.stderr.readAll().toString();
 		var code = p.exitCode();
@@ -643,14 +689,17 @@ class Runtime {
 	public final label:String;
 	public final dir:String;
 	public final exe:String;
+	public final cppiaExe:String;
 	public var hxcppPath = "";
 	public var env:Dynamic = null;
+	public var cppiaEnv:Dynamic = null;
 
 	public function new(name:String, label:String, dir:String) {
 		this.name = name;
 		this.label = label;
 		this.dir = dir;
 		this.exe = dir + "/out/Main" + (Sys.systemName() == "Windows" ? ".exe" : "");
+		this.cppiaExe = dir + "/cppia/Main" + (Sys.systemName() == "Windows" ? ".exe" : "");
 	}
 }
 

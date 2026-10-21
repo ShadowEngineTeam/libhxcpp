@@ -22,11 +22,15 @@ import haxe.Timer;
 **/
 class Main {
 	static function all():Array<Benchmark> {
+		#if bench_cppia
+		return CppiaBenchmarks.all();
+		#else
 		return [
 			new AllocSmall(), new AllocStrings(), new AllocArrays(), new GcPauses(), new MapInt(), new MapString(), new MapObject(),
 			new StringBuild(), new StringIndex(), new StringSubstr(), new StringSplit(), new StringCase(), new SortInt(), new SortString(),
 			new SortObject(),
 		];
+		#end
 	}
 
 	static function main() {
