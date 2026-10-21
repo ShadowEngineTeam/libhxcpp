@@ -90,6 +90,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Conservative stack scanning no longer scans the whole large-object list for every stack word in its address range: after several such words in a collection it searches a sorted index, and the range shrinks back when large objects are freed. With 40000 large buffers, a collection with native frames on the stack fell from 2.4-4.6 ms to 0.8 ms
 * Programs no longer load user32.dll at startup on Windows, which made starting and exiting about 1.1 ms slower than stock hxcpp: the critical-error dialog now looks MessageBoxA up when it is needed
 * cppia safe casts to Int, Float, Bool or String skip their type check when the value's static type already passes it: the check boxed every value and called out of the JIT, so Float array code ran at a fifth of its speed
+* cppia sets object fields directly again, except host fields at API level 500, which can hold typed functions: since HaxeFoundation/hxcpp#1324 every object field store went through a named lookup, and script allocation and virtual calls ran at a third to a sixth of hxcpp 4.3.53's speed in the JIT
 
 ### Garbage collector
 

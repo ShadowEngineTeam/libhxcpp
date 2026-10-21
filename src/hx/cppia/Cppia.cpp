@@ -4739,6 +4739,7 @@ struct GetFieldByLinkage : public CppiaExpr
       int offset = 0;
       CppiaExpr *replace = 0;
       FieldStorage storeType = fsUnknown;
+      bool hostField = false;
 
       if (type->haxeClass.mPtr)
       {
@@ -4747,6 +4748,7 @@ struct GetFieldByLinkage : public CppiaExpr
          {
             offset = store->offset;
             storeType = store->type;
+            hostField = true;
             DBGLOG(" found haxe var %s::%s = %d (%d)\n", type->haxeClass->mName.out_str(), field.out_str(), offset, storeType);
          }
       }
@@ -4787,6 +4789,21 @@ struct GetFieldByLinkage : public CppiaExpr
                      (CppiaExpr*)new MemReference<String,locThis>(this,offset);
                   break;
             case fsObject:
+               // A host field can hold a typed function at API level 500,
+               // which a script closure must be converted to on the way in
+               // (HaxeFoundation/hxcpp#1324); other object fields hold the
+               // object as it is
+               #if (HXCPP_API_LEVEL>=500)
+               if (hostField)
+               {
+                  forceNamedAccess = true;
+                  break;
+               }
+               #endif
+               replace = object ?
+                     (CppiaExpr*)new MemReference<hx::Object *,locObj>(this,offset,object):
+                     (CppiaExpr*)new MemReference<hx::Object *,locThis>(this,offset);
+               break;
             case fsByte:
             case fsUnknown:
                 forceNamedAccess = true;
