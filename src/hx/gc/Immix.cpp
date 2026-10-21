@@ -305,6 +305,18 @@ static GcMode sGcMode = gcmFull;
 #define IMMIX_BLOCK_GROUP_BITS  5
 
 
+struct CensusEntry
+{
+   size_t count;
+   size_t bytes;
+};
+// Set while __hxcpp_gc_census collects; marking is then single-threaded
+static bool sgCensus = false;
+static std::unordered_map<hx::Class_obj *,CensusEntry> *sgCensusCounts = 0;
+// Stack values a census collection could not tell from raw memory, with whether
+// each is a large allocation; they are marked after the precise marking
+static std::vector< std::pair<void *,bool> > *sgCensusDeferred = 0;
+
 #ifdef HXCPP_DEBUG
 static hx::Object *gCollectTrace = 0;
 static bool gCollectTraceDoPrint = false;
@@ -2203,6 +2215,16 @@ void MarkAllocUnchecked(void *inPtr,hx::MarkContext *__inCtx)
    }
 }
 
+static void CensusCount(hx::Object *inPtr, unsigned int inFlags)
+{
+   // A large object keeps its size in the word before its header
+   size_t size = (inFlags & IMMIX_ALLOC_ROW_COUNT) ? (inFlags & IMMIX_ALLOC_SIZE_MASK) >> IMMIX_ALLOC_SIZE_SHIFT :
+                                                     ((unsigned int *)inPtr)[-2];
+   CensusEntry &entry = (*sgCensusCounts)[ inPtr->__GetClass().GetPtr() ];
+   entry.count++;
+   entry.bytes += size;
+}
+
 void MarkObjectAllocUnchecked(hx::Object *inPtr,hx::MarkContext *__inCtx)
 {
    size_t ptr_i = ((size_t)inPtr)-sizeof(int);
@@ -2252,6 +2274,9 @@ void MarkObjectAllocUnchecked(hx::Object *inPtr,hx::MarkContext *__inCtx)
    else
    #endif
       ((unsigned char *)inPtr)[HX_ENDIAN_MARK_ID_BYTE] = gByteMarkID;
+
+   if (sgCensus)
+      CensusCount(inPtr, flags);
 
    int rows = flags & IMMIX_ALLOC_ROW_COUNT;
    if (rows)
@@ -4804,6 +4829,8 @@ public:
 
 
       mMarker.init();
+      if (sgCensus)
+         sgCensusCounts->clear();
 
       hx::MarkClassStatics(&mMarker);
       #if defined(HXCPP_SCRIPTABLE) && defined(HXCPP_GC_GENERATIONAL)
@@ -4866,13 +4893,19 @@ public:
       MEM_STAMP(tMarkLocalEnd);
 
       #ifdef HX_MULTI_THREAD_MARKING
+      if (!sgCensus)
+      {
          mMarker.releaseJobs();
 
          // Unleash the workers...
          StartThreadJobs(tpjMark, MAX_GC_THREADS, true);
-      #else
-         mMarker.processMarkStack();
+      }
+      else
       #endif
+         mMarker.processMarkStack();
+
+      if (sgCensus)
+         MarkCensusDeferred();
 
 
 
@@ -4908,6 +4941,26 @@ public:
 
 
    
+   // The stack values a census put aside: what a reference reached is marked, and
+   // counted, by now, and the rest is marked as the stack scan would have
+   void MarkCensusDeferred()
+   {
+      hx::MarkContext *__inCtx = &mMarker;
+      for(size_t i=0;i<sgCensusDeferred->size();i++)
+      {
+         void *ptr = (*sgCensusDeferred)[i].first;
+         if ((*sgCensusDeferred)[i].second)
+         {
+            unsigned char &mark = ((unsigned char *)ptr)[HX_ENDIAN_MARK_ID_BYTE];
+            if (mark != gByteMarkID)
+               mark = static_cast<unsigned char>(gByteMarkID);
+         }
+         else
+            HX_MARK_STRING(ptr);
+      }
+      sgCensusDeferred->clear();
+   }
+
    // Weak-key hashes are ephemerons: a value is reachable only while the hash and its
    // key are. A value can make keys in other weak hashes reachable, so this repeats
    // until nothing more is marked.
@@ -4927,11 +4980,14 @@ public:
          if (marked)
          {
             #ifdef HX_MULTI_THREAD_MARKING
-            mMarker.releaseJobs();
-            StartThreadJobs(tpjMark, MAX_GC_THREADS, true);
-            #else
-            mMarker.processMarkStack();
+            if (!sgCensus)
+            {
+               mMarker.releaseJobs();
+               StartThreadJobs(tpjMark, MAX_GC_THREADS, true);
+            }
+            else
             #endif
+               mMarker.processMarkStack();
          }
       }
       while(marked);
@@ -5905,7 +5961,12 @@ void MarkConservative(int *inBottom, int *inTop,hx::MarkContext *__inCtx)
             {
                unsigned char& mark{ reinterpret_cast<unsigned char*>(potentialObject)[HX_ENDIAN_MARK_ID_BYTE] };
                if (mark != gByteMarkID)
-                  mark = static_cast<unsigned char>(gByteMarkID);
+               {
+                  if (sgCensus)
+                     sgCensusDeferred->push_back(std::make_pair(reinterpret_cast<void*>(potentialObject), true));
+                  else
+                     mark = static_cast<unsigned char>(gByteMarkID);
+               }
             }
             else
             {
@@ -5945,7 +6006,12 @@ void MarkConservative(int *inBottom, int *inTop,hx::MarkContext *__inCtx)
                   if (isWatch)
                      GCLOG(" Mark string %p (%p)\n", reinterpret_cast<void*>(potentialObject), ptr);
                   #endif
-                  HX_MARK_STRING(reinterpret_cast<void*>(potentialObject));
+                  // An object with no pointer fields looks like this too, so a
+                  //  census marks it last, after a reference may have counted it
+                  if (sgCensus)
+                     sgCensusDeferred->push_back(std::make_pair(reinterpret_cast<void*>(potentialObject), false));
+                  else
+                     HX_MARK_STRING(reinterpret_cast<void*>(potentialObject));
                   lastPin = potentialObject;
                   info->pin();
                }
@@ -7283,6 +7349,34 @@ int __hxcpp_gc_trace(hx::Class inClass,bool inPrint)
        gCollectTrace = 0;
        return gCollectTraceCount;
     #endif
+}
+
+Dynamic __hxcpp_gc_census()
+{
+   std::unordered_map<hx::Class_obj *,CensusEntry> counts;
+   std::vector< std::pair<void *,bool> > deferred;
+   sgCensusCounts = &counts;
+   sgCensusDeferred = &deferred;
+   sgCensus = true;
+   hx::InternalCollect(true,false);
+   sgCensus = false;
+   sgCensusCounts = 0;
+   sgCensusDeferred = 0;
+
+   std::vector< std::pair<hx::Class_obj *,CensusEntry> > sorted(counts.begin(), counts.end());
+   std::sort(sorted.begin(), sorted.end(), [](const std::pair<hx::Class_obj *,CensusEntry> &a, const std::pair<hx::Class_obj *,CensusEntry> &b)
+      { return a.second.bytes > b.second.bytes; });
+
+   Array<Dynamic> result = Array_obj<Dynamic>::__new(0, (int)sorted.size());
+   for(size_t i=0;i<sorted.size();i++)
+   {
+      hx::Anon row = hx::Anon_obj::Create();
+      row->__SetField(HX_CSTRING("name"), sorted[i].first ? sorted[i].first->mName : HX_CSTRING("(no class)"), hx::paccDynamic);
+      row->__SetField(HX_CSTRING("count"), (int)std::min(sorted[i].second.count, (size_t)std::numeric_limits<int>::max()), hx::paccDynamic);
+      row->__SetField(HX_CSTRING("bytes"), (Float)sorted[i].second.bytes, hx::paccDynamic);
+      result->push(row);
+   }
+   return result;
 }
 
 static int hxSaturateInt(size_t inBytes)

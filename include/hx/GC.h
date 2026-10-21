@@ -35,6 +35,9 @@ HXCPP_EXTERN_CLASS_ATTRIBUTES void  __hxcpp_enable(bool inEnable);
 HXCPP_EXTERN_CLASS_ATTRIBUTES void  __hxcpp_collect(bool inMajor=true);
 HXCPP_EXTERN_CLASS_ATTRIBUTES void   __hxcpp_gc_compact();
 HXCPP_EXTERN_CLASS_ATTRIBUTES int   __hxcpp_gc_trace(hx::Class inClass, bool inPrint);
+// A major collection that counts the live objects of each class, in any build.
+// Returns an Array of { name:String, count:Int, bytes:Float }, most bytes first
+HXCPP_EXTERN_CLASS_ATTRIBUTES Dynamic __hxcpp_gc_census();
 HXCPP_EXTERN_CLASS_ATTRIBUTES int   __hxcpp_gc_used_bytes();
 HXCPP_EXTERN_CLASS_ATTRIBUTES double __hxcpp_gc_mem_info(int inWhat);
 HXCPP_EXTERN_CLASS_ATTRIBUTES void  __hxcpp_enter_gc_free_zone();
