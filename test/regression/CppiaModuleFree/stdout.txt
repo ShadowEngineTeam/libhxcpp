@@ -1,0 +1,30 @@
+jit false: released modules freed: true
+jit false: instance: kept true, freed after true
+jit false: bound method: kept true, freed after true
+jit false: static function: kept true, freed after true
+jit false: local function: kept true, freed after true
+jit false: enum value: kept true, freed after true
+jit false: enum with arguments: kept true, freed after true
+jit false: enum constructor: kept true, freed after true
+jit false: class: kept true, freed after true
+jit false: resource string outlives its module: true
+jit false: running code kept: true, freed after true
+jit false: running on a thread: true, freed after true
+jit false: exception stack: true, still readable true
+jit false: failed load freed: true
+jit false: native memory stable: true
+jit true: released modules freed: true
+jit true: instance: kept true, freed after true
+jit true: bound method: kept true, freed after true
+jit true: static function: kept true, freed after true
+jit true: local function: kept true, freed after true
+jit true: enum value: kept true, freed after true
+jit true: enum with arguments: kept true, freed after true
+jit true: enum constructor: kept true, freed after true
+jit true: class: kept true, freed after true
+jit true: resource string outlives its module: true
+jit true: running code kept: true, freed after true
+jit true: running on a thread: true, freed after true
+jit true: exception stack: true, still readable true
+jit true: failed load freed: true
+jit true: native memory stable: true

@@ -2,6 +2,9 @@
 #include "Cppia.h"
 #include "CppiaStream.h"
 #include <stdlib.h>
+#include <atomic>
+#include <mutex>
+#include <new>
 
 
 namespace hx
@@ -9,12 +12,107 @@ namespace hx
 
 
 static int sScriptId = 0;
+static std::atomic<int> sLiveModules(0);
 
 
 const char **sgNativeNameSlots = 0;
 int sgNativeNameSlotCount = 0;
 
-Array<Dynamic> gAllCppiaModules;
+// Every module not yet freed, loaded or released
+static std::mutex sModuleLock;
+static std::vector<CppiaModule *> &allModules()
+{
+   static std::vector<CppiaModule *> *modules = new std::vector<CppiaModule *>();
+   return *modules;
+}
+
+
+// --- Module arena ----
+
+static thread_local CppiaModule *sAllocModule = 0;
+
+struct CppiaAllocScope
+{
+   CppiaModule *previous;
+   CppiaAllocScope(CppiaModule *inModule) : previous(sAllocModule) { sAllocModule = inModule; }
+   ~CppiaAllocScope() { sAllocModule = previous; }
+};
+
+struct CppiaBlock
+{
+   void (*destroy)(void *);
+   // Zero for a block from malloc, made when no module was loading
+   size_t size;
+};
+enum { CPPIA_BLOCK_HEADER = 16, CPPIA_ARENA_CHUNK = 64*1024 };
+
+void *cppiaAlloc(size_t inSize, void (*inDestroy)(void *))
+{
+   size_t total = (CPPIA_BLOCK_HEADER + inSize + 15) & ~(size_t)15;
+   CppiaBlock *block;
+   if (sAllocModule)
+   {
+      block = (CppiaBlock *)sAllocModule->arenaAlloc(total);
+      block->size = total;
+   }
+   else
+   {
+      block = (CppiaBlock *)malloc(total);
+      if (!block)
+         throw std::bad_alloc();
+      block->size = 0;
+   }
+   block->destroy = inDestroy;
+   return (char *)block + CPPIA_BLOCK_HEADER;
+}
+
+void cppiaFree(void *inPtr)
+{
+   if (!inPtr)
+      return;
+   CppiaBlock *block = (CppiaBlock *)((char *)inPtr - CPPIA_BLOCK_HEADER);
+   if (block->size)
+      block->destroy = 0;
+   else
+      free(block);
+}
+
+void *CppiaModule::arenaAlloc(size_t inSize)
+{
+   ArenaChunk chunk;
+   if (inSize > CPPIA_ARENA_CHUNK/4)
+   {
+      // A chunk of its own, before the one still filling
+      chunk.base = (char *)malloc(inSize);
+      if (!chunk.base)
+         throw std::bad_alloc();
+      chunk.size = chunk.used = inSize;
+      arena.insert(arena.empty() ? arena.end() : arena.end()-1, chunk);
+      return chunk.base;
+   }
+   if (arena.empty() || arena.back().used + inSize > arena.back().size)
+   {
+      chunk.base = (char *)malloc(CPPIA_ARENA_CHUNK);
+      if (!chunk.base)
+         throw std::bad_alloc();
+      chunk.size = CPPIA_ARENA_CHUNK;
+      chunk.used = 0;
+      arena.push_back(chunk);
+   }
+   ArenaChunk &last = arena.back();
+   void *result = last.base + last.used;
+   last.used += inSize;
+   return result;
+}
+
+bool CppiaModule::ownsMemory(const void *inPtr) const
+{
+   const char *ptr = (const char *)inPtr;
+   for(size_t i=0;i<arena.size();i++)
+      if (ptr>=arena[i].base && ptr<arena[i].base + arena[i].used)
+         return true;
+   return false;
+}
 
 
 
@@ -26,12 +124,17 @@ CppiaModule::CppiaModule()
    layout = 0;
    creatingClass = 0;
    creatingFunction = 0;
+   owner = 0;
+   released = false;
    scriptId = ++sScriptId;
+   sLiveModules++;
    strings = Array_obj<String>::__new(0,0);
    if (sgNativeNameSlotCount>0)
       for(int i=2;i<sgNativeNameSlotCount;i++)
          interfaceSlots[sgNativeNameSlots[i]] = i;
 
+   std::lock_guard<std::mutex> lock(sModuleLock);
+   allModules().push_back(this);
 }
 
 void CppiaModule::setDebug(CppiaExpr *outExpr, int inFileId, int inLine)
@@ -50,11 +153,31 @@ void CppiaModule::setDebug(CppiaExpr *outExpr, int inFileId, int inLine)
 
 // --- CppiaModule -------------------------
 
+// Runs in a collection, so it must not allocate from the collector
 CppiaModule::~CppiaModule()
 {
-   delete main;
-   for(int i=0;i<classes.size();i++)
-      delete classes[i];
+   sLiveModules--;
+   for(size_t c=0;c<arena.size();c++)
+   {
+      char *ptr = arena[c].base;
+      char *end = ptr + arena[c].used;
+      while(ptr<end)
+      {
+         CppiaBlock *block = (CppiaBlock *)ptr;
+         if (block->destroy)
+         {
+            void (*destroy)(void *) = block->destroy;
+            block->destroy = 0;
+            destroy(ptr + CPPIA_BLOCK_HEADER);
+         }
+         ptr += block->size;
+      }
+   }
+   for(size_t c=0;c<arena.size();c++)
+      free(arena[c].base);
+   for(size_t r=0;r<resources.size();r++)
+      if (resources[r].mData)
+         free((unsigned char *)resources[r].mData - 4);
 }
 
 void CppiaModule::link()
@@ -129,8 +252,7 @@ CppiaClassInfo *CppiaModule::findClass( ::String inName)
 }
 
 
-// The data the module holds goes; its code stays, since instances, closures,
-// class objects, stack traces and JIT code can still point into it
+// The data the module holds goes now; its code goes once nothing reaches the module
 void CppiaModule::release()
 {
    for(int i=0;i<classes.size();i++)
@@ -290,18 +412,21 @@ public:
    CppiaModule *cppia;
    bool        booted;
 
+   // A loaded module is a root until it is released
    CppiaObject(CppiaModule *inModule)
    {
       cppia = inModule;
-      GCSetFinalizer( this, onRelease );
-   }
-   static void onRelease(hx::Object *inObj)
-   {
-      delete ((CppiaObject *)inObj)->cppia;
+      booted = false;
+      cppia->owner = this;
+      GCAddRoot(&cppia->owner);
    }
    void __Mark(hx::MarkContext *ctx) HXCPP_OVERRIDE { cppia->mark(ctx); }
 #ifdef HXCPP_VISIT_ALLOCS
-   void __Visit(hx::VisitContext *ctx) HXCPP_OVERRIDE { cppia->visit(ctx); }
+   void __Visit(hx::VisitContext *__inCtx) HXCPP_OVERRIDE
+   {
+      cppia->visit(__inCtx);
+      HX_VISIT_OBJECT(cppia->owner);
+   }
 #endif
 
 
@@ -336,7 +461,13 @@ public:
             //__hxcpp_enable(false);
             DBGLOG("--- Run --------------------------------------------\n");
             CppiaCtx *ctx = CppiaCtx::getCurrent();
-            ctx->runVoid(cppia->main);
+            {
+               // Main gets a frame of its own, which is given back when it returns
+               unsigned char *pointer = ctx->pointer;
+               ctx->push( (hx::Object *) 0 );
+               AutoStack save(ctx,pointer);
+               ctx->runVoid(cppia->main);
+            }
             if (ctx->exception)
             {
                hx::Object *e = ctx->exception;
@@ -360,9 +491,18 @@ public:
       return null();
    }
 
+   // The module stops being a root; it is freed by the first collection that finds nothing
+   // reaching this object
    void release() HXCPP_OVERRIDE
    {
+      {
+         std::lock_guard<std::mutex> lock(sModuleLock);
+         if (cppia->released)
+            return;
+         cppia->released = true;
+      }
       cppia->release();
+      GCRemoveRoot(&cppia->owner);
    }
 
    // The std's Module extern does not declare release, so untyped calls
@@ -399,33 +539,122 @@ public:
  embeds that box in its code, a script static is assigned. None of those writes has a barrier, so a
  minor collection freed the young object while the old module still pointed at it.
 
- So every loaded module is marked on every collection, the way class statics are.
+ So every loaded module is marked on every collection, the way class statics are. A released module
+ is too in a minor collection; a full one reaches it only through its CppiaObject, so it can be freed.
 */
-void scriptMarkModules(hx::MarkContext *__inCtx)
+void scriptMarkModules(hx::MarkContext *__inCtx, bool inGenerational)
 {
-   if (!gAllCppiaModules.mPtr)
-      return;
-   for(int i=0;i<gAllCppiaModules->length;i++)
-   {
-      CppiaObject *module = static_cast<CppiaObject *>(gAllCppiaModules[i].mPtr);
-      if (module)
-         module->cppia->mark(__inCtx);
-   }
+   std::lock_guard<std::mutex> lock(sModuleLock);
+   std::vector<CppiaModule *> &modules = allModules();
+   for(size_t i=0;i<modules.size();i++)
+      if (!modules[i]->released || inGenerational)
+         modules[i]->mark(__inCtx);
 }
 
 #ifdef HXCPP_VISIT_ALLOCS
 void scriptVisitModules(hx::VisitContext *__inCtx)
 {
-   if (!gAllCppiaModules.mPtr)
-      return;
-   for(int i=0;i<gAllCppiaModules->length;i++)
+   std::lock_guard<std::mutex> lock(sModuleLock);
+   std::vector<CppiaModule *> &modules = allModules();
+   for(size_t i=0;i<modules.size();i++)
    {
-      CppiaObject *module = static_cast<CppiaObject *>(gAllCppiaModules[i].mPtr);
-      if (module)
-         module->cppia->visit(__inCtx);
+      modules[i]->visit(__inCtx);
+      HX_VISIT_OBJECT(modules[i]->owner);
    }
 }
 #endif
+
+
+#ifdef HXCPP_STACK_TRACE
+void GCForEachStackContext(void (*inFunc)(StackContext *, void *), void *inData);
+
+static const char *copyPositionString(const char *inString)
+{
+   if (!inString)
+      return 0;
+   size_t len = strlen(inString) + 1;
+   char *result = (char *)malloc(len);
+   memcpy(result, inString, len);
+   return result;
+}
+
+static std::string positionKey(const char *inString)
+{
+   return inString ? std::string(inString) : std::string();
+}
+
+// An exception stack can still show functions of a freed module; they get copies kept by content,
+// so reloading the same code adds none
+static const StackPosition *keepPosition(const StackPosition *inPosition)
+{
+   static std::map<std::string, StackPosition *> *kept = new std::map<std::string, StackPosition *>();
+   std::string key = positionKey(inPosition->className) + '\n' + positionKey(inPosition->functionName) + '\n' +
+                     positionKey(inPosition->fullName) + '\n' + positionKey(inPosition->fileName);
+   StackPosition *&copy = (*kept)[key];
+   if (!copy)
+   {
+      copy = new StackPosition(*inPosition);
+      copy->className = copyPositionString(inPosition->className);
+      copy->functionName = copyPositionString(inPosition->functionName);
+      copy->fullName = copyPositionString(inPosition->fullName);
+      copy->fileName = copyPositionString(inPosition->fileName);
+      #ifdef HXCPP_STACK_SCRIPTABLE
+      copy->scriptCallable = 0;
+      #endif
+   }
+   return copy;
+}
+
+static void keepPositions(QuickVec<ExceptionStackFrame> &ioStack, std::vector<CppiaModule *> &inFreed)
+{
+   for(int i=0;i<ioStack.size();i++)
+      for(size_t m=0;m<inFreed.size();m++)
+         if (inFreed[m]->ownsMemory(ioStack[i].position))
+         {
+            ioStack[i].position = keepPosition(ioStack[i].position);
+            break;
+         }
+}
+
+static void keepContextPositions(StackContext *inCtx, void *inFreed)
+{
+   std::vector<CppiaModule *> &freed = *(std::vector<CppiaModule *> *)inFreed;
+   keepPositions(inCtx->mExceptionStack, freed);
+   keepPositions(inCtx->mOuterExceptionStack, freed);
+}
+#endif
+
+// Called by each collection once marking and finalizers are done, with every thread stopped
+void scriptFreeModules()
+{
+   // They remember function names by address
+   #if !defined(HXCPP_PROFILER) && !defined(HXCPP_TELEMETRY)
+   std::vector<CppiaModule *> freed;
+   {
+      std::lock_guard<std::mutex> lock(sModuleLock);
+      std::vector<CppiaModule *> &modules = allModules();
+      for(size_t i=0;i<modules.size(); )
+      {
+         if (modules[i]->released && !IsWeakRefValid(modules[i]->owner))
+         {
+            freed.push_back(modules[i]);
+            modules.erase(modules.begin()+i);
+         }
+         else
+            i++;
+      }
+   }
+   if (freed.empty())
+      return;
+
+   #ifdef HXCPP_STACK_TRACE
+   GCForEachStackContext(keepContextPositions, &freed);
+   #endif
+
+   for(size_t i=0;i<freed.size();i++)
+      delete freed[i];
+   #endif
+}
 
 
 int CppiaStream::getTypeId()
@@ -446,21 +675,16 @@ int CppiaStream::getStringId()
 
 CppiaLoadedModule LoadCppia(const unsigned char *inData, int inDataLength)
 {
-   if (!gAllCppiaModules.mPtr)
-   {
-      gAllCppiaModules = Array_obj<Dynamic>::__new();
-      GCAddRoot( (hx::Object **)&gAllCppiaModules.mPtr );
-   }
-
    CppiaModule   *cppiaPtr = new CppiaModule();
    CppiaLoadedModule loadedModule = new CppiaObject(cppiaPtr);
-   gAllCppiaModules->push(loadedModule);
 
+   String error;
+   {
+   CppiaAllocScope allocScope(cppiaPtr);
 
    CppiaModule   &cppia = *cppiaPtr;
    CppiaStream stream(cppiaPtr,inData, inDataLength);
 
-   String error;
    try
    {
       std::string tok = stream.getAsciiToken();
@@ -492,9 +716,11 @@ CppiaLoadedModule LoadCppia(const unsigned char *inData, int inDataLength)
       cppia.classes.reserve(classCount);
       for(int c=0;c<classCount;c++)
       {
+         // Listed while it loads, so the module marks its class object
          CppiaClassInfo *info = new CppiaClassInfo(cppia);
-         if (info->load(stream))
-            cppia.classes.push_back(info);
+         cppia.classes.push_back(info);
+         if (!info->load(stream))
+            cppia.classes.pop_back();
       }
 
       tok = stream.getToken();
@@ -504,6 +730,7 @@ CppiaLoadedModule LoadCppia(const unsigned char *inData, int inDataLength)
          cppia.main = new ScriptCallable(createCppiaExpr(stream));
          cppia.main->className = "cppia";
          cppia.main->functionName = "__cppia_main";
+         cppia.main->staticEntry = true;
       }
       else if (tok!="NOMAIN")
          throw "no main specified";
@@ -530,6 +757,9 @@ CppiaLoadedModule LoadCppia(const unsigned char *inData, int inDataLength)
          {
             int len = scriptResources[r].mDataLength;
             unsigned char *buffer = (unsigned char *)malloc(len+5);
+            if (!buffer)
+               throw "Out of memory";
+            scriptResources[r].mData = buffer + 4;
             *(unsigned int *)buffer = HX_GC_CONST_ALLOC_BIT;
             buffer[len+5-1] = '\0';
             stream.readBytes(buffer+4, len);
@@ -543,7 +773,6 @@ CppiaLoadedModule LoadCppia(const unsigned char *inData, int inDataLength)
                   break;
                }
             #endif
-            scriptResources[r].mData = buffer + 4;
          }
          scriptResources[count].mDataLength = 0;
          scriptResources[count].mData = 0;
@@ -566,6 +795,11 @@ CppiaLoadedModule LoadCppia(const unsigned char *inData, int inDataLength)
    {
       error = HX_CSTRING("Error reading file ") + String(e.what());
    }
+   catch(Dynamic e)
+   {
+      loadedModule->release();
+      throw;
+   }
 
    if (!error.raw_ptr())
       try
@@ -576,6 +810,11 @@ CppiaLoadedModule LoadCppia(const unsigned char *inData, int inDataLength)
       catch(const char *errorString)
       {
          error = String(errorString);
+      }
+      catch(Dynamic e)
+      {
+         loadedModule->release();
+         throw;
       }
 
    if (gEnableJit)
@@ -591,17 +830,23 @@ CppiaLoadedModule LoadCppia(const unsigned char *inData, int inDataLength)
          {
             error = String(errorString);
          }
+         catch(Dynamic e)
+         {
+            loadedModule->release();
+            throw;
+         }
       #endif
+   }
    }
 
    // The host never sees a module that failed to load, so it cannot release it
    if (error.raw_ptr())
    {
-      cppia.release();
+      loadedModule->release();
       hx::Throw(error);
    }
 
-   cppia.registerDebugger();
+   cppiaPtr->registerDebugger();
 
    return loadedModule;
 }
@@ -715,6 +960,11 @@ void __hxcpp_dbg_getScriptableClasses( Array< ::String> ioClasses )
 #endif
 
 
+
+int __scriptable_cppia_live_modules()
+{
+   return hx::sLiveModules;
+}
 
 ::hx::CppiaLoadedModule __scriptable_cppia_from_string(String inCode)
 {

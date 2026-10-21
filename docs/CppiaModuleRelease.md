@@ -22,14 +22,27 @@ The std's `cpp.cppia.Module` extern does not declare `release`, so call it with 
 
 Calling `release` more than once does nothing more.
 
-## What stays
+## When its code is freed
 
-The module's code stays loaded: its expressions, class tables, interface tables and JIT code. Each reload therefore keeps roughly the size of its `.cppia` file in native memory, but none of the data the old generation built. Keeping the code is what makes release safe while references to the old generation remain:
+After release, the module's code (its expressions, class tables, interface tables and JIT code) is freed by the first full collection that finds nothing still reaching the module. Until then it stays loaded, so references to the old generation stay safe:
 
-- Instances, closures, bound methods, enum values and `Class` values from the released module keep working. They see its statics cleared, and a static assigned again after release is kept alive as before.
-- Code from the released module that is still running on any thread finishes normally.
-- Stack traces that point into the released module stay readable.
+- Instances, closures, bound methods, enum values, enum constructors and `Class` values from the released module keep it loaded while anything holds them, and keep working. They see its statics cleared, and a static assigned again after release is kept alive as before.
+- Code from the released module that is still running on any thread keeps it loaded and finishes normally.
+- Exception stacks that show functions of the released module stay readable after it is freed; they keep copies of those positions.
+- Strings read from its resources are copies, so they stay valid too.
+
+A module that fails to load is freed the same way, since the host never gets it.
+
+Repeated reloads do not grow memory: each generation is freed once the host has dropped it.
+
+## Limitations
+
+- **Profiler and telemetry builds keep released modules.** With `HXCPP_PROFILER` or `HXCPP_TELEMETRY` (including Tracy), release still unregisters the module's classes, clears its statics and unregisters its resources, but its code is never freed. Those tools record function names by address and read them later, so freeing the code would leave them pointing at freed memory. Memory then grows with each reload, as it did before modules could be freed; use such builds for profiling, not for long reload sessions.
+- **Freeing can lag by a collection or two.** The collector finds references on thread stacks conservatively, so a stale pointer to the module left on a stack by earlier calls keeps it loaded until later calls overwrite it. A host that checks for freeing, as the regression test does, should do the reload in a function that has returned, and collect from elsewhere.
+- **With `HXCPP_GC_GENERATIONAL`, a full collection frees it.** Minor collections keep every released module's data marked, since script code writes into it without write barriers, so a released module normally waits for the next full collection.
 
 ## Contract
 
-Release a module after its UI, callbacks and worker activity have been detached from the host. Release does not stop code that is running; it only makes the module's statics and names unreachable from now on. Objects from the old generation that the host still holds are not freed by release; they are collected once the host drops them, like any other object.
+Release a module after its UI, callbacks and worker activity have been detached from the host. Release does not stop code that is running; it only makes the module's statics and names unreachable from now on. Objects from the old generation that the host still holds are not freed by release; they are collected once the host drops them, like any other object, and the module's code goes with the last of them.
+
+`__scriptable_cppia_live_modules()` returns the number of modules whose code has not been freed yet, loaded or released, for hosts and tests that want to check that reloads are freed.

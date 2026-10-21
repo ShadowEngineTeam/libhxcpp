@@ -97,6 +97,10 @@ Compare versions with `version()`. A comparison with a plain string, such as `(l
 
 Haxe's TLS (`sys.ssl`, and `haxe.Http` with https) runs on mbedTLS, which libhxcpp bundles. A library that bundles mbedTLS too, such as Lime, can offer its copy: in static builds (iOS, tvOS, `static_link`) libhxcpp then builds its TLS on the library's mbedTLS instead of its own, so the app carries one copy. The library sets the define `hxcpp_mbedtls_provider` to a small provider file describing its mbedTLS; libhxcpp uses it when the mbedTLS major version is one it supports, and its own copy otherwise. [docs/MbedTLSProvider.md](docs/MbedTLSProvider.md) describes how to offer one.
 
+## Reloading cppia code
+
+A host that loads replacement cppia code in a running process can release the module it replaces with `untyped module.release()`. Its classes, statics and resources are let go at once, and its code is freed once nothing from it is still in use, so repeated reloads do not grow memory. [docs/CppiaModuleRelease.md](docs/CppiaModuleRelease.md) describes the contract and its limitations: profiler and telemetry builds keep released modules loaded.
+
 ## Compatibility
 
 libhxcpp keeps hxcpp's build XML, defines and API, and works with the code Haxe 4.2 and later generates for hxcpp. A few fixes deliberately change behaviour to match the other Haxe targets, for example how `Std.string` formats floats, NaN and Infinity, and TLS connections now require TLS 1.2 or newer. Changes.md describes each one.

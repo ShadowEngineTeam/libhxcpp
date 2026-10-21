@@ -190,12 +190,13 @@ public:
    ::hx::ObjectPtr<hx::Class_obj > __GetClass() const HXCPP_OVERRIDE;
    ::String GetEnumName() const HXCPP_OVERRIDE;
    ::String __ToString() const HXCPP_OVERRIDE;
+   void __Mark(hx::MarkContext *__inCtx) HXCPP_OVERRIDE;
 };
 
 
 
 
-struct CppiaEnumConstructor
+struct CppiaEnumConstructor : public CppiaOwned<CppiaEnumConstructor>
 {
    struct Arg
    {
@@ -339,6 +340,7 @@ public:
 
    int __GetType() const HXCPP_OVERRIDE { return vtFunction; }
    int __ArgCount() const HXCPP_OVERRIDE { return constructor.args.size(); }
+   void __Mark(hx::MarkContext *__inCtx) HXCPP_OVERRIDE { HX_MARK_OBJECT(constructor.classInfo->cppia.owner); }
 
    String toString() HXCPP_OVERRIDE { return HX_CSTRING("#function(") + constructor.name + HX_CSTRING(")"); }
 };
@@ -858,8 +860,8 @@ CppiaEnumConstructor *CppiaClassInfo::findEnum(int inFieldId)
 void CppiaClassInfo::mark(hx::MarkContext *__inCtx)
 {
    HX_MARK_MEMBER(mClass);
-   // The class object is a const allocation, which the collector does not
-   // look inside, and the class registry marks it only while it holds it
+   // Its fields are written without a barrier, and a minor collection does
+   // not look inside the class object once it is old
    if (mClass.mPtr)
    {
       HX_MARK_MEMBER(mClass->mName);
@@ -1266,9 +1268,6 @@ void CppiaClassInfo::linkTypes()
       }
 
       extraData = classSize - haxeBase->mDataOffset;
-
-      if (!containsPointers)
-         getHaxeBaseVTable();
    }
 
 
@@ -1379,10 +1378,14 @@ void CppiaClassInfo::linkTypes()
    if (interfaceSlotSize)
       interfaceSlotSize++;
 
-   vtable = new void*[vtableSlot + 2 + interfaceSlotSize];
+   vtable = (void **)cppiaAlloc(sizeof(void *)*(vtableSlot+2+interfaceSlotSize), 0);
    memset(vtable, 0, sizeof(void *)*(vtableSlot+2+interfaceSlotSize));
    vtable += interfaceSlotSize;
    *vtable++ = this;
+
+   // Makes an instance, which marks through its script vtable
+   if (haxeBase && !containsPointers)
+      getHaxeBaseVTable();
 
    DBGLOG("  vtable size %d -> %p\n", vtableSlot, vtable);
 
@@ -1797,6 +1800,7 @@ Array<String> CppiaClassInfo::GetClassFields()
 
 void CppiaClassInfo::markInstance(hx::Object *inThis, hx::MarkContext *__inCtx)
 {
+   HX_MARK_OBJECT(cppia.owner);
    if (dynamicMapOffset)
       HX_MARK_MEMBER(getFieldMap(inThis));
 
@@ -1830,15 +1834,51 @@ void CppiaClassInfo::visitInstance(hx::Object *inThis, hx::VisitContext *__inCtx
 
 
 
+// Unlike a host class, an ordinary collected object: a Class value keeps its module
 class CppiaClass : public hx::Class_obj
 {
 public:
    CppiaClassInfo *info;
 
+   inline void *operator new( size_t inSize )
+   {
+      return hx::InternalNew(inSize,true);
+   }
+   void operator delete( void *) { }
+
    CppiaClass(CppiaClassInfo *inInfo)
    {
       info = inInfo;
+      // Compiled code holds its address
+      #if defined(HXCPP_GC_MOVING) || defined(HXCPP_GC_DEBUG_ALWAYS_MOVE)
+      __hxcpp_add_member_finalizer(this, (_hx_member_finalizer)&CppiaClass::unpin, true);
+      #endif
    }
+
+   void unpin() { }
+
+   void __Mark(hx::MarkContext *__inCtx) HXCPP_OVERRIDE
+   {
+      HX_MARK_MEMBER(mName);
+      HX_MARK_MEMBER(__meta__);
+      HX_MARK_MEMBER(__rtti__);
+      HX_MARK_MEMBER(mStatics);
+      HX_MARK_MEMBER(mMembers);
+      HX_MARK_MEMBER(mInstanceFieldsCache);
+      HX_MARK_OBJECT(info->cppia.owner);
+   }
+
+   #ifdef HXCPP_VISIT_ALLOCS
+   void __Visit(hx::VisitContext *__inCtx) HXCPP_OVERRIDE
+   {
+      HX_VISIT_MEMBER(mName);
+      HX_VISIT_MEMBER(__meta__);
+      HX_VISIT_MEMBER(__rtti__);
+      HX_VISIT_MEMBER(mStatics);
+      HX_VISIT_MEMBER(mMembers);
+      HX_VISIT_MEMBER(mInstanceFieldsCache);
+   }
+   #endif
 
    Array<String> GetClassFields() HXCPP_OVERRIDE
    {
@@ -2003,6 +2043,12 @@ hx::Class_obj *createCppiaClass(CppiaClassInfo *inInfo) { return new CppiaClass(
 ::String CppiaEnumBase::__ToString() const
 {
    return classInfo->getClass()->mName + HX_CSTRING(".") + _hx_tag;
+}
+
+void CppiaEnumBase::__Mark(hx::MarkContext *__inCtx)
+{
+   EnumBase_obj::__Mark(__inCtx);
+   HX_MARK_OBJECT(classInfo->cppia.owner);
 }
 
 

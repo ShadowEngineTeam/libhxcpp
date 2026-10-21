@@ -37,8 +37,10 @@ ScriptCallable::ScriptCallable(CppiaStream &stream)
    initVals.resize(argCount);
    captureSize = 0;
    hasDefaults = false;
+   staticEntry = false;
    #ifdef CPPIA_JIT
    compiled = 0;
+   ownsCompiled = false;
    #endif
    for(int a=0;a<argCount;a++)
    {
@@ -63,8 +65,10 @@ ScriptCallable::ScriptCallable(CppiaExpr *inBody) : CppiaDynamicExpr(inBody)
    hasDefaults = false;
    body = inBody;
    data = 0;
+   staticEntry = false;
    #ifdef CPPIA_JIT
    compiled = 0;
+   ownsCompiled = false;
    #endif
 }
 
@@ -135,10 +139,12 @@ ScriptCallable::ScriptCallable(CppiaModule &inModule,ScriptNamedFunction *inFunc
       }
    }
    body = new RelayExpr(inFunction->execute);
+   staticEntry = false;
 
    #ifdef CPPIA_JIT
    // magically already compiled for us
    compiled = inFunction->execute;
+   ownsCompiled = false;
    #endif
 }
 
@@ -146,7 +152,7 @@ ScriptCallable::ScriptCallable(CppiaModule &inModule,ScriptNamedFunction *inFunc
 ScriptCallable::~ScriptCallable()
 {
    #ifdef CPPIA_JIT
-   if (compiled)
+   if (compiled && ownsCompiled)
       CppiaCompiler::freeCompiled(compiled);
    #endif
 }
@@ -210,7 +216,7 @@ void ScriptCallable::getScriptableVariables(unsigned char *inStack, Array<Dynami
    unsigned char *frame = inStack - stackSize;
 
    hx::Object *thizz = *(hx::Object **)frame;
-   if (thizz)
+   if (thizz && !staticEntry)
       outNames->push(HX_CSTRING("this"));
 
    for(CppiaStackVarMap::iterator i=varMap.begin();i!=varMap.end();++i)
@@ -369,6 +375,16 @@ void ScriptCallable::genArgs(CppiaCompiler *compiler, CppiaExpr *inThis, Express
    }
 }
 
+
+void ScriptCallable::genModuleAnchor(CppiaCompiler *compiler)
+{
+   if (staticEntry && data)
+   {
+      compiler->move( sJitTemp0, JitVal( (void *)&data->owner ) );
+      compiler->move( sJitTemp0, sJitTemp0.star(jtPointer,0) );
+      compiler->move( sJitFrame.star(jtPointer,0), sJitTemp0 );
+   }
+}
 
 void ScriptCallable::genDefaults(CppiaCompiler *compiler)
 {
@@ -546,6 +562,8 @@ void ScriptCallable::runFunction(CppiaCtx *ctx)
             if (hasDefault[i])
                args[i].setDefault(ctx, initVals[i]);
       }
+      if (staticEntry && data)
+         *(hx::Object **)ctx->frame = data->owner;
 
       CPPIA_STACK_FRAME(this);
       CPPIA_STACK_LINE(this);
@@ -583,6 +601,8 @@ void ScriptCallable::runFunctionClosure(CppiaCtx *ctx)
             if (hasDefault[i])
                args[i].setDefault(ctx, initVals[i]);
       }
+      if (staticEntry && data)
+         *(hx::Object **)ctx->frame = data->owner;
 
       CPPIA_STACK_FRAME(this);
       CPPIA_STACK_LINE(this);
@@ -675,6 +695,7 @@ void ScriptCallable::compile()
 
       // First pass calculates size...
       genDefaults(compiler);
+      genModuleAnchor(compiler);
 
       #ifdef HXCPP_STACK_TRACE
       compiler->move(sJitFrame.star(jtPointer)+(offsetof(StackFrame,position) + stackSize),  (void *)&position );
@@ -693,6 +714,7 @@ void ScriptCallable::compile()
 
       // Second pass does the job
       genDefaults(compiler);
+      genModuleAnchor(compiler);
 
       #ifdef HXCPP_STACK_TRACE
       compiler->move(sJitFrame.star(jtPointer)+(offsetof(StackFrame,position) + stackSize),  (void *)&position );
@@ -703,6 +725,7 @@ void ScriptCallable::compile()
       body->genCode(compiler);
 
       compiled = compiler->finishGeneration();
+      ownsCompiled = true;
 
       delete compiler;
    }
@@ -945,6 +968,8 @@ public:
    void __Mark(hx::MarkContext *__inCtx) HXCPP_OVERRIDE
    {
       HX_MARK_MEMBER(*getThis());
+      if (function->data)
+         HX_MARK_OBJECT(function->data->owner);
       char *base = ((char *)this) + sizeof(CppiaClosure);
       for(int i=0;i<function->captureVars.size();i++)
          function->captureVars[i]->markClosure(base,__inCtx);
@@ -1028,7 +1053,13 @@ void CppiaFunction::link( )
    {
       linked = true;
       if (funExpr)
+      {
          funExpr = (ScriptCallable *)(funExpr->link(cppia));
+         // A constructor's frame holds the new object
+         ScriptCallable *callable = dynamic_cast<ScriptCallable *>((CppiaExpr *)funExpr);
+         if (callable && isStatic && name!="new")
+            callable->staticEntry = true;
+      }
    }
 }
 

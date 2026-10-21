@@ -161,9 +161,8 @@ String __hxcpp_resource_string(String inName)
                if (p[i]>127)
                   return _hx_utf8_to_utf16(p, reso->mDataLength,false);
             #endif
-            return String((const char *) reso->mData, reso->mDataLength );
-
-            return String((const char *) reso->mData, reso->mDataLength );
+            // A script's resources are freed with its module
+            return String::create((const char *) reso->mData, reso->mDataLength );
          }
    }
    return null();

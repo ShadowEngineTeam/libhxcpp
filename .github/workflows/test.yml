@@ -316,6 +316,33 @@ jobs:
             echo "::endgroup::"
           done
           [ -z "$failed" ] || { echo "Failed modes:$failed"; exit 1; }
+      # Freeing released cppia modules depends on what each collector mode marks and moves
+      - name: cppia module free
+        if: ${{ !cancelled() }}
+        working-directory: test/regression/CppiaModuleFree
+        shell: bash
+        run: |
+          failed=""
+          for mode in ${{ matrix.group }}; do
+            case $mode in
+              default) flags=""; bin=Main ;;
+              generational) flags="-D HXCPP_GC_GENERATIONAL"; bin=Main ;;
+              moving) flags="-D HXCPP_GC_MOVING"; bin=Main ;;
+              always-move) flags="--debug -D HXCPP_GC_DEBUG_ALWAYS_MOVE"; bin=Main-debug ;;
+              verify) flags="-D HXCPP_GC_VERIFY"; bin=Main ;;
+              generational-verify) flags="-D HXCPP_GC_GENERATIONAL -D HXCPP_GC_VERIFY"; bin=Main ;;
+              big-blocks) flags="-D HXCPP_GC_BIG_BLOCKS"; bin=Main ;;
+              check-pointer) flags="--debug"; bin=Main-debug ;;
+              *) echo "::error::unknown gc stress mode $mode"; exit 1 ;;
+            esac
+            echo "::group::cppia module free: $mode"
+            if ! { haxe build.hxml $flags -D $HXCPP_ARCH_FLAG && bin/$bin > out.txt && diff <(tr -d '\r' < stdout.txt) <(tr -d '\r' < out.txt); }; then
+              failed="$failed $mode"
+              echo "::error::cppia module free failed: $mode"
+            fi
+            echo "::endgroup::"
+          done
+          [ -z "$failed" ] || { echo "Failed modes:$failed"; exit 1; }
 
   cppia:
     if: inputs.scope == 'full'
