@@ -116,6 +116,7 @@ struct ArraySetter : public ArrayBuiltinBase
    {
       return (ExprType)ExprTypeOf<ELEM>::value;
    }
+   bool isBoolInt() HXCPP_OVERRIDE { return ExprTypeIsBool<ELEM>::value; }
    int runInt(CppiaCtx *ctx) HXCPP_OVERRIDE
    {
       Array_obj<ELEM> *thisVal = reinterpret_cast<Array_obj<ELEM>*>(thisExpr->runObject(ctx));
@@ -436,6 +437,13 @@ struct ArrayBuiltin : public ArrayBuiltinBase
       unsafe = inUnsafe;
    }
    const char *getName() HXCPP_OVERRIDE { return gArrayFuncNames[FUNC]; }
+
+   // Bools travel as Int, so what boxes the result must be told it is one
+   bool isBoolInt() HXCPP_OVERRIDE
+   {
+      return FUNC==afContains || FUNC==afRemove ||
+             ((FUNC==af__get || FUNC==af__set) && ExprTypeIsBool<ELEM>::value);
+   }
 
    ExprType getType() HXCPP_OVERRIDE
    {

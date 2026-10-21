@@ -9,5 +9,8 @@ class Script {
 		var flags = [true, false, true];
 		var p:Dynamic = flags.pop();
 		Sys.println(Std.isOfType(p, Bool) + " " + p);
+		// In an Array<Dynamic> literal the jit boxed these as Int
+		var row:Array<Dynamic> = [a.contains(1), a.remove(3), flags[0], flags[1] = false];
+		Sys.println(row + " " + [for (x in row) Std.isOfType(x, Bool)]);
 	}
 }

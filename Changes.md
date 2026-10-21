@@ -389,6 +389,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed cppia reloads that load the replacement before releasing the old module crashing in a collection or keeping old modules loaded: the class registry kept a freed module's class name as the key for that name, and a lookup that then missed the key left the released class listed for the collector. Script class names are now permanent strings, release always takes the class out of the collector's list, and the registry marks the script classes it lists (libhxcpp #243, #244)
 * Fixed the debugger showing wrong values for a cppia function's this, arguments and locals: it read them from the wrong frame base, and in jitted code the frame's variable lists and unassigned locals held stale stack data, which could crash it (based on HaxeFoundation/hxcpp#1426 by @robknopf)
 * Fixed script functions' stack frames and script object fields sitting at 4-byte offsets on 64-bit targets, which the debugger and the collector then read misaligned: stack frames now live in aligned native storage, and fields are aligned to their type
+* Fixed the cppia jit boxing Array.contains and Array.remove results, and Array<Bool> elements read or written, as Int instead of Bool where they become Dynamic, as in an Array<Dynamic> literal
 
 ### CFFI, ndlls, the debugger and telemetry
 
