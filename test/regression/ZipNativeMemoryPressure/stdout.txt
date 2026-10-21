@@ -1,0 +1,4 @@
+native compression memory accounted: true
+released by close: true
+round trip: true
+released by finalizers: true

@@ -3481,6 +3481,17 @@ public:
       return result+2;
    }
 
+   void onMemoryRelease(size_t inBytes)
+   {
+      #ifndef HXCPP_SINGLE_THREADED_APP
+      mLargeListLock.lock();
+      #endif
+      mLargeAllocated -= std::min(inBytes, (size_t)mLargeAllocated);
+      #ifndef HXCPP_SINGLE_THREADED_APP
+      mLargeListLock.unlock();
+      #endif
+   }
+
    void onMemoryChange(int inDelta, const char *inWhy)
    {
       if (hx::gPauseForCollect)
@@ -6974,6 +6985,11 @@ unsigned int ObjectSizeSafe(void *inData)
    return (header & IMMIX_ALLOC_ROW_COUNT) ?
             ( (header & IMMIX_ALLOC_SIZE_MASK) >> IMMIX_ALLOC_SIZE_SHIFT) :
              ((unsigned int *)(inData))[-2];
+}
+
+void GCReleaseManagedMemory(size_t inBytes)
+{
+   sGlobalAlloc->onMemoryRelease(inBytes);
 }
 
 void GCChangeManagedMemory(int inDelta, const char *inWhy)

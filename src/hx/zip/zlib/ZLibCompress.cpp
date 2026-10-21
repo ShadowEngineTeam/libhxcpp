@@ -1,5 +1,6 @@
 #include <hxcpp.h>
 #include "ZLibCompress.hpp"
+#include "ZLibMemory.hpp"
 
 #include <memory>
 #include <limits>
@@ -19,6 +20,7 @@ static void zlibThrow(z_stream *stream, int code)
 hx::zip::Compress hx::zip::Compress_obj::create(int level)
 {
 	auto handle = std::unique_ptr<z_stream>(new z_stream());
+	auto memory = std::unique_ptr<hx::zip::zlib::ZLibMemory>(hx::zip::zlib::ZLibMemory::attach(handle.get()));
 	auto error  = deflateInit(handle.get(), level);
 
 	if (error != Z_OK)
@@ -26,6 +28,7 @@ hx::zip::Compress hx::zip::Compress_obj::create(int level)
 		zlibThrow(handle.get(), error);
 	}
 
+	memory.release()->report();
 	return new hx::zip::zlib::ZLibCompress(handle.release());
 }
 
@@ -105,6 +108,9 @@ hx::zip::Result hx::zip::zlib::ZLibCompress::execute(cpp::marshal::View<uint8_t>
 	auto error = deflate(handle, flush);
 	ExitGCFreeZone();
 
+	// Inflate allocates its window on first use
+	static_cast<ZLibMemory *>(handle->opaque)->report();
+
 	if (error < 0)
 	{
 		zlibThrow(handle, error);
@@ -174,6 +180,10 @@ void hx::zip::zlib::ZLibCompress::close()
 	}
 
 	deflateEnd(handle);
+
+	auto memory = static_cast<ZLibMemory *>(handle->opaque);
+	memory->release();
+	delete memory;
 
 	delete handle;
 

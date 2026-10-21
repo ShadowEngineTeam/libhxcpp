@@ -215,6 +215,9 @@ void InternalEnableGC(bool inEnable);
 // Record that fact that external memory has been allocated and associated with a haxe object
 //  eg. BitmapData.  This will help the collector know when to collect
 void GCChangeManagedMemory(int inDelta, const char *inWhy=0);
+// Takes memory counted with GCChangeManagedMemory back off without a safe
+// point or a collection, so finalizers and GC-free zones can call it
+void GCReleaseManagedMemory(size_t inBytes);
 
 // Haxe threads can center GC free zones, where they can't make GC allocation calls, and should not mess with GC memory.
 // This means that they do not need to pause while the GC collections happen, and other threads will not

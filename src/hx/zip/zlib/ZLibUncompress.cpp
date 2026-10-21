@@ -1,5 +1,6 @@
 #include <hxcpp.h>
 #include "ZLibUncompress.hpp"
+#include "ZLibMemory.hpp"
 
 #include <memory>
 #include <vector>
@@ -20,6 +21,7 @@ static void zlibThrow(z_stream *stream, int code)
 hx::zip::Uncompress hx::zip::Uncompress_obj::create(int windowSize)
 {
 	auto handle = std::unique_ptr<z_stream>(new z_stream());
+	auto memory = std::unique_ptr<hx::zip::zlib::ZLibMemory>(hx::zip::zlib::ZLibMemory::attach(handle.get()));
 	auto error  = inflateInit2(handle.get(), windowSize);
 
 	if (error != Z_OK)
@@ -27,6 +29,7 @@ hx::zip::Uncompress hx::zip::Uncompress_obj::create(int windowSize)
 		zlibThrow(handle.get(), error);
 	}
 
+	memory.release()->report();
 	return new hx::zip::zlib::ZLibUncompress(handle.release());
 }
 
@@ -118,6 +121,9 @@ hx::zip::Result hx::zip::zlib::ZLibUncompress::execute(cpp::marshal::View<uint8_
 	auto error = inflate(handle, flush);
 	ExitGCFreeZone();
 
+	// Inflate allocates its window on first use
+	static_cast<ZLibMemory *>(handle->opaque)->report();
+
 	// Z_NEED_DICT repeats forever without consuming input - surfacing it
 	// as an error stops the haxe.zip streaming loop from spinning
 	if (error < 0 || error == Z_NEED_DICT)
@@ -173,6 +179,10 @@ void hx::zip::zlib::ZLibUncompress::close()
 	}
 
 	inflateEnd(handle);
+
+	auto memory = static_cast<ZLibMemory *>(handle->opaque);
+	memory->release();
+	delete memory;
 
 	delete handle;
 

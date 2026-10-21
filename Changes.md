@@ -334,6 +334,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed zlib state leaks: Compress.run/Uncompress.run now release zlib's internal state on all paths including errors, and closing a Compress/Uncompress no longer leaks the stream structure
 * Fixed EReg.matchSub integer overflow with huge lengths, regex runtime errors (e.g. match limit) being silently treated as no-match, and undefined behaviour passing unvalidated UTF-16 subjects to PCRE2 with the no-check flag
 * Fixed a long-lived EReg keeping its last UTF-16 subject (and any cleaned-up copy of it) alive after matching an ASCII subject
+* haxe.zip.Compress and Uncompress streams count their native zlib state (about 256 KB per compressor) towards collection pressure, so abandoned streams are collected and their memory freed sooner; added hx::GCReleaseManagedMemory, which takes such memory back off without a safe point
 
 ### cppia
 
