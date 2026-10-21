@@ -442,6 +442,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed Emscripten builds running --spill-pointers without --profiling-funcs when the detected emscripten version was below 6 or misread, which failed to find the stack pointer or lost GC roots; the two always go together
 * Removed the Visual Studio 2013 and older toolchain setup, which could no longer build libhxcpp, and HXCPP_MSVC_VER values that name them now stop the build with an error (HaxeFoundation/hxcpp#1428 by @tobil4sk)
 * Added a .clang-format for libhxcpp's C++ sources, used for changed lines rather than whole files; third-party code is excluded (HaxeFoundation/hxcpp#1430 by @tobil4sk)
+* The build tool names the copy that runs it: -v prints its version, git commit and path, and it warns when Haxe generated the code for another hxcpp version than the one building it, as happens with several copies installed (libhxcpp #79)
 
 
 4.3.xx

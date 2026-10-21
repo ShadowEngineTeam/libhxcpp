@@ -1530,6 +1530,24 @@ class BuildTool
       }
    }
 
+   // " (commit)" when this library is a git checkout
+   private static function getCommit():String
+   {
+      try
+      {
+         var proc = new Process("git", ["-C", HXCPP, "rev-parse", "--short", "HEAD"]);
+         var commit = StringTools.trim(proc.stdout.readAll().toString());
+         proc.stderr.readAll();
+         var code = proc.exitCode();
+         proc.close();
+         return code==0 && commit!="" ? ' ($commit)' : "";
+      }
+      catch (e:Dynamic)
+      {
+         return "";
+      }
+   }
+
    private static function getVersion():String
    {
       try
@@ -1612,6 +1630,7 @@ class BuildTool
       var makefile:String="";
       var optionsTxt = "Options.txt";
       var optionsGiven = false;
+      var generatedFor:String = null;
 
       Profile.start();
 
@@ -1844,7 +1863,7 @@ class BuildTool
                         var value = def.substr(equals+1);
                         if (name=="hxcpp")
                         {
-                           // Ignore
+                           generatedFor = value;
                         }
                         else if (name=="destination")
                             destination = value;
@@ -1879,7 +1898,14 @@ class BuildTool
          defines.set("HXCPP",HXCPP);
       }
 
-      //Log.info("", "HXCPP : " + HXCPP);
+      var version = getVersion();
+      if (Log.verbose)
+         Log.info("", 'Using libhxcpp $version${getCommit()} from $HXCPP');
+      // Haxe records the hxcpp define, which can be a line of haxelib's
+      // output around the version rather than the version alone
+      var recorded = ~/[0-9]+\.[0-9]+\.[0-9]+[-+.a-zA-Z0-9]*/;
+      if (generatedFor!=null && recorded.match(generatedFor) && recorded.matched(0)!=version)
+         Log.warn('Haxe generated this code for hxcpp ${recorded.matched(0)}, but libhxcpp $version from $HXCPP is building it. If that is not intended, make haxelib and HXCPP point at the same copy');
 
       include_path.push(".");
       if (env.exists("HOME"))
