@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<project>
+	<app title="FlxSmoke" file="FlxSmoke" main="Main" version="1.0.0" />
+	<window width="640" height="480" fps="60" background="#000000" />
+	<set name="BUILD_DIR" value="export" />
+	<source path="source" />
+	<haxelib name="flixel" />
+	<haxedef name="FLX_NO_DEBUG" unless="debug" />
+</project>

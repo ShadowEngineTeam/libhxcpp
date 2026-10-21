@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<project>
+	<app title="HaxeUISmoke" file="HaxeUISmoke" main="Main" version="1.0.0" />
+	<window width="640" height="480" background="#ffffff" />
+	<set name="BUILD_DIR" value="export" />
+	<source path="source" />
+	<haxelib name="openfl" />
+	<haxelib name="haxeui-core" />
+	<haxelib name="haxeui-openfl" />
+</project>
