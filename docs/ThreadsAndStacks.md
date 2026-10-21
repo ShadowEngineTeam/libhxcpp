@@ -143,6 +143,35 @@ Solutions:
 
 
 
+### Entering main more than once
+
+Some embedders call the program's `main` more than once: a wasm host calling `callMain` again, or a plugin host that loads a Haxe module and runs it per document. Two things carry over from one run to the next.
+
+The thread stays attached with the first run's top of stack. The generated `main` starts with `HX_TOP_OF_STACK`, which is `hx::SetTopOfStack(&t0,false)`, and that call only ever widens the top: if the next run starts higher up the stack the top moves up, and if it starts deeper the old top stays, so collections keep scanning up to wherever the first run began. Release the thread between runs, from native code once `main` has returned:
+
+```
+hx::SetTopOfStack(0,false);
+```
+
+`SetTopOfStack(&top,false)` holds the thread attached until a `SetTopOfStack(0,false)`, and each `SetTopOfStack(&top,true)` adds a count that a `SetTopOfStack(0,true)` takes away. Once neither holds it, the thread is released: its stack range is cleared and it stops being scanned. The next `main` attaches it again with its own top of stack. Only release from outside Haxe code, with no Haxe frames still on the stack.
+
+A wasm host can export the call from the Haxe side and call it from JavaScript after `callMain` returns:
+
+```haxe
+@:cppFileCode('
+#include <emscripten.h>
+extern "C" EMSCRIPTEN_KEEPALIVE void hxcpp_release_main() { hx::SetTopOfStack(0,false); }
+')
+class Main { ... }
+```
+
+Do not release a thread that keeps running Haxe code after `main` returns, such as an emscripten main loop or a GUI framework's callbacks: those rely on the attachment `main` made.
+
+Each run also boots the program again. `main` calls `hx::Boot()` and `__boot_all()`, which run every class's static initialisers, so statics start from their initial values in each run; what the previous run left reachable only from statics becomes garbage. Nothing closes the previous run's threads, sockets, files or native handles, so close them before `main` returns.
+
+The generated `main` returns 0, or -1 after printing an uncaught exception. `Sys.exit(code)` calls the C `exit` instead of returning from `main`.
+
+
 ### Debugging.
   - in debug mode, hxcpp will check for calls from unattached threads
   - hxcpp can log conservative ranges.  With a native debugger you can check the address of
