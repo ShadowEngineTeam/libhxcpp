@@ -1262,6 +1262,7 @@ void CppiaClassInfo::linkTypes()
 
       if (dynamicMapOffset==-1)
       {
+         AlignOffset(etObject, classSize);
          dynamicMapOffset = classSize;
          classSize += sizeof( hx::FieldMap * );
          containsPointers = true;

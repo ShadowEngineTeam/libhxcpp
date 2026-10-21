@@ -461,7 +461,7 @@ struct BlockExpr : public CppiaExpr
       for(int i=0;i<n;i++)
       {
          if (lineOffset)
-            compiler->move( sJitFrame.star(etInt)+lineOffset, expressions[i]->line );
+            compiler->move( JitLocalPos(lineOffset, jtInt), expressions[i]->line );
          //compiler->traceInt("line",expressions[i]->line);
          if (i<n-1)
             expressions[i]->genCode(compiler);

@@ -7,12 +7,12 @@ namespace hx
 
 static int sTypeSize[] = { 0, 0, sizeof(hx::Object *), sizeof(String), sizeof(Float), sizeof(int) };
 
-inline void AlignOffset(ExprType type, int &ioOffset)
+void AlignOffset(ExprType type, int &ioOffset)
 {
-   #ifdef HXCPP_ALIGN_FLOAT
-   if (type==etFloat && (ioOffset & 0x7) )
-      ioOffset = (ioOffset + 7) & ~7;
-   #endif
+   int align = type==etInt ? (int)alignof(int) :
+               type==etFloat ? (int)alignof(Float) :
+               type==etString ? (int)alignof(String) : (int)alignof(hx::Object *);
+   ioOffset = (ioOffset + align - 1) & ~(align - 1);
 }
 
 

@@ -903,14 +903,14 @@ void __hxcpp_dbg_getScriptableVariables(hx::StackFrame *inFrame, ::Array<Dynamic
 {
    hx::ScriptCallable *callable = inFrame->position->scriptCallable;
    if (callable)
-      callable->getScriptableVariables((unsigned char *)inFrame, outNames);
+      callable->getScriptableVariables(inFrame->scriptStack, outNames);
 }
 
 bool __hxcpp_dbg_getScriptableValue(hx::StackFrame *inFrame, String inName, ::Dynamic &outValue)
 {
    hx::ScriptCallable *callable = inFrame->position->scriptCallable;
    if (callable)
-      return callable->getScriptableValue((unsigned char *)inFrame, inName, outValue);
+      return callable->getScriptableValue(inFrame->scriptStack, inName, outValue);
    return false;
 }
 
@@ -919,7 +919,7 @@ bool __hxcpp_dbg_setScriptableValue(hx::StackFrame *inFrame, String inName, ::Dy
 {
    hx::ScriptCallable *callable = inFrame->position->scriptCallable;
    if (callable)
-      return callable->setScriptableValue((unsigned char *)inFrame, inName, inValue);
+      return callable->setScriptableValue(inFrame->scriptStack, inName, inValue);
    return false;
 }
 

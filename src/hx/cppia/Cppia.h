@@ -330,6 +330,9 @@ struct ScriptCallable : public CppiaDynamicExpr
    void genZeroLocals(CppiaCompiler *compiler);
    #endif
    void genModuleAnchor(CppiaCompiler *compiler);
+   #ifdef HXCPP_STACK_TRACE
+   void genPushFrame(CppiaCompiler *compiler, int frameLocal);
+   #endif
    void genArgs(CppiaCompiler *compiler, CppiaExpr *inThis, Expressions &inArgs, const JitVal &inThisVal);
    void genCode(CppiaCompiler *compiler,const JitVal &inDest=JitVal(),ExprType type=etNull) HXCPP_OVERRIDE;
    #endif
@@ -536,6 +539,8 @@ hx::Object *ObjectToInterface(hx::Object *inObject, TypeData *toType);
 void LinkExpressions(Expressions &ioExpressions, CppiaModule &data);
 
 CppiaExpr *createEnumField(CppiaStream &stream,bool inWithArgs);
+
+void AlignOffset(ExprType type, int &ioOffset);
 
 struct CppiaVar : public CppiaOwned<CppiaVar>
 {
@@ -835,11 +840,16 @@ public:
    {
       hx::StackContext *ctx;
       hx::StackFrame *frame;
+      // The script stack only keeps 4-byte alignment
+      alignas(hx::StackFrame) unsigned char storage[sizeof(hx::StackFrame)];
       CppiaStackFrame(hx::StackContext *inCtx, hx::StackPosition *inPosition)
       {
          ctx = inCtx;
-         frame = (hx::StackFrame *)ctx->stackAlloc(sizeof(hx::StackFrame));
+         frame = (hx::StackFrame *)storage;
          frame->position = inPosition;
+         #ifdef HXCPP_STACK_SCRIPTABLE
+         frame->scriptStack = ctx->pointer;
+         #endif
          #ifdef HXCPP_DEBUGGER
          frame->variables = 0;
          frame->catchables = 0;

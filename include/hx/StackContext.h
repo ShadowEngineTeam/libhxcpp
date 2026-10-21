@@ -676,6 +676,12 @@ public:
          #endif
       #endif
 
+      #ifdef HXCPP_STACK_SCRIPTABLE
+      // A script function's place on the script stack, from which the
+      // debugger finds its variables
+      unsigned char *scriptStack;
+      #endif
+
        // The constructor automatically adds the StackFrame to the list of
        // stack frames for the current thread
        inline StackFrame(const StackPosition *inPosition
