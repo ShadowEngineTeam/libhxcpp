@@ -34,7 +34,7 @@ jobs:
       sep: \
       ext: .dll
       os: windows-latest
-      stress: '["default generational verify", "generational-verify moving big-blocks", "always-move check-pointer"]'
+      stress: '["default generational verify", "generational-verify moving big-blocks", "always-move check-pointer", "big-generational big-verify nursery dynamic-size debug-level"]'
 
   MacOS64:
     uses: ./.github/workflows/test.yml
@@ -78,7 +78,7 @@ jobs:
       sep: /
       ext: .dso
       os: ubuntu-latest
-      stress: '["default generational verify", "generational-verify moving big-blocks", "always-move check-pointer"]'
+      stress: '["default generational verify", "generational-verify moving big-blocks", "always-move check-pointer", "big-generational big-verify nursery dynamic-size debug-level"]'
       bindir: Linux64
 
   # Haxe 4.3.7 has no Linux arm64 build, so this runs with the nightly

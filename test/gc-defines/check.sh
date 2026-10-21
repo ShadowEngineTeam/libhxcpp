@@ -3,8 +3,10 @@
 #
 # Most GC defines are not built by any test, so code behind them can stop
 # compiling without anyone noticing. This runs the compiler's checks on
-# src/hx/gc/Immix.cpp for every configuration below (no object files are
-# written) and fails if any of them does not compile.
+# src/hx/gc/Immix.cpp and GcCommon.cpp for every configuration below, and on
+# the cppia sources for the collector modes that change their write barriers
+# and roots (no object files are written), and fails if any of them does not
+# compile. CI runs it with g++ and clang++.
 #
 # Usage: test/gc-defines/check.sh [compiler]   (default: g++)
 
@@ -44,6 +46,8 @@ CONFIGS=(
    HXCPP_DEBUG
    HXCPP_SCRIPTABLE
    HX_WATCH
+   HX_WATCH,HX_WATCH_ADDRESS=0x100000200
+   HX_GC_ZERO_EARLY
    SHOW_FRAGMENTATION
    SHOW_FRAGMENTATION,SHOW_FRAGMENTATION_BLOCKS
    SHOW_MEM_EVENTS
@@ -52,14 +56,23 @@ CONFIGS=(
    PROFILE_THREAD_USAGE
 )
 
+CPPIA_CONFIGS=(
+   none
+   HXCPP_GC_GENERATIONAL
+   HXCPP_GC_MOVING
+   HXCPP_GC_GENERATIONAL,HXCPP_GC_DEBUG_LEVEL=1
+   HXCPP_DEBUGGER
+)
+
 # Prints one line per configuration, with the first error when it fails.
 check_one() {
-   local size="$1" config="$2" flags="" d out
+   local size="$1" config="$2" flags="" d out files="src/hx/gc/Immix.cpp src/hx/gc/GcCommon.cpp"
    [ "$size" = big ] && flags="-DHXCPP_GC_BIG_BLOCKS"
+   [ "$size" = cppia ] && { flags="-DHXCPP_SCRIPTABLE -DCPPIA_JIT -Iproject/thirdparty"; files=$(echo src/hx/cppia/*.cpp); }
    if [ "$config" != none ]; then
       for d in ${config//,/ }; do flags="$flags -D$d"; done
    fi
-   if out=$($CXX $BASE_FLAGS $flags src/hx/gc/Immix.cpp 2>&1); then
+   if out=$($CXX $BASE_FLAGS $flags $files 2>&1); then
       echo "ok   [$size] $config"
    else
       echo "FAIL [$size] $config :: $(echo "$out" | grep -m1 "error")"
@@ -68,11 +81,15 @@ check_one() {
 export -f check_one
 
 results=$(
-   for size in default big; do
+   ( for size in default big; do
       for config in "${CONFIGS[@]}"; do
          echo "$size $config"
       done
-   done | xargs -P "$(nproc 2>/dev/null || echo 2)" -L 1 bash -c 'check_one "$0" "$1"' | sort
+   done
+   for config in "${CPPIA_CONFIGS[@]}"; do
+      echo "cppia $config"
+   done
+   ) | xargs -P "$(nproc 2>/dev/null || echo 2)" -L 1 bash -c 'check_one "$0" "$1"' | sort
 )
 
 echo "$results"

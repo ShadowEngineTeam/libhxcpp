@@ -306,6 +306,11 @@ jobs:
               generational-verify) flags="-D HXCPP_GC_GENERATIONAL -D HXCPP_GC_VERIFY"; bin=Stress ;;
               big-blocks) flags="-D HXCPP_GC_BIG_BLOCKS"; bin=Stress ;;
               check-pointer) flags="--debug"; bin=Stress-debug ;;
+              big-generational) flags="-D HXCPP_GC_BIG_BLOCKS -D HXCPP_GC_GENERATIONAL"; bin=Stress ;;
+              big-verify) flags="-D HXCPP_GC_BIG_BLOCKS -D HXCPP_GC_VERIFY"; bin=Stress ;;
+              nursery) flags="-D HXCPP_GC_NURSERY"; bin=Stress ;;
+              dynamic-size) flags="-D HXCPP_GC_DYNAMIC_SIZE"; bin=Stress ;;
+              debug-level) flags="-D HXCPP_GC_DEBUG_LEVEL=1"; bin=Stress ;;
               *) echo "::error::unknown gc stress mode $mode"; exit 1 ;;
             esac
             echo "::group::gc stress: $mode"
@@ -333,6 +338,11 @@ jobs:
               generational-verify) flags="-D HXCPP_GC_GENERATIONAL -D HXCPP_GC_VERIFY"; bin=Main ;;
               big-blocks) flags="-D HXCPP_GC_BIG_BLOCKS"; bin=Main ;;
               check-pointer) flags="--debug"; bin=Main-debug ;;
+              big-generational) flags="-D HXCPP_GC_BIG_BLOCKS -D HXCPP_GC_GENERATIONAL"; bin=Main ;;
+              big-verify) flags="-D HXCPP_GC_BIG_BLOCKS -D HXCPP_GC_VERIFY"; bin=Main ;;
+              nursery) flags="-D HXCPP_GC_NURSERY"; bin=Main ;;
+              dynamic-size) flags="-D HXCPP_GC_DYNAMIC_SIZE"; bin=Main ;;
+              debug-level) flags="-D HXCPP_GC_DEBUG_LEVEL=1"; bin=Main ;;
               *) echo "::error::unknown gc stress mode $mode"; exit 1 ;;
             esac
             echo "::group::cppia module free: $mode"

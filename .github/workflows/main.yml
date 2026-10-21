@@ -47,6 +47,8 @@ jobs:
 
     - run: bash test/gc-defines/check.sh
       name: Compile the GC under each define
+    - run: bash test/gc-defines/check.sh clang++
+      name: Compile the GC under each define with clang
 
   check-msvc-llvm:
     name: Check MSVC builds with clang-cl
