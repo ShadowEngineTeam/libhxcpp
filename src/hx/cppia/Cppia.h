@@ -326,6 +326,9 @@ struct ScriptCallable : public CppiaDynamicExpr
    #ifdef CPPIA_JIT
    void compile();
    void genDefaults(CppiaCompiler *compiler);
+   #ifdef HXCPP_DEBUGGER
+   void genZeroLocals(CppiaCompiler *compiler);
+   #endif
    void genModuleAnchor(CppiaCompiler *compiler);
    void genArgs(CppiaCompiler *compiler, CppiaExpr *inThis, Expressions &inArgs, const JitVal &inThisVal);
    void genCode(CppiaCompiler *compiler,const JitVal &inDest=JitVal(),ExprType type=etNull) HXCPP_OVERRIDE;

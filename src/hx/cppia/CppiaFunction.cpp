@@ -211,11 +211,26 @@ CppiaExpr *ScriptCallable::link(CppiaModule &inModule)
 }
 
 #ifdef HXCPP_STACK_SCRIPTABLE
+
+// The base holds this, then the arguments and locals at their stackPos. Jitted
+// code pushes the StackFrame at base + stackSize; the interpreter pushes this
+// and the arguments, then allocates the whole layout again before it
+static unsigned char *scriptableBase(unsigned char *inStack, int stackSize,
+                                     const std::vector<CppiaStackVar> &args, bool inCompiled)
+{
+   if (inCompiled)
+      return inStack - stackSize;
+   int argBytes = 0;
+   for (int i = 0; i < (int)args.size(); i++)
+      argBytes += sTypeSize[args[i].argType];
+   return inStack - stackSize - sizeof(hx::Object *) - argBytes;
+}
+
 void ScriptCallable::getScriptableVariables(unsigned char *inStack, Array<Dynamic> outNames)
 {
-   unsigned char *frame = inStack - stackSize;
+   unsigned char *base = scriptableBase(inStack, stackSize, args, compiled!=0);
 
-   hx::Object *thizz = *(hx::Object **)frame;
+   hx::Object *thizz = *(hx::Object **)base;
    if (thizz && !staticEntry)
       outNames->push(HX_CSTRING("this"));
 
@@ -229,10 +244,10 @@ void ScriptCallable::getScriptableVariables(unsigned char *inStack, Array<Dynami
 
 bool ScriptCallable::getScriptableValue(unsigned char *inStack, String inName, ::Dynamic &outValue)
 {
-   unsigned char *frame = inStack - stackSize;
-   if (inName == HX_CSTRING("this"))
+   unsigned char *base = scriptableBase(inStack, stackSize, args, compiled!=0);
+   if (inName == HX_CSTRING("this") && !staticEntry)
    {
-      outValue = *(hx::Object **)frame;
+      outValue = *(hx::Object **)base;
       return true;
    }
 
@@ -242,7 +257,7 @@ bool ScriptCallable::getScriptableValue(unsigned char *inStack, String inName, :
       CppiaStackVar *var = i->second;
       if ( var->module->strings[ var->nameId]==inName)
       {
-         outValue = var->getInFrame(frame);
+         outValue = var->getInFrame(base);
          return true;
       }
    }
@@ -253,13 +268,13 @@ bool ScriptCallable::getScriptableValue(unsigned char *inStack, String inName, :
 
 bool ScriptCallable::setScriptableValue(unsigned char *inStack, String inName, ::Dynamic inValue)
 {
-   unsigned char *frame = inStack - stackSize;
+   unsigned char *base = scriptableBase(inStack, stackSize, args, compiled!=0);
    for(CppiaStackVarMap::iterator i=varMap.begin();i!=varMap.end();++i)
    {
       CppiaStackVar *var = i->second;
       if ( var->module->strings[ var->nameId]==inName)
       {
-         var->setInFrame(frame,inValue);
+         var->setInFrame(base,inValue);
          return true;
       }
    }
@@ -385,6 +400,27 @@ void ScriptCallable::genModuleAnchor(CppiaCompiler *compiler)
       compiler->move( sJitFrame.star(jtPointer,0), sJitTemp0 );
    }
 }
+
+#ifdef HXCPP_DEBUGGER
+static void SLJIT_CALL zeroLocals(unsigned char *inLocals, void *inSize)
+{
+   memset(inLocals, 0, (size_t)inSize);
+}
+
+// The interpreter zeroes a frame's locals; jitted code writes each before
+// reading it, but the debugger can read any of them at any time
+void ScriptCallable::genZeroLocals(CppiaCompiler *compiler)
+{
+   int argEnd = sizeof(void *);
+   for(int i=0;i<args.size();i++)
+      argEnd += sTypeSize[args[i].argType];
+   if (stackSize > argEnd)
+   {
+      compiler->add(sJitArg1.as(jtPointer), sJitFrame.as(jtPointer), argEnd );
+      compiler->callNative( (void *)zeroLocals, sJitArg1.as(jtPointer), JitVal((void *)(size_t)(stackSize - argEnd)) );
+   }
+}
+#endif
 
 void ScriptCallable::genDefaults(CppiaCompiler *compiler)
 {
@@ -694,11 +730,19 @@ void ScriptCallable::compile()
       CppiaCompiler *compiler = CppiaCompiler::create(size);
 
       // First pass calculates size...
+      #ifdef HXCPP_DEBUGGER
+      genZeroLocals(compiler);
+      #endif
       genDefaults(compiler);
       genModuleAnchor(compiler);
 
       #ifdef HXCPP_STACK_TRACE
       compiler->move(sJitFrame.star(jtPointer)+(offsetof(StackFrame,position) + stackSize),  (void *)&position );
+         #if defined(HXCPP_STACK_LINE) && defined(HXCPP_DEBUGGER)
+         // As the StackFrame constructor does - the debugger walks these lists
+         compiler->move(sJitFrame.star(jtPointer)+(offsetof(StackFrame,variables) + stackSize), (void *)0 );
+         compiler->move(sJitFrame.star(jtPointer)+(offsetof(StackFrame,catchables) + stackSize), (void *)0 );
+         #endif
       compiler->add(sJitArg1.as(jtPointer), sJitFrame.as(jtPointer), stackSize );
       compiler->callNative( (void *)pushFrame, sJitCtx.as(jtPointer), sJitArg1.as(jtPointer) );
 
@@ -713,11 +757,19 @@ void ScriptCallable::compile()
       compiler->beginGeneration(1);
 
       // Second pass does the job
+      #ifdef HXCPP_DEBUGGER
+      genZeroLocals(compiler);
+      #endif
       genDefaults(compiler);
       genModuleAnchor(compiler);
 
       #ifdef HXCPP_STACK_TRACE
       compiler->move(sJitFrame.star(jtPointer)+(offsetof(StackFrame,position) + stackSize),  (void *)&position );
+         #if defined(HXCPP_STACK_LINE) && defined(HXCPP_DEBUGGER)
+         // As the StackFrame constructor does - the debugger walks these lists
+         compiler->move(sJitFrame.star(jtPointer)+(offsetof(StackFrame,variables) + stackSize), (void *)0 );
+         compiler->move(sJitFrame.star(jtPointer)+(offsetof(StackFrame,catchables) + stackSize), (void *)0 );
+         #endif
       compiler->add(sJitArg1.as(jtPointer), sJitFrame.as(jtPointer), stackSize );
       compiler->callNative( (void *)pushFrame, sJitCtx.as(jtPointer), sJitArg1.as(jtPointer) );
       #endif
