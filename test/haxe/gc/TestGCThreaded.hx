@@ -86,10 +86,12 @@ class TestGCThreaded extends Test
       for (i in 0...numWork)
          threads[i % threads.length].sendMessage('doWork');
 
+      // utest records results in a shared list, so only this thread asserts
       for (i in 0...numThreads)
       {
          threads[i].sendMessage('exit'); 
-         Thread.readMessage(true);
+         var badSums:Int = Thread.readMessage(true);
+         Assert.equals(0, badSums);
       }
    }
 
@@ -105,6 +107,7 @@ class TestGCThreaded extends Test
       for (i in 0...numThreads)
       {
          threads.push( Thread.create(function() {
+            var badSums = 0;
             while(true) {
                var message:Dynamic = Thread.readMessage(true);
                if(message == 'exit')
@@ -124,9 +127,10 @@ class TestGCThreaded extends Test
                      for(w in a)
                         sum += w.a;
 
-                  Assert.equals(100000, sum);
+                  if (sum != 100000)
+                     badSums++;
             }
-            main.sendMessage('done');
+            main.sendMessage(badSums);
          }) );
       }
       return threads;
