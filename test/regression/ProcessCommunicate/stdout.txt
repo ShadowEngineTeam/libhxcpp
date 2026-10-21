@@ -1,0 +1,5 @@
+1 MB of stderr before stdout: true, stdout done, exit 3
+4 MB through stdin and back: true, exit 3
+past the deadline: timedOut true, stopped within 5 s true
+bounded output: kept 1000, truncated true, exit 3
+descendant holding stdout: stdout parent, returned within 2 s true, timedOut false

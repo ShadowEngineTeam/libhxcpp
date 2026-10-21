@@ -871,6 +871,7 @@ HXCPP_EXTERN_CLASS_ATTRIBUTES int _hx_std_process_exit( Dynamic handle );
 HXCPP_EXTERN_CLASS_ATTRIBUTES int _hx_std_process_pid( Dynamic handle );
 HXCPP_EXTERN_CLASS_ATTRIBUTES void _hx_std_process_kill( Dynamic handle );
 HXCPP_EXTERN_CLASS_ATTRIBUTES void _hx_std_process_close( Dynamic handle );
+HXCPP_EXTERN_CLASS_ATTRIBUTES Dynamic _hx_std_process_communicate( Dynamic handle, Array<unsigned char> input, Float timeout, int maxOutput );
 
 // Random
 HXCPP_EXTERN_CLASS_ATTRIBUTES Dynamic _hx_std_random_new();

@@ -25,6 +25,15 @@
 #include <string.h>
 #include <vector>
 #include <string>
+#include <chrono>
+#include <algorithm>
+#if !defined(HX_WINRT) && !defined(EPPC)
+#ifdef NEKO_WINDOWS
+#include <atomic>
+#else
+#include <poll.h>
+#endif
+#endif
 #if !defined(HX_WINRT) && !defined(EPPC) && !defined(NEKO_WINDOWS) && !defined(__EMSCRIPTEN__) && !defined(HXCPP_SINGLE_THREADED_APP)
 #define HX_PROCESS_REAPER
 #include <thread>
@@ -1032,6 +1041,394 @@ void _hx_std_process_close( Dynamic handle )
    p->destroy();
 }
 
+namespace
+{
+// Keeps up to limit bytes of a stream (all of it when limit is 0) and drops the
+// rest, so the child is never left blocked on a full pipe
+struct CommunicateOutput
+{
+   std::vector<unsigned char> data;
+   size_t limit;
+   bool truncated;
+
+   CommunicateOutput(size_t inLimit) : limit(inLimit), truncated(false) { }
+
+   void add(const unsigned char *inData, size_t inLen)
+   {
+      size_t keep = inLen;
+      if (limit)
+      {
+         size_t room = data.size() < limit ? limit - data.size() : 0;
+         if (keep > room)
+         {
+            keep = room;
+            truncated = true;
+         }
+      }
+      data.insert(data.end(), inData, inData + keep);
+   }
+};
+
+Array<unsigned char> communicateBytes(const std::vector<unsigned char> &inData)
+{
+   if (inData.empty())
+      return Array_obj<unsigned char>::__new(0,0);
+   return Array_obj<unsigned char>::fromData(inData.data(), (int)inData.size());
+}
+
+typedef std::chrono::steady_clock CommunicateClock;
+
+// Once the child has exited, a pipe that one of its descendants still holds open
+// is given up after nothing has arrived on either stream for this long
+const std::chrono::milliseconds sCommunicateQuiet(100);
+
+#ifdef NEKO_WINDOWS
+struct CommunicatePipe
+{
+   HANDLE handle;
+   CommunicateOutput *output;
+   const std::vector<unsigned char> *input;
+   std::atomic<bool> done;
+   std::atomic<CommunicateClock::rep> *lastData;
+   HANDLE thread;
+};
+
+DWORD WINAPI communicateRead(void *inPipe)
+{
+   CommunicatePipe *pipe = (CommunicatePipe *)inPipe;
+   std::vector<unsigned char> buf(65536);
+   DWORD got = 0;
+   while (ReadFile(pipe->handle, buf.data(), (DWORD)buf.size(), &got, 0) && got > 0)
+   {
+      pipe->output->add(buf.data(), got);
+      *pipe->lastData = CommunicateClock::now().time_since_epoch().count();
+   }
+   pipe->done = true;
+   return 0;
+}
+
+DWORD WINAPI communicateWrite(void *inPipe)
+{
+   CommunicatePipe *pipe = (CommunicatePipe *)inPipe;
+   const std::vector<unsigned char> &in = *pipe->input;
+   size_t pos = 0;
+   while (pos < in.size())
+   {
+      DWORD wrote = 0;
+      DWORD chunk = (DWORD)std::min(in.size() - pos, (size_t)65536);
+      if (!WriteFile(pipe->handle, in.data() + pos, chunk, &wrote, 0))
+         break;
+      pos += wrote;
+   }
+   CloseHandle(pipe->handle);
+   pipe->done = true;
+   return 0;
+}
+
+void startPipe(CommunicatePipe &ioPipe, LPTHREAD_START_ROUTINE inRun)
+{
+   ioPipe.thread = CreateThread(0, 0, inRun, &ioPipe, 0, 0);
+   if (!ioPipe.thread)
+      ioPipe.done = true;
+}
+
+// A thread blocked on a pipe that a descendant keeps open is woken with
+// CancelSynchronousIo, which Windows XP does not have; there it is waited for
+void finishPipe(CommunicatePipe &ioPipe)
+{
+   if (!ioPipe.thread)
+      return;
+   typedef BOOL (WINAPI *CancelSynchronousIoFunc)(HANDLE);
+   static CancelSynchronousIoFunc cancelIo =
+      (CancelSynchronousIoFunc)GetProcAddress(GetModuleHandleA("kernel32.dll"), "CancelSynchronousIo");
+   if (cancelIo)
+      while (!ioPipe.done)
+      {
+         cancelIo(ioPipe.thread);
+         Sleep(1);
+      }
+   WaitForSingleObject(ioPipe.thread, INFINITE);
+   CloseHandle(ioPipe.thread);
+}
+#else
+void setNonBlocking(int inFd)
+{
+   int flags = fcntl(inFd, F_GETFL);
+   if (flags != -1)
+      fcntl(inFd, F_SETFL, flags | O_NONBLOCK);
+}
+#endif
+}
+
+/**
+   process_communicate : 'process -> input:bytes -> timeout:float -> maxOutput:int -> object
+   <doc>
+   Writes [input] to the process's stdin and closes it, while reading stdout and
+   stderr at the same time, so neither side can block the other on a full pipe.
+   Returns { stdout, stderr, exitCode, timedOut, stdoutTruncated, stderrTruncated }
+   once the process has exited. A [timeout] above 0 is a deadline in seconds:
+   the process is killed if it is still running then, and timedOut is true.
+   A [maxOutput] above 0 keeps that many bytes of each stream and drops the rest.
+   After the process exits, a stream that one of its descendants keeps open is
+   read until nothing more arrives for 100 ms; descendants are not killed. The
+   pipes are closed afterwards; exitCode() still works.
+   </doc>
+**/
+Dynamic _hx_std_process_communicate( Dynamic handle, Array<unsigned char> input, Float timeout, int maxOutput )
+{
+   vprocess *p = getOpenProcess(handle);
+
+   std::vector<unsigned char> in;
+   if (input.mPtr && input->length > 0)
+      in.assign((unsigned char *)input->GetBase(), (unsigned char *)input->GetBase() + input->length);
+   size_t limit = maxOutput > 0 ? (size_t)maxOutput : 0;
+   CommunicateOutput out(limit);
+   CommunicateOutput err(limit);
+   bool timedOut = false;
+   bool haveExit = false;
+   int exitCode = 0;
+
+   CommunicateClock::time_point deadline = CommunicateClock::time_point::max();
+   if (timeout > 0 && timeout < 1e9)
+      deadline = CommunicateClock::now() +
+                 std::chrono::duration_cast<CommunicateClock::duration>(std::chrono::duration<double>(timeout));
+
+   #ifdef NEKO_WINDOWS
+   CommunicatePipe pipes[3];
+   HANDLE handles[3] = { p->iwrite, p->oread, p->eread };
+   p->iwrite = p->oread = p->eread = 0;
+   HANDLE proc = p->pinf.hProcess;
+   std::atomic<CommunicateClock::rep> lastData(CommunicateClock::now().time_since_epoch().count());
+
+   hx::EnterGCFreeZone();
+   for(int i=0;i<3;i++)
+   {
+      pipes[i].handle = handles[i];
+      pipes[i].output = i==1 ? &out : i==2 ? &err : 0;
+      pipes[i].input = &in;
+      pipes[i].done = handles[i]==0;
+      pipes[i].lastData = &lastData;
+      pipes[i].thread = 0;
+   }
+   if (handles[0])
+      startPipe(pipes[0], communicateWrite);
+   for(int i=1;i<3;i++)
+      if (handles[i])
+         startPipe(pipes[i], communicateRead);
+
+   DWORD wait = INFINITE;
+   if (deadline != CommunicateClock::time_point::max())
+   {
+      auto left = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - CommunicateClock::now()).count();
+      wait = left > 0 ? (DWORD)left : 0;
+   }
+   if (WaitForSingleObject(proc, wait) == WAIT_OBJECT_0)
+   {
+      // Let the readers take what the child wrote before it exited
+      lastData = CommunicateClock::now().time_since_epoch().count();
+      while (!(pipes[1].done && pipes[2].done))
+      {
+         CommunicateClock::time_point now = CommunicateClock::now();
+         if (now >= deadline || now - CommunicateClock::time_point(CommunicateClock::duration(lastData.load())) >= sCommunicateQuiet)
+            break;
+         Sleep(5);
+      }
+   }
+   else
+   {
+      TerminateProcess(proc, 1);
+      WaitForSingleObject(proc, INFINITE);
+      timedOut = true;
+   }
+   for(int i=0;i<3;i++)
+      finishPipe(pipes[i]);
+   for(int i=1;i<3;i++)
+      if (handles[i])
+         CloseHandle(handles[i]);
+   if (handles[0] && !pipes[0].thread)
+      CloseHandle(handles[0]);
+   DWORD code = 0;
+   if (GetExitCodeProcess(proc, &code))
+   {
+      haveExit = true;
+      exitCode = (int)code;
+   }
+   hx::ExitGCFreeZone();
+
+   #else
+   int fdIn = p->iwrite;
+   int fdOut = p->oread;
+   int fdErr = p->eread;
+   p->iwrite = p->oread = p->eread = -1;
+   int pid = p->pid;
+   bool exited = p->reaped;
+   bool reapedHere = false;
+   int status = 0;
+
+   hx::EnterGCFreeZone();
+   if (fdIn != -1 && in.empty())
+   {
+      do_close(fdIn);
+      fdIn = -1;
+   }
+   if (fdIn != -1)
+      setNonBlocking(fdIn);
+   if (fdOut != -1)
+      setNonBlocking(fdOut);
+   if (fdErr != -1)
+      setNonBlocking(fdErr);
+
+   size_t inPos = 0;
+   std::vector<unsigned char> buf(65536);
+   CommunicateClock::time_point lastData = CommunicateClock::now();
+   while (fdIn != -1 || fdOut != -1 || fdErr != -1)
+   {
+      if (!exited)
+      {
+         int r;
+         do
+            r = waitpid(pid, &status, WNOHANG);
+         while (r < 0 && errno == EINTR);
+         if (r == pid)
+         {
+            exited = reapedHere = true;
+            lastData = CommunicateClock::now();
+         }
+      }
+      // A child that has exited reads no more input
+      if (exited && fdIn != -1)
+      {
+         do_close(fdIn);
+         fdIn = -1;
+      }
+      CommunicateClock::time_point now = CommunicateClock::now();
+      if (now >= deadline || (exited && now - lastData >= sCommunicateQuiet))
+         break;
+
+      struct pollfd fds[3];
+      int n = 0;
+      if (fdIn != -1)
+      {
+         fds[n].fd = fdIn;
+         fds[n++].events = POLLOUT;
+      }
+      if (fdOut != -1)
+      {
+         fds[n].fd = fdOut;
+         fds[n++].events = POLLIN;
+      }
+      if (fdErr != -1)
+      {
+         fds[n].fd = fdErr;
+         fds[n++].events = POLLIN;
+      }
+      for(int i=0;i<n;i++)
+         fds[i].revents = 0;
+      // waitpid cannot be polled, so the child's exit is checked this often
+      long long waitMs = 20;
+      if (deadline != CommunicateClock::time_point::max())
+         waitMs = std::min(waitMs, (long long)std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now).count() + 1);
+      int ready = poll(fds, n, (int)waitMs);
+      if (ready < 0 && errno != EINTR)
+         break;
+      if (ready <= 0)
+         continue;
+
+      for(int i=0;i<n;i++)
+      {
+         if (!fds[i].revents)
+            continue;
+         int fd = fds[i].fd;
+         if (fd == fdIn)
+         {
+            ssize_t wrote = writeNoSigpipe(fdIn, in.data() + inPos, in.size() - inPos);
+            if (wrote > 0)
+               inPos += wrote;
+            if ((wrote < 0 && errno != EAGAIN && errno != EWOULDBLOCK) || inPos == in.size())
+            {
+               do_close(fdIn);
+               fdIn = -1;
+            }
+            continue;
+         }
+         CommunicateOutput &target = fd == fdOut ? out : err;
+         while (true)
+         {
+            ssize_t got = read(fd, buf.data(), buf.size());
+            if (got > 0)
+            {
+               target.add(buf.data(), got);
+               lastData = CommunicateClock::now();
+               continue;
+            }
+            if (got < 0 && errno == EINTR)
+               continue;
+            if (got < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+               break;
+            do_close(fd);
+            if (fd == fdOut)
+               fdOut = -1;
+            else
+               fdErr = -1;
+            break;
+         }
+      }
+   }
+   if (fdIn != -1)
+      do_close(fdIn);
+   if (fdOut != -1)
+      do_close(fdOut);
+   if (fdErr != -1)
+      do_close(fdErr);
+
+   while (!exited)
+   {
+      bool forever = deadline == CommunicateClock::time_point::max();
+      int r;
+      do
+         r = waitpid(pid, &status, forever ? 0 : WNOHANG);
+      while (r < 0 && errno == EINTR);
+      if (r == pid)
+      {
+         exited = reapedHere = true;
+         break;
+      }
+      if (r < 0)
+         break;
+      if (CommunicateClock::now() >= deadline)
+      {
+         kill(pid, SIGKILL);
+         timedOut = true;
+         do
+            r = waitpid(pid, &status, 0);
+         while (r < 0 && errno == EINTR);
+         exited = reapedHere = r == pid;
+         break;
+      }
+      usleep(5000);
+   }
+   hx::ExitGCFreeZone();
+
+   if (reapedHere)
+      reapStatus(p, status);
+   if (p->reaped)
+   {
+      haveExit = true;
+      exitCode = p->exitStatus;
+   }
+   #endif
+
+   hx::Anon result = hx::Anon_obj::Create();
+   result->__SetField(HX_CSTRING("stdout"), communicateBytes(out.data), hx::paccDynamic);
+   result->__SetField(HX_CSTRING("stderr"), communicateBytes(err.data), hx::paccDynamic);
+   result->__SetField(HX_CSTRING("exitCode"), haveExit ? Dynamic(exitCode) : Dynamic(), hx::paccDynamic);
+   result->__SetField(HX_CSTRING("timedOut"), timedOut, hx::paccDynamic);
+   result->__SetField(HX_CSTRING("stdoutTruncated"), out.truncated, hx::paccDynamic);
+   result->__SetField(HX_CSTRING("stderrTruncated"), err.truncated, hx::paccDynamic);
+   return result;
+}
+
+
 #else  // !HX_WINRT
 
 Dynamic _hx_std_process_run( String cmd, Array<String> vargs, int inShowParam ){ return null(); }
@@ -1047,6 +1444,7 @@ int _hx_std_process_exit( Dynamic handle ) { return 0; }
 int _hx_std_process_pid( Dynamic handle ) { return 0; }
 void _hx_std_process_close( Dynamic handle ) { }
 void _hx_std_process_kill( Dynamic handle ) { }
+Dynamic _hx_std_process_communicate( Dynamic handle, Array<unsigned char> input, Float timeout, int maxOutput ) { return null(); }
 
 #endif // HX_WINRT
 

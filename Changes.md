@@ -319,6 +319,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Process pipe reads and writes of zero bytes return 0 at once, without touching the buffer or entering a GC-free zone
 * Fixed File.getContent and getBytes returning nothing for files that report a size of 0, such as Linux /proc files, and failing on unseekable inputs; they read to the end when the size is zero or unknown, and keep what was read when a file holds less than its size said
 * Fixed a POSIX child starting with its stdin, stdout or stderr closed when the parent had that descriptor closed: the pipe took the same number and kept close-on-exec through a dup2 onto itself
+* _hx_std_process_communicate(process, input, timeout, maxOutput) runs a child without the pipe deadlocks of the blocking stream API: it writes stdin while draining stdout and stderr together, can keep only the first maxOutput bytes of each, kills the child at a deadline, and returns once the child exits even when a descendant keeps a pipe open. Haxe's sys.io.Process has no method for it yet; call it through untyped __global__ with the process's handle (libhxcpp #214)
 
 ### Regular expressions, zlib and databases
 
