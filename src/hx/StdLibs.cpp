@@ -104,6 +104,12 @@ void RegisterResources(Resource *inResources)
       sgResources = inResources;
 }
 
+void UnregisterResources(Resource *inResources)
+{
+   if (sgSecondResources==inResources)
+      sgSecondResources = 0;
+}
+
 }
 
 using namespace hx;

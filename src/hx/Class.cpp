@@ -190,6 +190,21 @@ void Class_obj::registerScriptable(bool inOverwrite)
    slot = this;
 }
 
+void Class_obj::unregisterScriptable()
+{
+   ClassMapLock lock;
+   ClassMap::iterator it = sClassMap->find(mName);
+   if (it==sClassMap->end() || it->second.mPtr!=this)
+      return;
+   sClassMap->erase(it);
+   for(int i=(int)sAllClasses->size()-1; i>=0; i--)
+      if ((*sAllClasses)[i].mPtr==this)
+      {
+         sAllClasses->erase(sAllClasses->begin()+i);
+         break;
+      }
+}
+
 Class Class_obj::GetSuper()
 {
    if (!mSuper)

@@ -18,6 +18,7 @@ Resource *GetResources();
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES
 void RegisterResources(hx::Resource *inResources);
+void UnregisterResources(hx::Resource *inResources);
 
 
 struct AnyCast

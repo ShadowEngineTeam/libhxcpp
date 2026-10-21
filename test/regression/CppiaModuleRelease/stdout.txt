@@ -1,0 +1,6 @@
+jit false: released statics collected: true
+jit false: class registered only while loaded: true
+jit false: first generation still works: true
+jit true: released statics collected: true
+jit true: class registered only while loaded: true
+jit true: first generation still works: true

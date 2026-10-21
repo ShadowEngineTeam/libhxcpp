@@ -389,9 +389,12 @@ public:
    int                             scriptId;
 
    ScriptCallable                  *main;
+   std::vector< hx::Resource >     resources;
 
    CppiaModule();
    ~CppiaModule();
+
+   void release();
 
    void link();
    void compile();
@@ -765,6 +768,7 @@ public:
 
    void mark(hx::MarkContext *__inCtx);
    void markInstance(hx::Object *inThis, hx::MarkContext *__inCtx);
+   void release();
 
    #ifdef HXCPP_VISIT_ALLOCS
    void visit(hx::VisitContext *__inCtx);

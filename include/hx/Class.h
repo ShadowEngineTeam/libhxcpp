@@ -160,6 +160,7 @@ public:
    static bool SetNoStaticField(const String &inString, Dynamic &ioValue, hx::PropertyAccess inCallProp);
 
    void registerScriptable(bool inOverwrite);
+   void unregisterScriptable();
   
 	hx::CanCastFunc     mCanCast;
 

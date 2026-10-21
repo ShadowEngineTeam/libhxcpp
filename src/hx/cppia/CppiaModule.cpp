@@ -16,8 +16,6 @@ int sgNativeNameSlotCount = 0;
 
 Array<Dynamic> gAllCppiaModules;
 
-std::vector<hx::Resource> scriptResources;
-
 
 
 // --- CppiaModule ----
@@ -130,6 +128,16 @@ CppiaClassInfo *CppiaModule::findClass( ::String inName)
    return 0;
 }
 
+
+// The data the module holds goes; its code stays, since instances, closures,
+// class objects, stack traces and JIT code can still point into it
+void CppiaModule::release()
+{
+   for(int i=0;i<classes.size();i++)
+      classes[i]->release();
+   if (resources.size())
+      UnregisterResources(&resources[0]);
+}
 
 void CppiaModule::mark(hx::MarkContext *__inCtx)
 {
@@ -352,6 +360,36 @@ public:
       return null();
    }
 
+   void release() HXCPP_OVERRIDE
+   {
+      cppia->release();
+   }
+
+   // The std's Module extern does not declare release, so untyped calls
+   // reach it as a field
+   struct ReleaseFunc : public hx::LocalFunc
+   {
+      hx::Object *module;
+      ReleaseFunc(hx::Object *inModule) : module(inModule) { }
+      Dynamic __run() HXCPP_OVERRIDE
+      {
+         static_cast<CppiaObject *>(module)->release();
+         return null();
+      }
+      int __ArgCount() const HXCPP_OVERRIDE { return 0; }
+      void __Mark(hx::MarkContext *__inCtx) HXCPP_OVERRIDE { HX_MARK_MEMBER(module); }
+      #ifdef HXCPP_VISIT_ALLOCS
+      void __Visit(hx::VisitContext *__inCtx) HXCPP_OVERRIDE { HX_VISIT_OBJECT(module); }
+      #endif
+   };
+
+   hx::Val __Field(const String &inName, hx::PropertyAccess inCallProp) HXCPP_OVERRIDE
+   {
+      if (inName==HX_CSTRING("release"))
+         return Dynamic(new ReleaseFunc(this));
+      return hx::CppiaLoadedModule_obj::__Field(inName, inCallProp);
+   }
+
 };
 
 
@@ -474,6 +512,7 @@ CppiaLoadedModule LoadCppia(const unsigned char *inData, int inDataLength)
       if (tok=="RESOURCES")
       {
          int count = stream.checkCount(stream.getInt());
+         std::vector<hx::Resource> &scriptResources = cppia.resources;
          scriptResources.resize(count+1);
          for(int r=0;r<count;r++)
          {
@@ -555,8 +594,12 @@ CppiaLoadedModule LoadCppia(const unsigned char *inData, int inDataLength)
       #endif
    }
 
+   // The host never sees a module that failed to load, so it cannot release it
    if (error.raw_ptr())
+   {
+      cppia.release();
       hx::Throw(error);
+   }
 
    cppia.registerDebugger();
 

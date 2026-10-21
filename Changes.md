@@ -369,6 +369,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed cppia's safe casts to Int, Float, Bool and String never throwing: cast("abc", Int) gave 0, cast(1.5, Int) gave 1 and cast(7, String) gave "7". They throw as compiled code does, and null gives 0, 0 and false, or null for String, as on the static targets
 * Fixed the cppia JIT's String += dropping a null right-hand side, so s += null left s unchanged and a null s += "x" gave "x"; it appends "null" as compiled code and the interpreter do
 * Fixed cppia Int arithmetic not wrapping when the result is used as a Float or String: the JIT's "s" + (a + 1) with a = 2147483647 gave s2147483648. Both engines now wrap as compiled code does
+* cppia modules can be released (`untyped module.release()`, or `hx::CppiaLoadedModule_obj::release()` from native code): the module's classes leave the class registry, its statics are cleared so the data they held can be collected, and its resources are unregistered; its code stays loaded, so objects from it keep working. See docs/CppiaModuleRelease.md. Also fixed a class replaced by a later module losing its metadata and field lists to the collector, and a later module's resources reallocating the list the previous module had registered
 
 ### CFFI, ndlls, the debugger and telemetry
 

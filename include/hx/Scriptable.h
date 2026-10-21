@@ -184,6 +184,9 @@ public:
    virtual void run() = 0;
    virtual void boot() = 0;
    virtual ::hx::Class resolveClass( ::String inName) = 0;
+   // Unregisters the module's classes and resources and clears its statics.
+   // Its code stays loaded, so objects and closures it made keep working.
+   virtual void release() { }
 };
 typedef ::hx::ObjectPtr<CppiaLoadedModule_obj> CppiaLoadedModule;
 

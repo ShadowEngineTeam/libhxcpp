@@ -858,6 +858,17 @@ CppiaEnumConstructor *CppiaClassInfo::findEnum(int inFieldId)
 void CppiaClassInfo::mark(hx::MarkContext *__inCtx)
 {
    HX_MARK_MEMBER(mClass);
+   // The class object is a const allocation, which the collector does not
+   // look inside, and the class registry marks it only while it holds it
+   if (mClass.mPtr)
+   {
+      HX_MARK_MEMBER(mClass->mName);
+      HX_MARK_MEMBER(mClass->__meta__);
+      HX_MARK_MEMBER(mClass->__rtti__);
+      HX_MARK_MEMBER(mClass->mStatics);
+      HX_MARK_MEMBER(mClass->mMembers);
+      HX_MARK_MEMBER(mClass->mInstanceFieldsCache);
+   }
    for(int i=0;i<enumConstructors.size();i++)
    {
       HX_MARK_MEMBER(enumConstructors[i]->value);
@@ -868,10 +879,32 @@ void CppiaClassInfo::mark(hx::MarkContext *__inCtx)
    for(int i=0;i<staticDynamicFunctions.size();i++)
       staticDynamicFunctions[i]->mark(__inCtx);
 }
+void CppiaClassInfo::release()
+{
+   if (mClass.mPtr)
+      mClass->unregisterScriptable();
+   for(int i=0;i<staticVars.size();i++)
+   {
+      staticVars[i]->objVal.mPtr = 0;
+      staticVars[i]->stringVal = String();
+   }
+   for(int i=0;i<staticDynamicFunctions.size();i++)
+      staticDynamicFunctions[i]->objVal.mPtr = 0;
+}
+
 #ifdef HXCPP_VISIT_ALLOCS
 void CppiaClassInfo::visit(hx::VisitContext *__inCtx)
 {
    HX_VISIT_MEMBER(mClass);
+   if (mClass.mPtr)
+   {
+      HX_VISIT_MEMBER(mClass->mName);
+      HX_VISIT_MEMBER(mClass->__meta__);
+      HX_VISIT_MEMBER(mClass->__rtti__);
+      HX_VISIT_MEMBER(mClass->mStatics);
+      HX_VISIT_MEMBER(mClass->mMembers);
+      HX_VISIT_MEMBER(mClass->mInstanceFieldsCache);
+   }
    for(int i=0;i<enumConstructors.size();i++)
    {
       HX_VISIT_MEMBER(enumConstructors[i]->value);
