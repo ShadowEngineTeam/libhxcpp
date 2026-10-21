@@ -1924,7 +1924,8 @@ public:
 
    void linkClass(CppiaModule &inModule,String inName)
    {
-      mName = inName;
+      // The class registry keeps the first registration's name as its key, after this module is freed
+      mName = inName.makePermanent();
       mSuper = info->getSuperClass();
       DBGLOG("LINK %p ########################### %s -> %p\n", this, mName.out_str(), mSuper );
       //mStatics = Array_obj<String>::__new(0,0);

@@ -1,3 +1,5 @@
+jit false: class registry survives compaction: true
+jit false: overlapping generations freed: true
 jit false: released modules freed: true
 jit false: instance: kept true, freed after true
 jit false: bound method: kept true, freed after true
@@ -13,6 +15,8 @@ jit false: running on a thread: true, freed after true
 jit false: exception stack: true, still readable true
 jit false: failed load freed: true
 jit false: native memory stable: true
+jit true: class registry survives compaction: true
+jit true: overlapping generations freed: true
 jit true: released modules freed: true
 jit true: instance: kept true, freed after true
 jit true: bound method: kept true, freed after true

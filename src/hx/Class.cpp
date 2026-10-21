@@ -193,16 +193,15 @@ void Class_obj::registerScriptable(bool inOverwrite)
 void Class_obj::unregisterScriptable()
 {
    ClassMapLock lock;
+   // A newer class of the same name keeps the name
    ClassMap::iterator it = sClassMap->find(mName);
-   if (it==sClassMap->end() || it->second.mPtr!=this)
-      return;
-   sClassMap->erase(it);
-   for(int i=(int)sAllClasses->size()-1; i>=0; i--)
-      if ((*sAllClasses)[i].mPtr==this)
-      {
-         sAllClasses->erase(sAllClasses->begin()+i);
-         break;
-      }
+   if (it!=sClassMap->end() && it->second.mPtr==this)
+      sClassMap->erase(it);
+   // The collector marks every class listed here, so none may outlive its release
+   if (sAllClasses)
+      for(int i=(int)sAllClasses->size()-1; i>=0; i--)
+         if ((*sAllClasses)[i].mPtr==this)
+            sAllClasses->erase(sAllClasses->begin()+i);
 }
 
 Class Class_obj::GetSuper()
@@ -424,6 +423,9 @@ void MarkClassStatics(hx::MarkContext *__inCtx)
       for(size_t i=0; i<count; i++)
       {
          Class_obj *c = (*sAllClasses)[i].mPtr;
+         // Script classes are collected objects now. The registry is a root
+         // for the class itself as well as its statics.
+         HX_MARK_OBJECT(c);
          if (c->__meta__.mPtr || c->mMarkFunc || c->mInstanceFieldsCache.mPtr)
          {
             #ifdef HXCPP_DEBUG

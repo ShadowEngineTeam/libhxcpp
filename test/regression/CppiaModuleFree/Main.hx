@@ -242,6 +242,54 @@ class Main {
 		}
 	}
 
+	// Leave the native registry as the only owner of a collected script Class.
+	// Loaded modules normally root their classes too, hiding a missing registry root.
+	static function registerReleasedClass() {
+		var m = load();
+		var cls = m.resolveClass("Thing");
+		release(m);
+		untyped __cpp__("{0}->registerScriptable(true)", cls);
+	}
+
+	static function unregisterClass() {
+		var cls = Type.resolveClass("Thing");
+		untyped __cpp__("{0}->unregisterScriptable()", cls);
+	}
+
+	static function registry():Bool {
+		isolated(registerReleasedClass);
+		var ok = true;
+		for (i in 0...5) {
+			collect();
+			Gc.compact();
+			var cls = Type.resolveClass("Thing");
+			if (cls == null || Type.getClassName(cls) != "Thing"
+				|| Type.getInstanceFields(cls).indexOf("value") < 0
+				|| Type.createInstance(cls, []).get() != 8)
+				ok = false;
+		}
+		isolated(unregisterClass);
+		return ok && Type.resolveClass("Thing") == null;
+	}
+
+	// A host loads the replacement before releasing the module it replaces
+	static function overlapped():Bool {
+		var previous = load();
+		var ok = true;
+		for (i in 0...6) {
+			var next = load();
+			if (Type.resolveClass("Thing") != next.resolveClass("Thing"))
+				ok = false;
+			release(previous);
+			if (Type.resolveClass("Thing") != next.resolveClass("Thing"))
+				ok = false;
+			previous = next;
+			collect();
+		}
+		release(previous);
+		return ok && Type.resolveClass("Thing") == null;
+	}
+
 	static function main() {
 		var path = haxe.io.Path.join([haxe.io.Path.directory(Sys.programPath()), "script.cppia"]);
 		bytes = sys.io.File.getBytes(path);
@@ -249,6 +297,12 @@ class Main {
 			cpp.cppia.Host.enableJit(jit);
 			collect();
 			base = live();
+			var registered = isolated(registry);
+			collect();
+			Sys.println('jit $jit: class registry survives compaction: ${registered && live() == base}');
+			var overlap = isolated(overlapped);
+			collect();
+			Sys.println('jit $jit: overlapping generations freed: ${overlap && live() == base}');
 
 			reloads(10);
 			Sys.println('jit $jit: released modules freed: ${live() == base}');
