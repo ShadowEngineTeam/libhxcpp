@@ -9,47 +9,75 @@ The benchmark suite in [bench](bench) compares libhxcpp with stock hxcpp 4.3.53,
 
 | Benchmark | Unit | libhxcpp | hxcpp 4.3.53 | libhxcpp vs stock |
 | --- | --- | ---: | ---: | ---: |
-| alloc_small | objects/s | 589M ±1.1% | 593M ±0.7% | ~0.99x |
-| alloc_strings | strings/s | 48M ±0.3% | 23.7M ±0.2% | 2.03x |
-| alloc_arrays | arrays/s | 20.2M ±0.8% | 20.7M ±0.4% | 0.98x |
-| gc_pauses | objects/s | 90.6M ±2.3% | 59.8M ±1.4% | 1.51x |
-| map_int | map operations/s | 130M ±1.6% | 123M ±2.4% | 1.05x |
-| map_string | map operations/s | 31.2M ±4% | 23.2M ±1.7% | 1.34x |
-| map_object | map operations/s | 10.1M ±3.6% | 10.2M ±2.7% | ~0.99x |
-| string_build | appends/s | 64.8M ±0.8% | 41.7M ±2.3% | 1.56x |
-| string_index | indexOf calls/s | 1.9M ±0.6% | 213k ±0.7% | 9.0x |
-| string_substr | substr calls/s | 81.2M ±0.5% | 82.4M ±0.3% | 0.99x |
-| string_split | split calls/s | 28k ±0.4% | 22.8k ±0.6% | 1.23x |
-| string_case | case conversions/s | 37.7M ±0.5% | 1.5M ±0.3% | 25.03x |
-| sort_int | elements/s | 3.8M ±4.6% | 3.1M ±0.3% | 1.21x |
-| sort_string | elements/s | 1.5M ±1.9% | 1.2M ±1.9% | 1.32x |
-| sort_object | elements/s | 4.3M ±0.7% | 4.1M ±0.3% | 1.05x |
+| alloc_small | objects/s | 593M ±0.8% | 599M ±0.3% | ~0.99x |
+| alloc_strings | strings/s | 50.1M ±0.2% | 24M ±0.2% | 2.09x |
+| alloc_arrays | arrays/s | 20.4M ±0.5% | 20.6M ±0.7% | ~0.99x |
+| gc_pauses | objects/s | 84.7M ±2.9% | 57.5M ±2.4% | 1.47x |
+| map_int | map operations/s | 128M ±1.4% | 124M ±1.3% | 1.03x |
+| map_string | map operations/s | 29.6M ±3.3% | 21.1M ±2.5% | 1.41x |
+| map_object | map operations/s | 9M ±3.8% | 9.1M ±1.8% | ~0.99x |
+| string_build | appends/s | 62.9M ±1.2% | 40.5M ±2.3% | 1.56x |
+| string_index | indexOf calls/s | 1.9M ±1% | 211k ±0.7% | 8.82x |
+| string_substr | substr calls/s | 86.2M ±0.4% | 82.7M ±0.6% | 1.04x |
+| string_split | split calls/s | 28.8k ±1% | 22.7k ±0.4% | 1.27x |
+| string_case | case conversions/s | 37.6M ±0.5% | 1.5M ±1% | 25.08x |
+| sort_int | elements/s | 3.8M ±3% | 3M ±1.2% | 1.26x |
+| sort_string | elements/s | 606k ±50.9% | 1M ±6.9% | ~0.6x |
+| sort_object | elements/s | 4.1M ±2.4% | 4M ±1.6% | ~1.03x |
+| cppia_interp_int_loop | iterations/s | 47.3M ±1.4% | 45.4M ±3.1% | ~1.04x |
+| cppia_interp_float_array | elements/s | 24.1M ±1% | 24.8M ±2.7% | ~0.97x |
+| cppia_interp_alloc_objects | objects/s | 17.9M ±0.6% | 18.3M ±1% | ~0.98x |
+| cppia_interp_virtual_call | calls/s | 37.9M ±0.6% | 38.3M ±0.7% | ~0.99x |
+| cppia_interp_closure_call | calls/s | 12.1M ±39.1% | 20.4M ±1.3% | ~0.59x |
+| cppia_interp_native_call | calls/s | 72.5M ±0.5% | 71.2M ±3.7% | ~1.02x |
+| cppia_interp_native_callback | callbacks/s | 26.4M ±1.3% | 27.4M ±1.7% | 0.96x |
+| cppia_jit_int_loop | iterations/s | 728M ±3.7% | 732M ±2.4% | ~0.99x |
+| cppia_jit_float_array | elements/s | 216M ±0.4% | 223M ±0.2% | 0.97x |
+| cppia_jit_alloc_objects | objects/s | 102M ±0.4% | 106M ±0.4% | 0.96x |
+| cppia_jit_virtual_call | calls/s | 289M ±0.4% | 292M ±0.4% | 0.99x |
+| cppia_jit_closure_call | calls/s | 25.4M ±0.5% | 26.2M ±0.6% | 0.97x |
+| cppia_jit_native_call | calls/s | 609M ±0.2% | 607M ±0.1% | ~1.0x |
+| cppia_jit_native_callback | callbacks/s | 26.8M ±0.5% | 28M ±0.4% | 0.96x |
 
 **Collection pauses and memory** (lower is better)
 
 | Metric | Benchmark | libhxcpp | hxcpp 4.3.53 | stock / libhxcpp |
 | --- | --- | ---: | ---: | ---: |
-| Startup and exit | noop | 4 ms | 2.5 ms | 0.63x |
-| Work unit time, p99 | gc_pauses | 54.2 us | 75.2 us | 1.39x |
-| Work unit time, p99.9 | gc_pauses | 4.7 ms | 11.9 ms | 2.54x |
-| Work unit time, max | gc_pauses | 5.7 ms | 17.2 ms | 3.02x |
-| Peak memory | alloc_small | 26.3 MB | 24.9 MB | 0.94x |
-| Peak memory | alloc_strings | 26.3 MB | 24.8 MB | 0.94x |
-| Peak memory | alloc_arrays | 29.5 MB | 28.3 MB | 0.96x |
-| Peak memory | gc_pauses | 136 MB | 131 MB | 0.96x |
-| Peak memory | map_int | 32.4 MB | 30.6 MB | 0.94x |
-| Peak memory | map_string | 134 MB | 110 MB | 0.82x |
-| Peak memory | map_object | 73 MB | 68.3 MB | 0.94x |
-| Peak memory | string_build | 30.7 MB | 228 MB | 7.43x |
-| Peak memory | string_index | 10.9 MB | 8.4 MB | 0.78x |
-| Peak memory | string_substr | 26.4 MB | 24.9 MB | 0.94x |
-| Peak memory | string_split | 70 MB | 72.4 MB | 1.03x |
-| Peak memory | string_case | 26.3 MB | 24.9 MB | 0.94x |
-| Peak memory | sort_int | 32.7 MB | 27.7 MB | 0.85x |
-| Peak memory | sort_string | 34.9 MB | 30.3 MB | 0.87x |
-| Peak memory | sort_object | 29.4 MB | 27.9 MB | 0.95x |
+| Startup and exit | noop | 3 ms | 3 ms | 0.99x |
+| Work unit time, p99 | gc_pauses | 60.2 us | 74.6 us | 1.24x |
+| Work unit time, p99.9 | gc_pauses | 4.8 ms | 12.2 ms | 2.53x |
+| Work unit time, max | gc_pauses | 6.4 ms | 13.2 ms | 2.06x |
+| Peak memory | alloc_small | 25.3 MB | 24.9 MB | 0.98x |
+| Peak memory | alloc_strings | 25.4 MB | 24.8 MB | 0.98x |
+| Peak memory | alloc_arrays | 28.5 MB | 28.3 MB | 0.99x |
+| Peak memory | gc_pauses | 135 MB | 131 MB | 0.97x |
+| Peak memory | map_int | 31.4 MB | 30.6 MB | 0.97x |
+| Peak memory | map_string | 133 MB | 110 MB | 0.83x |
+| Peak memory | map_object | 71.9 MB | 68.3 MB | 0.95x |
+| Peak memory | string_build | 29.7 MB | 228 MB | 7.67x |
+| Peak memory | string_index | 9.9 MB | 8.4 MB | 0.85x |
+| Peak memory | string_substr | 25.4 MB | 24.9 MB | 0.98x |
+| Peak memory | string_split | 69 MB | 72.4 MB | 1.05x |
+| Peak memory | string_case | 25.3 MB | 24.9 MB | 0.98x |
+| Peak memory | sort_int | 32 MB | 27.7 MB | 0.87x |
+| Peak memory | sort_string | 34 MB | 30.3 MB | 0.89x |
+| Peak memory | sort_object | 28.4 MB | 27.9 MB | 0.98x |
+| Peak memory | cppia_interp_int_loop | 7.4 MB | 8.3 MB | 1.13x |
+| Peak memory | cppia_interp_float_array | 28 MB | 29 MB | 1.03x |
+| Peak memory | cppia_interp_alloc_objects | 22.7 MB | 23.8 MB | 1.05x |
+| Peak memory | cppia_interp_virtual_call | 7.3 MB | 8.3 MB | 1.13x |
+| Peak memory | cppia_interp_closure_call | 27.9 MB | 28.8 MB | 1.04x |
+| Peak memory | cppia_interp_native_call | 7.3 MB | 8.3 MB | 1.13x |
+| Peak memory | cppia_interp_native_callback | 27.8 MB | 28.8 MB | 1.03x |
+| Peak memory | cppia_jit_int_loop | 7.5 MB | 8.5 MB | 1.13x |
+| Peak memory | cppia_jit_float_array | 7.6 MB | 8.6 MB | 1.13x |
+| Peak memory | cppia_jit_alloc_objects | 22.9 MB | 23.9 MB | 1.04x |
+| Peak memory | cppia_jit_virtual_call | 7.5 MB | 8.5 MB | 1.13x |
+| Peak memory | cppia_jit_closure_call | 28 MB | 29 MB | 1.03x |
+| Peak memory | cppia_jit_native_call | 7.5 MB | 8.5 MB | 1.13x |
+| Peak memory | cppia_jit_native_callback | 28 MB | 29 MB | 1.04x |
 
-Windows, AMD Ryzen 9 9950X 16-Core Processor; MSVC 194435213, 64-bit; Haxe 4.3.7; libhxcpp 51939949; 3 processes x 10 samples per benchmark; 2026-10-20 16:08:27.
+Windows, AMD Ryzen 9 9950X 16-Core Processor; MSVC 194435213, 64-bit; Haxe 4.3.7; libhxcpp c653b135; 3 processes x 10 samples per benchmark; 2026-10-21 11:05:06.
 Reproduce with `cd bench && haxe --run Run`. Ratios above 1 favour libhxcpp; "~" marks a difference within the run-to-run spread.
 <!-- bench:end -->
 
@@ -112,9 +140,6 @@ uses `scriptable` and `--dce no`, like the CPPIA tests. It is a separate executa
 so those flags do not change the native benchmarks. Peak memory for these cases
 includes the host, loaded module and any JIT code. The `noop` startup row still
 measures the native executable.
-
-The published results above predate the CPPIA cases. A fresh complete run from a
-committed tree is needed to publish comparable numbers for them.
 
 ## Running it yourself
 
