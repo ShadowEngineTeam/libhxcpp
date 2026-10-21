@@ -1,0 +1,4 @@
+live bytes reported: true
+live bytes within line usage: true
+scattered survivors use more lines than bytes: true
+kept 50000

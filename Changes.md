@@ -136,6 +136,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * An empty HXCPP_MINIMUM_WORKING_MEMORY, HXCPP_MINIMUM_FREE_SPACE or HXCPP_TARGET_FREE_SPACE is treated as unset again instead of stopping the program with a critical error
 * Fixed programs with many threads allocating at once stopping with "Memory exhausted" while the heap was far from full: other threads could claim every block a thread had just added before it took one (HaxeFoundation/hxcpp#1289)
 * Fixed releasing more managed memory than was reported wrapping the GC's large-allocation count, after which every GCChangeManagedMemory call forced a collection; negative GC tuning values and HXCPP_MINIMUM_WORKING_MEMORY, HXCPP_MINIMUM_FREE_SPACE and HXCPP_TARGET_FREE_SPACE values no longer become huge ones that stop collections, and cpp.vm.Gc's Int memory figures saturate instead of wrapping above 2 GB
+* Gc.memInfo64(4) reports live bytes: the bytes of the objects that survived the last full collection (every major collection is one), next to MEM_INFO_USAGE, which counts every 128-byte line a live object touches, so fragmentation can be measured. The value has no named constant in Haxe's cpp.vm.Gc yet (libhxcpp #83)
 
 ### Threads
 

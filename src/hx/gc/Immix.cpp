@@ -269,6 +269,9 @@ enum
    MEM_INFO_RESERVED = 1,
    MEM_INFO_CURRENT = 2,
    MEM_INFO_LARGE = 3,
+   // The bytes of the objects that survived the last full reclaim, which
+   // every major collection does, against MEM_INFO_USAGE's whole lines
+   MEM_INFO_LIVE = 4,
 };
 
 enum GcMode
@@ -3250,6 +3253,7 @@ public:
       mTotalAfterLastCollect = 1<<20;
       mCurrentRowsInUse = 0;
       mAllBlocksCount = 0;
+      mLiveBytes = 0;
       mGenerationalRetainEstimate = 0.5;
       for(int p=0;p<LOCAL_POOL_SIZE;p++)
          mLocalPool[p] = 0;
@@ -5394,6 +5398,8 @@ public:
       STAMP(t5)
 
       size_t mem = mRowsInUse<<IMMIX_LINE_BITS;
+      if (full)
+         mLiveBytes = stats.bytesInUse;
       size_t baseMem = full ? bytesInUse : mem;
       #ifdef HXCPP_GC_DYNAMIC_SIZE
       size_t targetFree = std::max(hx::sgMinimumFreeSpace, (size_t)(baseMem * profileCollectSummary.spaceFactor) );
@@ -5659,6 +5665,11 @@ public:
 
 
 
+   size_t MemLive()
+   {
+      return mLiveBytes + mLargeAllocated;
+   }
+
    size_t MemLarge()
    {
       return mLargeAllocated;
@@ -5760,6 +5771,7 @@ public:
    int mLargeLookups = 0;
    size_t mTotalAfterLastCollect;
    size_t mAllBlocksCount;
+   size_t mLiveBytes;
    double mGenerationalRetainEstimate;
 
    hx::MarkContext mMarker;
@@ -7285,6 +7297,8 @@ double __hxcpp_gc_mem_info(int inWhich)
          return (double)sGlobalAlloc->MemCurrent();
       case MEM_INFO_LARGE:
          return (double)sGlobalAlloc->MemLarge();
+      case MEM_INFO_LIVE:
+         return (double)sGlobalAlloc->MemLive();
    }
    return 0;
 }
