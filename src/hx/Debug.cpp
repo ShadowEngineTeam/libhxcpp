@@ -98,8 +98,14 @@ static void CriticalErrorHandler(String inErr, bool allowFixup)
     DBGLOG("Critical Error: %s\n", inErr.utf8_str());
 
 #if defined(HX_WINDOWS) && !defined(HX_WINRT)
-    MessageBoxA(0, inErr.utf8_str(), "Critical Error - program must terminate",
-        MB_ICONEXCLAMATION|MB_OK);
+    // Looked up here rather than imported, since importing user32 makes
+    // every program load it at startup, which costs about a millisecond
+    typedef int (WINAPI *MessageBoxFunc)(HWND, LPCSTR, LPCSTR, UINT);
+    HMODULE user32 = LoadLibraryA("user32.dll");
+    MessageBoxFunc messageBox = user32 ? (MessageBoxFunc)GetProcAddress(user32, "MessageBoxA") : 0;
+    if (messageBox)
+       messageBox(0, inErr.utf8_str(), "Critical Error - program must terminate",
+           MB_ICONEXCLAMATION|MB_OK);
 #endif
 
     // Good when using gdb, and to collect a core ...

@@ -88,6 +88,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Generational collections set the remembered set's marks straight from its chunks instead of first copying every pointer into a temporary array
 * Array<String>.sort boxes each String once instead of boxing both arguments on every comparison
 * Conservative stack scanning no longer scans the whole large-object list for every stack word in its address range: after several such words in a collection it searches a sorted index, and the range shrinks back when large objects are freed. With 40000 large buffers, a collection with native frames on the stack fell from 2.4-4.6 ms to 0.8 ms
+* Programs no longer load user32.dll at startup on Windows, which made starting and exiting about 1.1 ms slower than stock hxcpp: the critical-error dialog now looks MessageBoxA up when it is needed
 
 ### Garbage collector
 
