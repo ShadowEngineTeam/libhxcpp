@@ -206,6 +206,12 @@ struct pcredata : public hx::Object
          match_data8 = pcre2_match_data_create_from_pattern_8(rUtf8, NULL);
       }
 
+      // The remembered UTF-16 subject belongs to an earlier match
+      if (checkedSubject.raw_ptr())
+      {
+         checkedSubject = String();
+         safeSubject = String();
+      }
       #endif
       // The 8-bit subject comes from utf8_str(), which validates, so
       // PCRE2_NO_UTF_CHECK is safe here
