@@ -3793,7 +3793,19 @@ public:
          if (!result)
          {
             if (AllocMoreBlocks(forceCompact,false))
+            {
                result = GetNextFree(inRequiredBytes);
+               // Other threads take free blocks without this lock, so with
+               // many allocating at once they can claim every block just
+               // added before this thread looks: the heap grew, so try again
+               if (!result)
+               {
+                  #ifndef HXCPP_SINGLE_THREADED_APP
+                  gThreadStateChangeLock->unlock();
+                  #endif
+                  continue;
+               }
+            }
          }
 
          if (!result)

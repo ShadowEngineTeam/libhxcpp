@@ -130,6 +130,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed data races in the large-allocation path: the collection trigger, the large-allocation budget and the recycle hint were read and written by several threads without synchronization, and freeing a large buffer checked the recycle list outside its lock
 * The large-allocation allowance now halves at each collection, down to what the heap needs, instead of keeping its peak for the life of the process: after one 400 MB buffer, later garbage no longer piled up to 800 MB before a collection
 * An empty HXCPP_MINIMUM_WORKING_MEMORY, HXCPP_MINIMUM_FREE_SPACE or HXCPP_TARGET_FREE_SPACE is treated as unset again instead of stopping the program with a critical error
+* Fixed programs with many threads allocating at once stopping with "Memory exhausted" while the heap was far from full: other threads could claim every block a thread had just added before it took one (HaxeFoundation/hxcpp#1289)
 
 ### Threads
 
