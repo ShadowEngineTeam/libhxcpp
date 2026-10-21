@@ -1457,6 +1457,8 @@ static_assert(IMMIX_USEFUL_LINES <= std::numeric_limits<decltype(BlockDataInfo::
               "BlockDataInfo::mUsedRows must hold IMMIX_USEFUL_LINES");
 static_assert(IMMIX_USEFUL_LINES <= std::numeric_limits<decltype(BlockDataInfo::mFraggedRows)>::max(),
               "BlockDataInfo::mFraggedRows must hold IMMIX_USEFUL_LINES");
+static_assert(MAX_HOLES <= std::numeric_limits<decltype(BlockDataInfo::mHoles)>::max(),
+              "BlockDataInfo::mHoles must hold MAX_HOLES");
 
 static bool SmallestFreeFirst(BlockDataInfo *inA, BlockDataInfo *inB)
 {
