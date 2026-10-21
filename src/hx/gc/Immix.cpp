@@ -3347,7 +3347,7 @@ public:
       }
       unsigned int *blob = ((unsigned int *)inLarge) - 2;
       unsigned int size = *blob;
-      mLargeAllocated -= size;
+      takeLargeAllocated(size);
       // Search from the end - the realloc-growth path frees the buffer it
       // just allocated, which is the most recently pushed entry, so the
       // common case finds it immediately instead of scanning the whole
@@ -3481,12 +3481,19 @@ public:
       return result+2;
    }
 
+   // Under mLargeListLock or in a collection. Callers can release more
+   // managed memory than they reported, which must not wrap the count
+   void takeLargeAllocated(size_t inBytes)
+   {
+      mLargeAllocated -= std::min(inBytes, (size_t)mLargeAllocated);
+   }
+
    void onMemoryRelease(size_t inBytes)
    {
       #ifndef HXCPP_SINGLE_THREADED_APP
       mLargeListLock.lock();
       #endif
-      mLargeAllocated -= std::min(inBytes, (size_t)mLargeAllocated);
+      takeLargeAllocated(inBytes);
       #ifndef HXCPP_SINGLE_THREADED_APP
       mLargeListLock.unlock();
       #endif
@@ -3521,7 +3528,10 @@ public:
       if (do_lock)
          mLargeListLock.lock();
 
-      mLargeAllocated += inDelta;
+      if (inDelta<0)
+         takeLargeAllocated((size_t)-(ptrdiff_t)inDelta);
+      else
+         mLargeAllocated += inDelta;
 
       if (do_lock)
          mLargeListLock.unlock();
@@ -5207,7 +5217,7 @@ public:
          if ( (blob[1] & IMMIX_ALLOC_MARK_ID) != hx::gMarkID )
          {
             unsigned int size = *blob;
-            mLargeAllocated -= size;
+            takeLargeAllocated(size);
             if (size < recycleRemaining)
             {
                recycleRemaining -= size;
@@ -7248,14 +7258,19 @@ int __hxcpp_gc_trace(hx::Class inClass,bool inPrint)
     #endif
 }
 
+static int hxSaturateInt(size_t inBytes)
+{
+   return (int)std::min(inBytes, (size_t)std::numeric_limits<int>::max());
+}
+
 int   __hxcpp_gc_large_bytes()
 {
-   return sGlobalAlloc->MemLarge();
+   return hxSaturateInt(sGlobalAlloc->MemLarge());
 }
 
 int   __hxcpp_gc_reserved_bytes()
 {
-   return sGlobalAlloc->MemReserved();
+   return hxSaturateInt(sGlobalAlloc->MemReserved());
 }
 
 double __hxcpp_gc_mem_info(int inWhich)
@@ -7276,7 +7291,7 @@ double __hxcpp_gc_mem_info(int inWhich)
 
 int   __hxcpp_gc_used_bytes()
 {
-   return sGlobalAlloc->MemUsage();
+   return hxSaturateInt(sGlobalAlloc->MemUsage());
 }
 
 void  __hxcpp_gc_do_not_kill(Dynamic inObj)

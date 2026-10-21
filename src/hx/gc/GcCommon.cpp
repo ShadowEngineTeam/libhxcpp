@@ -4,6 +4,7 @@
 #include <vector>
 #include <set>
 #include <cstdio>
+#include <cstring>
 #include <stdlib.h>
 
 #if defined(HXCPP_CAPTURE_x64) && !defined(__GNUC__)
@@ -42,6 +43,12 @@ size_t sgTargetFreeSpacePercentage  = 100;
 
 
 
+// %zu would take "-1" as SIZE_MAX
+static bool parseSize(const char *inText, size_t &outValue)
+{
+   return !strchr(inText, '-') && 1 == std::sscanf(inText, "%zu", &outValue);
+}
+
 // Called internally before and GC operations
 void CommonInitAlloc()
 {
@@ -53,7 +60,7 @@ void CommonInitAlloc()
    const char *minimumWorking{ getenv("HXCPP_MINIMUM_WORKING_MEMORY") };
    if (minimumWorking && *minimumWorking)
    {
-       if (1 != std::sscanf(minimumWorking, "%zu", &sgMinimumWorkingMemory))
+       if (!parseSize(minimumWorking, sgMinimumWorkingMemory))
        {
            hx::CriticalError(HX_CSTRING("Failed to parse number from HXCPP_MINIMUM_WORKING_MEMORY environment variable"));
        }
@@ -62,7 +69,7 @@ void CommonInitAlloc()
    const char* minimumFreeSpace{ getenv("HXCPP_MINIMUM_FREE_SPACE") };
    if (minimumFreeSpace && *minimumFreeSpace)
    {
-       if (1 != std::sscanf(minimumFreeSpace, "%zu", &sgMinimumFreeSpace))
+       if (!parseSize(minimumFreeSpace, sgMinimumFreeSpace))
        {
            hx::CriticalError(HX_CSTRING("Failed to parse number from HXCPP_MINIMUM_FREE_SPACE environment variable"));
        }
@@ -71,7 +78,7 @@ void CommonInitAlloc()
    const char* targetFree{ getenv("HXCPP_TARGET_FREE_SPACE") };
    if (targetFree && *targetFree)
    {
-       if (1 != std::sscanf(targetFree, "%zu", &sgTargetFreeSpacePercentage))
+       if (!parseSize(targetFree, sgTargetFreeSpacePercentage))
        {
            hx::CriticalError(HX_CSTRING("Failed to parse number from HXCPP_TARGET_FREE_SPACE environment variable"));
        }
@@ -172,17 +179,17 @@ void __hxcpp_enable(bool inEnable)
 
 void  __hxcpp_set_minimum_working_memory(int inBytes)
 {
-   hx::sgMinimumWorkingMemory = inBytes;
+   hx::sgMinimumWorkingMemory = inBytes<0 ? 0 : inBytes;
 }
 
 void  __hxcpp_set_minimum_free_space(int inBytes)
 {
-   hx::sgMinimumFreeSpace = inBytes;
+   hx::sgMinimumFreeSpace = inBytes<0 ? 0 : inBytes;
 }
 
 void  __hxcpp_set_target_free_space_percentage(int inPercentage)
 {
-   hx::sgTargetFreeSpacePercentage = inPercentage;
+   hx::sgTargetFreeSpacePercentage = inPercentage<0 ? 0 : inPercentage;
 }
 
 bool __hxcpp_is_const_string(const ::String &inString)
