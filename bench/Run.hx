@@ -66,6 +66,8 @@ class Run {
 		{area: "Maps", what: "Object keys", bench: "map_object", measure: "rate"},
 		{area: "Strings", what: "Building with StringBuf", bench: "string_build", measure: "rate"},
 		{area: "Sorting", what: "Objects with a comparator", bench: "sort_object", measure: "rate"},
+		{area: "CPPIA", what: "Virtual calls in the JIT", bench: "cppia_jit_virtual_call", measure: "rate"},
+		{area: "CPPIA", what: "Object allocation in the JIT", bench: "cppia_jit_alloc_objects", measure: "rate"},
 		{area: "Startup", what: "Start and exit", bench: "noop", measure: "startup"},
 		{area: "Memory", what: "Peak memory, all benchmarks", bench: "", measure: "memory"},
 	];
@@ -459,6 +461,8 @@ class Run {
 		b.add("**Speed** (higher is better)\n\n");
 		header(["Benchmark", "Unit"], ["libhxcpp vs stock"]);
 		for (r in results) {
+			if (r.name.startsWith("cppia_"))
+				continue;
 			if (r.error != null) {
 				b.add('| ${r.name} | | ' + [for (rt in runtimes) "failed"].join(" | ") + (compare ? " | |" : "") + "\n");
 				continue;
@@ -469,6 +473,39 @@ class Run {
 				row += " | " + ratio(r.byRuntime.get(lib.name).rate, r.byRuntime.get(stock.name).rate,
 					Math.max(r.byRuntime.get(lib.name).spread, r.byRuntime.get(stock.name).spread));
 			b.add(row + " |\n");
+		}
+
+		var cppia = [for (r in results) if (r.name.startsWith("cppia_interp_")) r.name.substr("cppia_interp_".length)];
+		if (cppia.length > 0) {
+			var byName = [for (r in results) r.name => r];
+			b.add("\n**CPPIA speed** (higher is better)\n\n");
+			var modes = ["interp" => "Interpreter", "jit" => "JIT"];
+			var first = ["Workload", "Unit"];
+			var all = first.copy();
+			for (mode in ["interp", "jit"]) {
+				for (rt in runtimes)
+					all.push('${modes[mode]}, ${rt.label}');
+				if (compare)
+					all.push('${modes[mode]} vs stock');
+			}
+			b.add("| " + all.join(" | ") + " |\n");
+			b.add("|" + [for (i in 0...all.length) i < first.length ? " --- " : " ---: "].join("|") + "|\n");
+			for (workload in cppia) {
+				var unit = byName["cppia_interp_" + workload].unit;
+				var row = '| $workload | $unit/s';
+				for (mode in ["interp", "jit"]) {
+					var r = byName['cppia_${mode}_$workload'];
+					if (r == null || r.error != null) {
+						row += " | " + [for (rt in runtimes) "failed"].join(" | ") + (compare ? " | " : "");
+						continue;
+					}
+					row += " | " + [for (rt in runtimes) formatRate(r.byRuntime.get(rt.name).rate, null) + " ±" + percent(r.byRuntime.get(rt.name).spread)].join(" | ");
+					if (compare)
+						row += " | " + ratio(r.byRuntime.get(lib.name).rate, r.byRuntime.get(stock.name).rate,
+							Math.max(r.byRuntime.get(lib.name).spread, r.byRuntime.get(stock.name).spread));
+				}
+				b.add(row + " |\n");
+			}
 		}
 
 		b.add("\n**Collection pauses and memory** (lower is better)\n\n");
