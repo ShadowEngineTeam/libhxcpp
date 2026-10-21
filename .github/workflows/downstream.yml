@@ -46,6 +46,7 @@ jobs:
           haxelib install emitter 2.0.0 --always
           haxelib install utest 1.13.2 --always
           haxelib set utest 1.13.2 --always
+          haxelib dev crossbyte "$PWD/crossbyte"
 
       # Run from CrossByte's root: some tests look for src/ above the working directory
       - name: native suite
