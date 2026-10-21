@@ -1294,6 +1294,15 @@ struct CastExpr : public CppiaDynamicExpr
          }
          nullValue = op==castInt || op==castFloat ? Dynamic(0).mPtr :
                      op==castBool ? Dynamic(false).mPtr : 0;
+
+         // A value whose static type already passes needs no check
+         ExprType from = value->getType();
+         bool isBool = from==etInt && value->isBoolInt();
+         if ( (op==castFloat && (from==etFloat || (from==etInt && !isBool))) ||
+              (op==castInt && from==etInt && !isBool) ||
+              (op==castBool && isBool) ||
+              (op==castString && from==etString) )
+            checked = false;
       }
 
       if (op==castDynamic || op==castInt || op==castBool || op==castFloat || op==castString )

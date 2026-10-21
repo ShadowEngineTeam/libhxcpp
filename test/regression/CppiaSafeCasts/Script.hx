@@ -41,6 +41,15 @@ class Script {
 			i = -1;
 		}
 		Sys.println("typed " + i);
+		var f:Float = 2.5;
+		var n:Int = 3;
+		var s:String = null;
+		var b:Bool = true;
+		attempt("typed 2.5 Float", () -> cast(f, Float));
+		attempt("typed 3 Float", () -> cast(n, Float));
+		attempt("typed 3 Int", () -> cast(n, Int));
+		attempt("typed null String", () -> cast(s, String));
+		attempt("typed true Bool", () -> cast(b, Bool));
 	}
 
 	static function main() {

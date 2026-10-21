@@ -13,6 +13,11 @@ null Float = 0
 null Bool = false
 caught Int 0
 typed -1
+typed 2.5 Float = 2.5
+typed 3 Float = 3
+typed 3 Int = 3
+typed null String = null
+typed true Bool = true
 abc Int throws
 1.5 Int throws
 7 String throws
@@ -28,6 +33,11 @@ null Float = 0
 null Bool = false
 caught Int 0
 typed -1
+typed 2.5 Float = 2.5
+typed 3 Float = 3
+typed 3 Int = 3
+typed null String = null
+typed true Bool = true
 abc Int throws
 1.5 Int throws
 7 String throws
@@ -43,3 +53,8 @@ null Float = 0
 null Bool = false
 caught Int 0
 typed -1
+typed 2.5 Float = 2.5
+typed 3 Float = 3
+typed 3 Int = 3
+typed null String = null
+typed true Bool = true
