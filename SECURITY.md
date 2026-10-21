@@ -2,14 +2,14 @@
 
 ## Supported versions
 
-Security fixes go into the latest libhxcpp release line. Upgrade to the newest release to get them.
+Fixes go into the latest minor version of the current major line, as a patch release (see [RELEASING.md](RELEASING.md)). When a new major version is released, the previous major line's latest minor version gets security fixes for six months more.
 
 | Version | Supported |
 |---|---|
-| 6.x | Yes |
+| 6.x, latest minor | Yes |
 | hxcpp before libhxcpp 6.0.0 | No |
 
-libhxcpp supports the code that Haxe 4.2 and later generates for the C++ target.
+libhxcpp supports the code that Haxe 4.2 and later generates for the C++ target. Support for a Haxe version is only dropped in a major release, and announced in [Changes.md](Changes.md).
 
 ## Reporting a vulnerability
 

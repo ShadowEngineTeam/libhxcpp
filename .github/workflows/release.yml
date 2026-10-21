@@ -1,6 +1,6 @@
 name: release
-# Releases the version written in haxelib.json, from main, once CI has passed
-# on that commit. Run it from the Actions tab. See RELEASING.md.
+# Releases the version written in haxelib.json, from main or a release/<major>.<minor>
+# branch, once CI has passed on that commit. Run it from the Actions tab. See RELEASING.md.
 on:
   workflow_dispatch:
     inputs:
@@ -26,10 +26,10 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       prerelease: ${{ steps.version.outputs.prerelease }}
     steps:
-      - name: Release from main only
-        if: github.ref != 'refs/heads/main'
+      - name: Release from main or a release branch only
+        if: github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/heads/release/')
         run: |
-          echo "::error::Releases are made from main, not ${{ github.ref }}"
+          echo "::error::Releases are made from main or a release/<major>.<minor> branch, not ${{ github.ref }}"
           exit 1
 
       - name: Checkout
@@ -208,5 +208,7 @@ jobs:
           name: libhxcpp ${{ env.VERSION }}
           bodyFile: ${{ runner.temp }}/notes.md
           prerelease: ${{ needs.Check.outputs.prerelease }}
+          # A fix for an older line must not become the latest release
+          makeLatest: ${{ startsWith(github.ref, 'refs/heads/release/') && 'false' || 'legacy' }}
           draft: false
           artifacts: ./libhxcpp-${{ env.VERSION }}.zip

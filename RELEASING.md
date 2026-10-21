@@ -55,9 +55,9 @@ Push the commit to `main` and wait for the `main` workflow to pass on it. CI ski
 
 ### 3. Run the release workflow
 
-In the Actions tab, open **release** and run it on `main`. It stops without releasing if:
+In the Actions tab, open **release** and run it on `main` (or on a release branch, see below). It stops without releasing if:
 
-- it is not run on `main`;
+- it is not run on `main` or a `release/<major>.<minor>` branch;
 - the version in `haxelib.json` is not one haxelib accepts;
 - the top heading of Changes.md does not name that version;
 - `v<version>` is already released;
@@ -83,6 +83,17 @@ libhxcpp 6.0.1 (unreleased)
 ```
 
 After a pre-release, keep working toward the same version: after `6.0.0-beta.1`, go back to `6.0.0 (unreleased)`, and list the changes since the beta.
+
+## Fixes for a released version
+
+While `main` holds only fixes, patch releases come from `main` as above. Once `main` takes a change meant for the next minor or major version, a fix for the released version gets a branch of its own, cut only when the first such fix is needed:
+
+1. Cut `release/<major>.<minor>` from the line's latest tag: `git switch -c release/6.0 v6.0.0`, and push it.
+2. Land each fix on `main` first, then cherry-pick it to the branch with `git cherry-pick -x`, so that no fix exists only on a release branch. If a fix does not apply to `main`, say why in its commit message.
+3. Release from the branch exactly as from `main`: the release commit, CI passing on it (CI runs on pushes to `release/**`), then the **release** workflow run on the branch. It publishes the release without making it the latest one on GitHub.
+4. Copy the version's Changes.md section to `main` as well, below the unreleased one, so the history there stays complete.
+
+Only the latest minor version of a line gets fixes: once 6.1.0 is out, 6.0 fixes stop and `release/6.1` takes them when needed. Before submitting a release branch's version to haxelib, check that `haxelib install libhxcpp` still picks the newest version; if submitting would make the older line the current one, publish it on GitHub only.
 
 ## When a release is wrong
 
