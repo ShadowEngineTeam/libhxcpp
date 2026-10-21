@@ -449,6 +449,17 @@ class Test extends utest.Test
       final count = cnx.request("SELECT COUNT(*) FROM Vals").next();
       Assert.equals(1, Reflect.field(count, "COUNT(*)"));
 
+      // A name used twice keeps its later column, as it did when rows were
+      // built a field at a time
+      final twice:Dynamic = cnx.request("SELECT 1 AS a, 2 AS b, 3 AS a").next();
+      Assert.equals(3, twice.a);
+      Assert.equals(2, Reflect.fields(twice).length);
+      row.added = 4;
+      Reflect.deleteField(row, "bin_v");
+      Assert.equals(4, row.added);
+      Assert.isFalse(Reflect.hasField(row, "bin_v"));
+      Assert.equals(9, Reflect.fields(row).length);
+
       cnx.request("DROP TABLE Vals");
       cnx.close();
    }

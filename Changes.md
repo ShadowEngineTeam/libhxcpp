@@ -339,6 +339,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed a long-lived EReg keeping its last UTF-16 subject (and any cleaned-up copy of it) alive after matching an ASCII subject
 * haxe.zip.Compress and Uncompress streams count their native zlib state (about 256 KB per compressor) towards collection pressure, so abandoned streams are collected and their memory freed sooner; added hx::GCReleaseManagedMemory, which takes such memory back off without a safe point
 * Updated zlib to 1.3.2 (inflate state zeroed on allocation, NULL input checks, macOS build fix)
+* SQLite and MySQL rows are built with the fixed-field layout generated code uses for anonymous objects, laid out once per result, instead of a field hash table per row: reading 100k 8-column SQLite rows takes 21% less time and the rows hold 30% less memory. Rows stay mutable, and a MySQL name used twice still keeps its later column (libhxcpp #200)
 
 ### cppia
 

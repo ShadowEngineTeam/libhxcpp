@@ -23,6 +23,7 @@
 #include <hxcpp.h>
 
 #include <stdlib.h>
+#include <algorithm>
 #include <string.h>
 #include <stdio.h>
 #include <time.h>
@@ -140,6 +141,11 @@ struct Result : public hx::Object
    // statement -- COUNT(*), CONCAT(...) -- is an ordinary string, since
    // making each one permanent would keep every one ever seen.
    Array<String> field_names;
+   // The column for each of a row's fixed fields, which Anon_obj keeps
+   // sorted by name hash. A name used twice keeps its last column, which
+   // overwrote the first when rows were built field by field.
+   int *order;
+   int nfixed;
    MYSQL_ROW current;
    // For a result read a row at a time: the connection it reads from, held
    // so the connection outlives it, and the rows read so far.
@@ -151,6 +157,8 @@ struct Result : public hx::Object
       r = inR;
       fields_convs = 0;
       field_names = null();
+      order = 0;
+      nfixed = 0;
       nfields = 0;
       rowsRead = 0;
       _hx_set_finalizer(this, finalize);
@@ -163,6 +171,9 @@ struct Result : public hx::Object
          if (fields_convs)
            free(fields_convs);
          fields_convs = 0;
+         if (order)
+           free(order);
+         order = 0;
          mysql_free_result(r);
          r = 0;
       }
@@ -384,18 +395,19 @@ Dynamic _hx_mysql_result_next(Dynamic handle)
    if( !row )
       return null();
 
-   hx::Anon cur = hx::Anon_obj::Create(0);
+   hx::Anon cur = hx::Anon_obj::Create(r->nfixed);
 
    r->current = row;
    unsigned long *lengths = mysql_fetch_lengths(r->r);
-   for(int i=0;i<r->nfields;i++)
+   for(int slot=0;slot<r->nfixed;slot++)
    {
+      int i = r->order[slot];
       Dynamic v;
       if( row[i] )
          v = convert_value(r->fields_convs[i],row[i],lengths ? lengths[i] : (unsigned long)strlen(row[i]));
       // SQL NULL is a value: the field is there, holding null. It was left
       // out of the row, so a NULL column and a misspelt one looked alike.
-      cur->__SetField(r->field_names[i],v, hx::paccDynamic );
+      cur->setFixed(slot, r->field_names[i], v);
    }
    return cur;
 }
@@ -550,6 +562,20 @@ static Result *alloc_result( Connection *c, MYSQL_RES *r )
       res->field_names->__unsafe_set(i, name);
       res->fields_convs[i] = convert_type(fields[i].type,fields[i].flags,fields[i].length,fields[i].charset);
    }
+
+   res->order = (int*)malloc(sizeof(int)*(num_fields > 0 ? num_fields : 1));
+   if( !res->order )
+      HXTHROW("Out of memory reading the server's answer");
+   for(i=0;i<num_fields;i++)
+   {
+      for(j=i+1;j<num_fields;j++)
+         if( res->field_names[j]==res->field_names[i] )
+            break;
+      if( j==num_fields )
+         res->order[res->nfixed++] = i;
+   }
+   Array<String> names = res->field_names;
+   std::sort(res->order, res->order+res->nfixed, [&names](int a, int b) { return (int)names[a].hash() < (int)names[b].hash(); });
 
    return res;
 }

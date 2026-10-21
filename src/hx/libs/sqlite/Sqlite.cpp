@@ -23,6 +23,7 @@
 #include <hxcpp.h>
 #include "sqlite3.h"
 #include <stdlib.h>
+#include <algorithm>
 
 
 // Put in anon-namespace to avoid conflicts if static-linked
@@ -40,6 +41,9 @@ struct result : public hx::Object
    int count;
    String *names;
    int *bools;
+   // The column for each of a row's fixed fields, which Anon_obj keeps
+   // sorted by name hash
+   int *order;
    int done;
    int first;
 
@@ -53,6 +57,7 @@ struct result : public hx::Object
       ncols = sqlite3_column_count(r);
       names = (String *)malloc(sizeof(String)*ncols);
       bools = (int*)malloc(sizeof(int)*ncols);
+      order = (int*)malloc(sizeof(int)*(ncols > 0 ? ncols : 1));
       first = 1;
       done = 0;
       for(int i=0;i<ncols;i++)
@@ -64,7 +69,10 @@ struct result : public hx::Object
 
          const char *dtype = sqlite3_column_decltype(r,i);
          bools[i] = dtype?(strcmp(dtype,"BOOL") == 0):0;
+         order[i] = i;
       }
+      String *n = names;
+      std::sort(order, order+ncols, [n](int a, int b) { return (int)n[a].hash() < (int)n[b].hash(); });
    }
 
    static void finalize(Dynamic obj) { ((result *)(obj.mPtr))->destroy(false); }
@@ -79,6 +87,11 @@ struct result : public hx::Object
       {
          free(names);
          names = 0;
+      }
+      if (order)
+      {
+         free(order);
+         order = 0;
       }
       if (r)
       {
@@ -334,10 +347,11 @@ Dynamic _hx_sqlite_result_next(Dynamic handle)
    {
       case SQLITE_ROW:
       {
-         hx::Anon v = hx::Anon_obj::Create();
+         hx::Anon v = hx::Anon_obj::Create(r->ncols);
          r->first = 0;
-         for(int i=0;i<r->ncols;i++)
+         for(int slot=0;slot<r->ncols;slot++)
          {
+            int i = r->order[slot];
             Dynamic f;
             switch( sqlite3_column_type(r->r,i) )
             {
@@ -379,7 +393,7 @@ Dynamic _hx_sqlite_result_next(Dynamic handle)
                                String((int)sqlite3_column_type(r->r,i)));
                }
             }
-            v->__SetField(r->names[i],f,hx::paccDynamic);
+            v->setFixed(slot,r->names[i],f);
          }
          return v;
       }
