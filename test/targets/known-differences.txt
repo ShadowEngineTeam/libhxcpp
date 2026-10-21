@@ -1,0 +1,6 @@
+# Differences from C++ that are accepted: target, the line's label, and why.
+# Tab-separated. Keep a line only while the reason holds.
+js	int overflow	JS keeps Int arithmetic in doubles, so it does not wrap at 32 bits
+js	concat join	JS's Array.join writes null as an empty string; Haxe defines join through Std.string, which gives "null"
+js	ereg unicode	JS EReg has no u flag, so . matches half of a surrogate pair
+js	serialize	JS serializes -2147483648 as a Float

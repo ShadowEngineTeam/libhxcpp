@@ -1,0 +1,76 @@
+name: targets
+# Runs the programs in test/targets on C++, cppia (interpreted and jit),
+# JavaScript, HashLink, eval, Neko, Python, JVM and PHP side by side, and
+# compares their output with C++'s, to find semantic differences between
+# targets. The outputs and diffs are kept as an artifact and the comparison is
+# in the job summary. It fails only when cppia, which shares C++'s runtime,
+# differs in a way known-differences.txt does not explain. It does not gate main.
+on:
+  push:
+    branches: [main, 'targets/**']
+    paths:
+      - 'src/**'
+      - 'include/**'
+      - 'test/targets/**'
+      - '.github/workflows/targets.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  HXCPP_COMPILE_CACHE: ${{ github.workspace }}/.hxcpp-cache
+
+jobs:
+  compare:
+    name: Compare targets on ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - name: checkout
+        uses: actions/checkout@v7
+
+      - name: setup
+        uses: ./.github/workflows/setup
+        with:
+          haxe: 4.3.7
+
+      # Stable HashLink releases only have Windows builds; Linux takes the nightly
+      - name: install HashLink and hxjava
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          haxelib install hxjava --always > /dev/null
+          mkdir -p "$RUNNER_TEMP/hl" && cd "$RUNNER_TEMP/hl"
+          if [ "$RUNNER_OS" = Windows ]; then
+            gh release download 1.16 -R HaxeFoundation/hashlink -p 'hashlink-*-win.zip'
+            unzip -q ./*.zip
+          else
+            gh release download latest -R HaxeFoundation/hashlink -p 'hashlink-*-linux-amd64.tar.gz'
+            tar xzf ./*.tar.gz
+          fi
+          hl=$(find "$PWD" -type f \( -name hl -o -name hl.exe \) | head -1)
+          echo "HL=$hl" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$(dirname "$hl"):$(dirname "$hl")/../lib:${LD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
+
+      - name: compare
+        shell: bash
+        working-directory: test/targets
+        run: bash compare.sh -D HXCPP_M64 && cat out/summary.md >> "$GITHUB_STEP_SUMMARY" || { cat out/summary.md >> "$GITHUB_STEP_SUMMARY"; exit 1; }
+
+      - name: keep the outputs
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: targets-${{ runner.os }}
+          path: |
+            test/targets/out/*.txt
+            test/targets/out/*.diff
+            test/targets/out/*.err
+            test/targets/out/*.log
+            test/targets/out/summary.md
