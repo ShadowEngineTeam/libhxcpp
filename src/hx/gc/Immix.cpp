@@ -3604,9 +3604,12 @@ public:
    //
    // This contains some "lock free" code that triggers the thread sanitizer.
    //  * mOwned can only be changed with the mZeroLock
-   //  * mFreeBlocks may increase size, but it is not critical whether the mNextFreeBlockOfSize
-   //     is increased since skipping only leads to a bit of extra searhing for the
-   //     next allocation
+   //  * AllocMoreBlocks may add to mFreeBlocks meanwhile, into spare capacity so
+   //     the buffer does not move. It writes each slot before raising the size,
+   //     so this reads the size once, then only below it: a slot read past a
+   //     size seen early may not be written yet on a weakly ordered CPU
+   //  * it is not critical whether the mNextFreeBlockOfSize is increased since
+   //     skipping only leads to a bit of extra searching for the next allocation
    #if defined(__has_feature)
      #if __has_feature(thread_sanitizer)
       __attribute__((no_sanitize("thread")))
@@ -3620,11 +3623,13 @@ public:
          sizeSlot = BLOCK_OFSIZE_COUNT-1;
       //volatile int &nextFreeBlock = mNextFreeBlockOfSize[sizeSlot];
       int nextFreeBlock{ mNextFreeBlockOfSize[sizeSlot] };
-      while(failedLock && nextFreeBlock<mFreeBlocks.size())
+      size_t count{ mFreeBlocks.size() };
+      std::atomic_thread_fence(std::memory_order_acquire);
+      while(failedLock && nextFreeBlock<count)
       {
          failedLock = false;
 
-         for (int i{ nextFreeBlock }; i < mFreeBlocks.size(); i++)
+         for (int i{ nextFreeBlock }; i < count; i++)
          {
              BlockDataInfo *info = mFreeBlocks[i];
              if (!info->mOwned && info->mMaxHoleSize>=inRequiredBytes)
@@ -3645,7 +3650,7 @@ public:
 
                       // Increase the mNextFreeBlockOfSize
                       int idx = nextFreeBlock;
-                      while(idx<mFreeBlocks.size() && mFreeBlocks[idx]->mOwned)
+                      while(idx<count && mFreeBlocks[idx]->mOwned)
                       {
                          _hx_atomic_compare_exchange(mNextFreeBlockOfSize+sizeSlot, idx, idx+1);
                          idx++;
@@ -3777,7 +3782,12 @@ public:
          BlockDataInfo *info = new BlockDataInfo(gid,block);
 
          mAllBlocks.push(info);
-         mFreeBlocks.push(info);
+         // GetNextFree reads mFreeBlocks without the lock held here, so the
+         //  slot must be visible before the size that lets it look there. The
+         //  capacity was checked above, so the buffer itself does not move.
+         mFreeBlocks.mPtr[mFreeBlocks.mSize] = info;
+         std::atomic_thread_fence(std::memory_order_release);
+         mFreeBlocks.mSize = mFreeBlocks.mSize + 1;
       }
       std::stable_sort(&mAllBlocks[0], &mAllBlocks[0] + mAllBlocks.size(), SortByBlockPtr );
       mAllBlocksCount = mAllBlocks.size();
