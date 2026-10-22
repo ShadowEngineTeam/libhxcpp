@@ -113,7 +113,7 @@ libhxcpp keeps hxcpp's build XML, defines and API, and works with the code Haxe 
 | --- | --- |
 | 4.2 and 4.3 | Supported. Every change is tested with 4.3.7 |
 | 5.0.0-preview.1 | Supported. Every change runs the regression suite with it |
-| 5 nightly builds | Followed, not supported yet: the daily run against the nightly still fails ([#164](https://github.com/openfl/libhxcpp/issues/164)) |
+| 5 nightly builds | Not supported. libhxcpp supports Haxe 5 releases, and nightlies change between them |
 | Older than 4.2 | Not supported. The build stops and says so |
 
 Haxe keeps one `hxcpp_api_level` for a whole release cycle while the code it generates changes under it, so the level alone cannot say which runtime a build needs: 5.0.0-preview.1 and the nightlies after it both pass 500. libhxcpp tells them apart by the Haxe build each one names in the code it generates, where a nightly adds `+<commit>` to its version. A released build that generates code for an earlier runtime than its level says, as 5.0.0-preview.1 does for the level 430 runtime, is built against that runtime, so it needs no matching snapshot. Build with `-v` to see which runtime level a build used.
