@@ -21,15 +21,28 @@ function main() {
 	var total = 0;
 
 	final args = Sys.args();
+	// Comma-separated tests that the Haxe in use cannot build, such as ones that
+	// need a std library Haxe 5 removed
+	final skipList = Sys.getEnv("REGRESSION_SKIP");
+	final skip = skipList == null ? [] : skipList.split(",");
 
 	for (test in FileSystem.readDirectory(".")) {
 		if (!FileSystem.isDirectory(test)) {
 			continue;
 		}
+		if (skip.contains(test)) {
+			Sys.println('Skipping $test');
+			continue;
+		}
 
 		total++;
 
-		final buildExitCode = Sys.command("haxe", ["-C", test, "build.hxml"].concat(args));
+		// From inside the test, not with -C: Haxe 5.0.0-preview.1 does not keep the
+		// -C directory for the sections after --next, which the cppia tests use
+		final root = Sys.getCwd();
+		Sys.setCwd(test);
+		final buildExitCode = Sys.command("haxe", ["build.hxml"].concat(args));
+		Sys.setCwd(root);
 		if (buildExitCode != 0) {
 			Sys.println('Failed to build test $test. Exit code: $buildExitCode');
 			continue;

@@ -399,6 +399,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed script functions' stack frames and script object fields sitting at 4-byte offsets on 64-bit targets, which the debugger and the collector then read misaligned: stack frames now live in aligned native storage, and fields are aligned to their type
 * Fixed the cppia jit boxing Array.contains and Array.remove results, and Array<Bool> elements read or written, as Int instead of Bool where they become Dynamic, as in an Array<Dynamic> literal
 * Fixed the cppia jit storing a Bool set on a dynamic field, such as an optional field of an anonymous structure or a field of a Dynamic, as the Int 1 or 0, so it read back as a number and compared unequal to true (libhxcpp #259)
+* The debugger's script-loaded callback, which Haxe 5's cpp.vm.Debugger sets through __hxcpp_dbg_setOnScriptLoadedFunction, is there at every hxcpp API level, not only 500
 * Fixed breakpoints and stepping never stopping in jitted cppia code: the jit kept each line number for stack traces but never called the debugger's line hook, so a script could only be debugged with the jit off (HaxeFoundation/hxcpp#498, libhxcpp #267). A breakpoint on a script function by name stops now too: script functions had no first line for it to match. docs/CppiaDebugging.md describes what debugging a script needs
 
 ### CFFI, ndlls, the debugger and telemetry
@@ -459,6 +460,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Added a .clang-format for libhxcpp's C++ sources, used for changed lines rather than whole files; third-party code is excluded (HaxeFoundation/hxcpp#1430 by @tobil4sk)
 * The build tool names the copy that runs it: -v prints its version, git commit and path, and it warns when Haxe generated the code for another hxcpp version than the one building it, as happens with several copies installed (libhxcpp #79)
 * The build tool stops with a message when the code comes from a Haxe older than 4.2, which libhxcpp does not support, and warns when its hxcpp API level is newer than the tool knows
+* Haxe 5.0.0-preview.1 builds and runs: it passes hxcpp API level 500 but generates code for the level 430 runtime, as hxcpp was when it was released, and the build tool now builds it against that runtime. It tells the release from the nightlies after it, which pass the same level, by the Haxe build named in the generated code. CI runs the regression suite with it
 
 
 4.3.xx

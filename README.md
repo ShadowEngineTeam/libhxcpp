@@ -107,6 +107,17 @@ A host that loads replacement cppia code in a running process can release the mo
 
 libhxcpp keeps hxcpp's build XML, defines and API, and works with the code Haxe 4.2 and later generates for hxcpp. A few fixes deliberately change behaviour to match the other Haxe targets, for example how `Std.string` formats floats, NaN and Infinity, and TLS connections now require TLS 1.2 or newer. Changes.md describes each one.
 
+### Haxe versions
+
+| Haxe | libhxcpp 6 |
+| --- | --- |
+| 4.2 and 4.3 | Supported. Every change is tested with 4.3.7 |
+| 5.0.0-preview.1 | Supported. Every change runs the regression suite with it |
+| 5 nightly builds | Followed, not supported yet: the daily run against the nightly still fails ([#164](https://github.com/openfl/libhxcpp/issues/164)) |
+| Older than 4.2 | Not supported. The build stops and says so |
+
+Haxe keeps one `hxcpp_api_level` for a whole release cycle while the code it generates changes under it, so the level alone cannot say which runtime a build needs: 5.0.0-preview.1 and the nightlies after it both pass 500. libhxcpp tells them apart by the Haxe build each one names in the code it generates, where a nightly adds `+<commit>` to its version. A released build that generates code for an earlier runtime than its level says, as 5.0.0-preview.1 does for the level 430 runtime, is built against that runtime, so it needs no matching snapshot. Build with `-v` to see which runtime level a build used.
+
 ## Versions and releases
 
 libhxcpp follows [semantic versioning](https://semver.org) with its own numbers, starting at 6.0.0. Pre-releases are tagged `-alpha`, `-beta` or `-rc`. Each release is tagged `v<version>`, has its notes in [Changes.md](Changes.md), and is published on haxelib as `libhxcpp` and on the [releases](https://github.com/openfl/libhxcpp/releases) page. [RELEASING.md](RELEASING.md) describes how a release is made.

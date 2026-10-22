@@ -131,6 +131,30 @@ jobs:
     - name: Build and run the regression tests on Alpine
       run: docker run --rm -v "$PWD:/w" -w /w alpine:edge sh -c "apk add --no-cache neko g++ linux-headers && sh test/regression/run-generated.sh"
 
+  # Haxe 5.0.0-preview.1 passes API level 500 but generates code for the level
+  # 430 runtime, and the build tool builds it against that runtime
+  # (BuildTool.haxeRuntimeLevels). This keeps that working.
+  check-haxe5-preview:
+    name: Haxe 5.0.0-preview.1 / Linux 64 / regression
+    runs-on: ubuntu-latest
+    env:
+      HXCPP_COMPILE_CACHE: ${{ github.workspace }}/.hxcpp-cache
+      # Haxe 5 has no sys.db in its std, and the preview.1 compiler itself
+      # stops on CppiaArrayAccess
+      REGRESSION_SKIP: Issue971,SqliteOptions,CppiaArrayAccess
+    steps:
+    - name: checkout
+      uses: actions/checkout@v7
+
+    - name: setup
+      uses: ./.github/workflows/setup
+      with:
+        haxe: 5.0.0-preview.1
+
+    - name: Run the regression tests
+      working-directory: test/regression
+      run: haxe --run Run -D HXCPP_M64
+
   # The regression, std and GC stress suites under UBSan, ASan and TSan. A
   # sanitizer report fails its suite; the reports go to files because the
   # runner only shows stdout. Each suite runs even when one before it failed.
