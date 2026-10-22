@@ -151,8 +151,9 @@ jobs:
       # Each test would otherwise recompile the whole runtime
       HXCPP_COMPILE_CACHE: ${{ github.workspace }}/.hxcpp-cache
       UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1:suppressions=${{ github.workspace }}/test/sanitizers/ubsan.supp:log_path=/tmp/sanitizer/report
-      # The conservative GC cannot see locals moved to a fake stack
-      ASAN_OPTIONS: detect_leaks=0:detect_stack_use_after_return=0:log_path=/tmp/sanitizer/report
+      # The runtime turns off ASan's fake stack itself, which the conservative
+      # GC cannot see into, so these runs check that it does
+      ASAN_OPTIONS: detect_leaks=0:log_path=/tmp/sanitizer/report
       # Every race is reported, not only the first; the exit status still fails
       TSAN_OPTIONS: halt_on_error=0:second_deadlock_stack=1:suppressions=${{ github.workspace }}/test/sanitizers/tsan.supp:log_path=/tmp/sanitizer/report
     steps:

@@ -27,6 +27,25 @@
 #include <string>
 #include <stdlib.h>
 
+#if defined(__SANITIZE_ADDRESS__)
+   #define HX_ADDRESS_SANITIZER
+#elif defined(__has_feature)
+   #if __has_feature(address_sanitizer)
+      #define HX_ADDRESS_SANITIZER
+   #endif
+#endif
+
+#ifdef HX_ADDRESS_SANITIZER
+// The collector finds live objects by scanning thread stacks, and ASan's
+// use-after-return check moves locals into frames off the stack, where the
+// scan cannot see them; their objects would then be freed while in use.
+// ASan reads its defaults from here, and ASAN_OPTIONS still overrides them.
+extern "C" __attribute__((visibility("default"), used)) const char *__asan_default_options()
+{
+   return "detect_stack_use_after_return=0";
+}
+#endif
+
 namespace
 {
     // It took until C++26 for them to add saturating arithmetic!
