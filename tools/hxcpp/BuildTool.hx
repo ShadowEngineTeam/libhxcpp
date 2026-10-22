@@ -1907,6 +1907,28 @@ class BuildTool
       if (generatedFor!=null && recorded.match(generatedFor) && recorded.matched(0)!=version)
          Log.warn('Haxe generated this code for hxcpp ${recorded.matched(0)}, but libhxcpp $version from $HXCPP is building it. If that is not intended, make haxelib and HXCPP point at the same copy');
 
+      // Haxe passes its version (4.307 for 4.3.7) and API level with every
+      // build it starts; a build run by hand, such as an ndll's, has neither
+      if (defines.exists("haxe_ver"))
+      {
+         var haxeVer = defines.get("haxe_ver").split('"').join("");
+         var haxeNum = Std.parseFloat(haxeVer);
+         if (!Math.isNaN(haxeNum) && haxeNum < 4.2)
+         {
+            // 4.105 is 4.1.5
+            var parts = haxeVer.split(".");
+            var shown = parts.length==2 && parts[1].length==3 ?
+               parts[0] + "." + parts[1].charAt(0) + "." + Std.parseInt(parts[1].substr(1)) : haxeVer;
+            Log.error('libhxcpp $version supports the code Haxe 4.2 and later generates, but this build is from Haxe $shown. Use Haxe 4.2 or later, or switch back to hxcpp with "haxelib run libhxcpp off"');
+         }
+      }
+      if (defines.exists("hxcpp_api_level"))
+      {
+         var apiLevel = Std.parseInt(defines.get("hxcpp_api_level").split('"').join(""));
+         if (apiLevel!=null && apiLevel>SupportedVersion)
+            Log.warn('This build uses hxcpp API level $apiLevel, newer than the $SupportedVersion libhxcpp $version knows; it may not build or run correctly');
+      }
+
       include_path.push(".");
       if (env.exists("HOME"))
         include_path.push(env.get("HOME"));
