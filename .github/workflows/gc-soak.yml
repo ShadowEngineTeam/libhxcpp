@@ -27,8 +27,9 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
-    # Room for setup, the build and the run still going when time is up
-    timeout-minutes: ${{ fromJSON(inputs.minutes || '45') + 20 }}
+    # Room for setup, the build and the run still going when time is up.
+    # Expressions have no arithmetic, so this picks a step above the minutes
+    timeout-minutes: ${{ fromJSON(inputs.minutes || '45') <= 70 && 90 || (fromJSON(inputs.minutes || '45') <= 160 && 180 || 360) }}
     defaults:
       run:
         shell: bash
