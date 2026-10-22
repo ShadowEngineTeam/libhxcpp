@@ -216,7 +216,7 @@ private:
     bool (*mTestFunction)(Dynamic e);
 };
 
-#if defined(HXCPP_SCRIPTABLE) && (HXCPP_API_LEVEL >= 500)
+#if defined(HXCPP_SCRIPTABLE)
 // This is the function to call when a new script has been loaded.
 // Signature: Void -> Void
 extern Dynamic g_onScriptLoadedFunction;
@@ -303,7 +303,7 @@ void __hxcpp_dbg_setNewStackFrameFunction(Dynamic function);
 void __hxcpp_dbg_setNewThreadInfoFunction(Dynamic function);
 void __hxcpp_dbg_setAddParameterToStackFrameFunction(Dynamic function);
 void __hxcpp_dbg_setAddStackFrameToThreadInfoFunction(Dynamic function);
-#if defined(HXCPP_SCRIPTABLE) && (HXCPP_API_LEVEL >= 500)
+#if defined(HXCPP_SCRIPTABLE)
 void __hxcpp_dbg_setOnScriptLoadedFunction(Dynamic function);
 #endif
 
@@ -359,7 +359,7 @@ inline void __hxcpp_dbg_setNewStackFrameFunction(Dynamic) { }
 inline void __hxcpp_dbg_setNewThreadInfoFunction(Dynamic) { }
 inline void __hxcpp_dbg_setAddParameterToStackFrameFunction(Dynamic) { }
 inline void __hxcpp_dbg_setAddStackFrameToThreadInfoFunction(Dynamic) { }
-#if defined(HXCPP_SCRIPTABLE) && (HXCPP_API_LEVEL >= 500)
+#if defined(HXCPP_SCRIPTABLE)
 inline void __hxcpp_dbg_setOnScriptLoadedFunction(Dynamic) { }
 #endif
 

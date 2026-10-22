@@ -232,11 +232,9 @@ void CppiaModule::registerDebugger()
    for(std::unordered_set<int>::const_iterator i = allFileIds.begin(); i!=allFileIds.end(); ++i)
       addScriptableFile(strings[*i]);
 
-   #if (HXCPP_API_LEVEL >= 500)
    if (hx::g_onScriptLoadedFunction != null{}) {
       hx::g_onScriptLoadedFunction();
    }
-   #endif
 
    #endif
 }
