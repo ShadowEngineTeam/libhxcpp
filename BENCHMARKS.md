@@ -1,13 +1,13 @@
 # Benchmarks
 
-The benchmark suite in [bench](bench) compares libhxcpp with stock hxcpp 4.3.53, the release Lime's CI builds desktop and mobile targets with. The [README](README.md#performance) shows a short summary of the key measures; this page has every result.
+The benchmark suite in [bench](bench) compares libhxcpp 6.0.0 with stock hxcpp 4.3.53, the release Lime's CI builds desktop and mobile targets with. The [README](README.md#performance) shows a short summary of the key measures; this page has every result.
 
 ## Results
 
 <!-- bench:start -->
 **Speed** (higher is better)
 
-| Benchmark | Unit | libhxcpp | hxcpp 4.3.53 | libhxcpp vs stock |
+| Benchmark | Unit | libhxcpp 6.0.0 | hxcpp 4.3.53 | libhxcpp vs stock |
 | --- | --- | ---: | ---: | ---: |
 | alloc_small | objects/s | 576M ±2.3% | 578M ±1.1% | ~1.0x |
 | alloc_strings | strings/s | 50.3M ±0.4% | 23.6M ±0.4% | 2.13x |
@@ -27,7 +27,7 @@ The benchmark suite in [bench](bench) compares libhxcpp with stock hxcpp 4.3.53,
 
 **CPPIA speed** (higher is better)
 
-| Workload | Unit | Interpreter, libhxcpp | Interpreter, hxcpp 4.3.53 | Interpreter vs stock | JIT, libhxcpp | JIT, hxcpp 4.3.53 | JIT vs stock |
+| Workload | Unit | Interpreter, libhxcpp 6.0.0 | Interpreter, hxcpp 4.3.53 | Interpreter vs stock | JIT, libhxcpp 6.0.0 | JIT, hxcpp 4.3.53 | JIT vs stock |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | int_loop | iterations/s | 48M ±0.5% | 46.8M ±0.4% | 1.03x | 733M ±3.1% | 736M ±2.5% | ~1.0x |
 | float_array | elements/s | 24.5M ±0.6% | 25.5M ±0.4% | 0.96x | 216M ±0.5% | 221M ±0.9% | 0.98x |
@@ -39,7 +39,7 @@ The benchmark suite in [bench](bench) compares libhxcpp with stock hxcpp 4.3.53,
 
 **Collection pauses and memory** (lower is better)
 
-| Metric | Benchmark | libhxcpp | hxcpp 4.3.53 | stock / libhxcpp |
+| Metric | Benchmark | libhxcpp 6.0.0 | hxcpp 4.3.53 | stock / libhxcpp |
 | --- | --- | ---: | ---: | ---: |
 | Startup and exit | noop | 3.5 ms | 3.3 ms | 0.94x |
 | Work unit time, p99 | gc_pauses | 64.4 us | 83.2 us | 1.29x |
@@ -75,7 +75,7 @@ The benchmark suite in [bench](bench) compares libhxcpp with stock hxcpp 4.3.53,
 | Peak memory | cppia_jit_native_call | 7.5 MB | 8.5 MB | 1.13x |
 | Peak memory | cppia_jit_native_callback | 28 MB | 29 MB | 1.04x |
 
-Windows, AMD Ryzen 9 9950X 16-Core Processor; MSVC 194435213, 64-bit; Haxe 4.3.7; libhxcpp 6b740dcc; 3 processes x 10 samples per benchmark; 2026-10-21 11:13:39.
+Windows, AMD Ryzen 9 9950X 16-Core Processor; MSVC 194435213, 64-bit; Haxe 4.3.7; libhxcpp 6.0.0 at 6b740dcc; 3 processes x 10 samples per benchmark; 2026-10-21 11:13:39.
 Reproduce with `cd bench && haxe --run Run`. Ratios above 1 favour libhxcpp; "~" marks a difference within the run-to-run spread.
 <!-- bench:end -->
 

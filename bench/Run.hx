@@ -240,8 +240,13 @@ class Run {
 
 	static function label(name:String):String {
 		if (name == "libhxcpp")
-			return "libhxcpp";
+			return 'libhxcpp ${libVersion()}';
 		return stockDev != null ? "hxcpp (dev)" : 'hxcpp $stockVersion';
+	}
+
+	/** The version in this checkout's haxelib.json, so published results name the release as well as the commit. **/
+	static function libVersion():String {
+		return Json.parse(File.getContent(rootDir + "/haxelib.json")).version;
 	}
 
 	// --- Building --------------------------------------------------------
@@ -529,7 +534,7 @@ class Run {
 
 		var env = runtimes[0].env;
 		b.add('\n${report.host}; ${env.compiler}, ${env.pointerBits}-bit; Haxe ${report.haxe}; '
-			+ 'libhxcpp ${report.libhxcpp}; ${runs} processes x ${samples} samples per benchmark; ${report.date}.\n');
+			+ '${label("libhxcpp")} at ${report.libhxcpp}; ${runs} processes x ${samples} samples per benchmark; ${report.date}.\n');
 		b.add("Reproduce with `cd bench && haxe --run Run`. Ratios above 1 favour libhxcpp; "
 			+ "\"~\" marks a difference within the run-to-run spread.\n");
 		return b.toString();
@@ -539,7 +544,7 @@ class Run {
 	static function summary(report:Dynamic, lib:Runtime, stock:Runtime, startup:Map<String, Float>, results:Array<BenchResult>):String {
 		var byName = [for (r in results) if (r.error == null) r.name => r];
 		var b = new StringBuf();
-		b.add('| Area | Benchmark | libhxcpp vs ${stock.label} |\n| --- | --- | ---: |\n');
+		b.add('| Area | Benchmark | ${lib.label} vs ${stock.label} |\n| --- | --- | ---: |\n');
 		for (row in SUMMARY) {
 			// A benchmark that failed or was renamed drops out of the summary rather than breaking it
 			if ((row.measure == "rate" || row.measure == "p999") && !byName.exists(row.bench))
@@ -574,7 +579,7 @@ class Run {
 		}
 		var env = lib.env;
 		b.add('\nAbove 1 favours libhxcpp; "~" marks a difference within the run-to-run spread. '
-			+ '${report.host}; ${env.compiler}, ${env.pointerBits}-bit; Haxe ${report.haxe}; libhxcpp ${report.libhxcpp}; ${report.date}.\n');
+			+ '${report.host}; ${env.compiler}, ${env.pointerBits}-bit; Haxe ${report.haxe}; ${lib.label} at ${report.libhxcpp}; ${report.date}.\n');
 		return b.toString();
 	}
 
