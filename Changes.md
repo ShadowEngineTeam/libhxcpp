@@ -390,6 +390,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed the debugger showing wrong values for a cppia function's this, arguments and locals: it read them from the wrong frame base, and in jitted code the frame's variable lists and unassigned locals held stale stack data, which could crash it (based on HaxeFoundation/hxcpp#1426 by @robknopf)
 * Fixed script functions' stack frames and script object fields sitting at 4-byte offsets on 64-bit targets, which the debugger and the collector then read misaligned: stack frames now live in aligned native storage, and fields are aligned to their type
 * Fixed the cppia jit boxing Array.contains and Array.remove results, and Array<Bool> elements read or written, as Int instead of Bool where they become Dynamic, as in an Array<Dynamic> literal
+* Fixed the cppia jit storing a Bool set on a dynamic field, such as an optional field of an anonymous structure or a field of a Dynamic, as the Int 1 or 0, so it read back as a number and compared unequal to true (libhxcpp #259)
 
 ### CFFI, ndlls, the debugger and telemetry
 

@@ -2528,6 +2528,22 @@ static void SLJIT_CALL setFieldIntV( hx::Object *instance, String *name, int inV
    CATCH_NATIVE
 }
 
+// The jit carries Bools as Int; these box the value as a Bool
+static int SLJIT_CALL setFieldBool( hx::Object *instance, String *name, int inValue )
+{
+   TRY_NATIVE
+   instance->__SetField(*name, (bool)inValue, HX_PROP_DYNAMIC);
+   return inValue;
+   CATCH_NATIVE
+   return 0;
+}
+static void SLJIT_CALL setFieldBoolV( hx::Object *instance, String *name, int inValue )
+{
+   TRY_NATIVE
+   instance->__SetField(*name, (bool)inValue, HX_PROP_DYNAMIC);
+   CATCH_NATIVE
+}
+
 static hx::Object * SLJIT_CALL setFieldObject( hx::Object *instance, String *name, hx::Object *inValue )
 {
    TRY_NATIVE
@@ -2892,11 +2908,16 @@ struct FieldByName : public CppiaDynamicExpr
                   compiler->convertReturnReg(etObject, inDest, destType );
                break;
             case etInt:
+               {
+               bool isBool = value->isBoolInt();
                value->genCode(compiler,sJitArg2.as(jtInt), etInt);
-               compiler->callNative( ret ? (void *)setFieldInt : (void *)setFieldIntV, objSrc, (void *)&name, sJitArg2.as(jtInt) );
+               void *func = isBool ? (ret ? (void *)setFieldBool : (void *)setFieldBoolV) :
+                                     (ret ? (void *)setFieldInt : (void *)setFieldIntV);
+               compiler->callNative( func, objSrc, (void *)&name, sJitArg2.as(jtInt) );
                compiler->checkException();
                if (ret)
-                  compiler->convertReturnReg(etInt, inDest, destType );
+                  compiler->convertReturnReg(etInt, inDest, destType, isBool );
+               }
                break;
             case etString:
                {
