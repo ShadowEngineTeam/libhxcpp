@@ -151,13 +151,13 @@ void DebuggerTrap()
 
 static bool sgAllocInit = 0;
 static bool sgInternalEnable = true;
-// With virtual inheritance, stack pointers can point to the middle of an object
-#ifdef _MSC_VER
-// MSVC optimizes by taking the address of an initernal data member
-static uintptr_t sgCheckInternalOffset = sizeof(void *)*2;
-#else
-static uintptr_t sgCheckInternalOffset = 0;
-#endif
+// How far into an object a stack value may point and still keep it alive. With
+// virtual inheritance a pointer can point into the middle of an object, and
+// compilers keep the address of a member instead of the object: clang, keeping
+// only &array->length across a call, left nothing else on the stack that
+// reached the array (libhxcpp #269). That covers the fields Array and String
+// keep, and the first ones of most classes
+static uintptr_t sgCheckInternalOffset = sizeof(void *)*8;
 
 int gInAlloc = false;
 
@@ -5946,11 +5946,9 @@ void MarkConservative(int *inBottom, int *inTop,hx::MarkContext *__inCtx)
       memcpy(&word, ptr, sizeof(word));
       uintptr_t potentialObject{ reinterpret_cast<uintptr_t>(word) };
 
-      #ifdef HXCPP_ALIGN_ALLOC
-      const size_t validObjectMask{ 0x07 };
-      #else
+      // Objects start 8-byte aligned with HXCPP_ALIGN_ALLOC, but a pointer to an
+      //  Int field inside one need only be 4-byte aligned
       const size_t validObjectMask{ 0x03 };
-      #endif
 
       if (potentialObject && !(potentialObject & validObjectMask) && potentialObject != prev && potentialObject != lastPin)
       {

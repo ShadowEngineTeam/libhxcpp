@@ -97,6 +97,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 
 ### Garbage collector
 
+* Fixed the collector freeing an object that a function still used when the stack held only the address of one of its fields: clang keeps &array->length instead of the array across a call when only the length is read later, and the stack scan took only pointers to an object's start (or 16 bytes in, with MSVC) and only at 8-byte-aligned addresses. Stack values up to eight pointer sizes into an object (64 bytes on 64-bit), 4-byte aligned, now keep it alive on every compiler (libhxcpp #269)
 * The GC returns fully empty block groups to the system without HXCPP_GC_MOVING too, after a full collection that leaves much more memory than it needs and on Gc.compact (not under Emscripten, where WebAssembly memory never shrinks and a released group would only fragment it)
 * Debug builds now trap when a GC block's row counts exceed its useful lines, before the counts skew the heap stats
 * Fixed a data race in the large-allocation recycle list: the lock-free probe now reads a dedicated counter instead of scanning the vector concurrently with mutation (also fixed a skipped-entry bug when the locked recheck failed)
