@@ -409,6 +409,8 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed the CFFI val_gc_ptr always throwing "Finalizer not supported here": it attaches the finalizer to the allocation
 * Fixed DEFINE_PRIM_MULT exporting nothing with HXCPP_JS_PRIME (Emscripten): primitives with more than five arguments are exported and take their arguments as a JavaScript array
 * Fixed the debugger's breakpoint updates having no memory barriers, and made building with MSVC older than Visual Studio 2015 stop with a clear message
+* Fixed the debugger reading a stopped thread's stack while that thread was still running the stop handler: the handler is Haxe code that pushes and pops frames on that thread, so a query from the debugger thread could read its frame list while it changed, and count the handler's own frames as the top of the stack. Queries now wait until the handler returns
+* Fixed the flag that tells debugged threads to check for breakpoints being read on every line without synchronisation while the debugger thread set it; it is atomic now, with loads that cost what the old ones did
 * Fixed telemetry unlocking its allocation mutex before locking it when it skips an allocation made inside a CFFI call; on Windows that left the mutex held and the next thread that tracked an allocation blocked forever
 * Fixed the CFFI val_ocallN taking three parameters against its four-parameter declaration, so every call passed the argument array's address as a single argument; it now passes the arguments it is given
 * Fixed Marshal.readLittleEndianPointer and readBigEndianPointer (Haxe 5) failing to compile when used: they read a pointer to a pointer; they read the pointer and swap its bytes when the order differs

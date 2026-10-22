@@ -3,6 +3,7 @@
 
 #include "QuickVec.h"
 #include <exception>
+#include <atomic>
 
 #ifdef HXCPP_SINGLE_THREADED_APP
   #define HX_CTX_GET ::hx::gMainThreadContext
@@ -162,7 +163,7 @@
           /* This is incorrect - a read memory barrier is needed here. */     \
           /* For now, just live with the exceedingly rare cases where */      \
           /* breakpoints are missed */                                        \
-          if (::hx::gShouldCallHandleBreakpoints) {                             \
+          if (::hx::gShouldCallHandleBreakpoints.load(std::memory_order_relaxed)) { \
               __hxcpp_on_line_changed(_hx_stackframe.ctx);                    \
          }
       #define HX_STACK_LINE_QUICK(number) _hx_stackframe.lineNumber = number;
@@ -240,7 +241,8 @@ extern const char* EXTERN_CLASS_NAME;
 
 
 #ifdef HXCPP_DEBUGGER
-extern volatile bool gShouldCallHandleBreakpoints;
+// Set from the debugger thread and read on every line by the others
+extern std::atomic<bool> gShouldCallHandleBreakpoints;
 
 
 // These must match the values present in cpp.vm.Debugger

@@ -10,6 +10,7 @@
 #include <hx/thread/Thread.hpp>
 #include <atomic>
 #include <mutex>
+#include <thread>
 #include <atomic>
 
 // Newer versions of haxe compiler will set these too (or might be null for haxe 3.0)
@@ -30,11 +31,10 @@ extern const char *__hxcpp_all_files[];
 // This global boolean is set whenever there are any breakpoints (normal or
 // immediate), and can relatively quickly gate debugged threads from making
 // more expensive breakpoint check calls when there are no breakpoints set.
-// Note that there is no lock to protect this.  Volatile is used to ensure
-// that within a function call, the value of gShouldCallHandleBreakpoints is
-// not cached in a register and thus not properly checked within the function
-// call.
-volatile bool gShouldCallHandleBreakpoints = false;
+// Note that there is no lock to protect this. It is atomic so the threads
+// that read it on every line see the debugger thread's writes, with relaxed
+// loads that cost what the old volatile reads did.
+std::atomic<bool> gShouldCallHandleBreakpoints(false);
 
 // This is the event notification handler, as registered by the debugger
 // thread.
@@ -109,6 +109,10 @@ public:
    int          mStepLevel;
    Breakpoints  *mBreakpoints;
 
+   // Running the stop handler: the thread counts as stopped, but its stack
+   // still changes until the handler returns
+   std::atomic<bool> mInHandler;
+
    // Waiting for continue
    bool         mWaiting;
    std::mutex   mWaitMutex;
@@ -180,6 +184,7 @@ public:
 
    void reset()
    {
+      mInHandler = false;
       mCanStop = false;
       mBreakpoint = 0;
       mBreakpoints = 0;
@@ -321,10 +326,14 @@ public:
                 mCanStop = true;
                 return;
             }
+            // The handler runs Haxe code on this thread, so the debugger
+            // waits for it before reading this thread's stack
+            mInHandler = true;
             stopHandler
                 (mThreadNumber, THREAD_STOPPED, mStackContext->mDebugger->mStepLevel,
                  String(frame->position->className), String(frame->position->functionName),
                  String(frame->position->fileName), frame->lineNumber);
+            mInHandler = false;
         }
 
         if (mWaiting)
@@ -1008,10 +1017,36 @@ Breakpoints *ReleaseBreakpointsLocked(Breakpoints *inBreakpoints)
 
 
 // Gets a ThreadInfo for a thread
+// A thread announces a stop by running the stop handler on its own stack,
+// which pushes and pops frames, so the stack holds still only once the handler
+// has returned. A handler that asks about its own thread does not wait.
+static void WaitWhileInStopHandler(int threadNumber)
+{
+    if (threadNumber == (int)hx::thread::Thread_obj::id())
+        return;
+    for (;;)
+    {
+        bool inHandler = false;
+        gMutex.lock();
+        std::map<int, DebuggerContext *>::iterator found = gMap.find(threadNumber);
+        if (found != gMap.end())
+            inHandler = found->second->mInHandler;
+        gMutex.unlock();
+        if (!inHandler)
+            return;
+        hx::EnterGCFreeZone();
+        std::this_thread::yield();
+        hx::ExitGCFreeZone();
+    }
+}
+
 static Dynamic GetThreadInfo(int threadNumber, bool unsafe)
 {
     if (threadNumber == g_debugThreadNumber)
         return null();
+
+    if (!unsafe)
+        WaitWhileInStopHandler(threadNumber);
 
     DebuggerContext *stack = 0;
 
@@ -1101,6 +1136,9 @@ static ::Array<Dynamic> GetStackVariables(int threadNumber,
                                           bool unsafe,
                                           Dynamic markThreadNotStopped)
 {
+    if (!unsafe)
+        WaitWhileInStopHandler(threadNumber);
+
     ::Array<Dynamic> ret = Array_obj<Dynamic>::__new();
 
     // Collect the name pointers under the lock and allocate after
@@ -1166,6 +1204,9 @@ static Dynamic GetVariableValue(int threadNumber, int stackFrameNumber,
                                 Dynamic markNonexistent,
                                 Dynamic markThreadNotStopped)
 {
+    if (!unsafe)
+        WaitWhileInStopHandler(threadNumber);
+
     if (threadNumber == g_debugThreadNumber) {
         return markNonexistent;
     }
@@ -1230,6 +1271,9 @@ static Dynamic SetVariableValue(int threadNumber, int stackFrameNumber,
                                 bool unsafe, Dynamic markNonexistent,
                                 Dynamic markThreadNotStopped)
 {
+    if (!unsafe)
+        WaitWhileInStopHandler(threadNumber);
+
     if (threadNumber == g_debugThreadNumber) {
         return null();
     }

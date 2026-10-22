@@ -826,7 +826,7 @@ public:
    #ifdef HXCPP_DEBUGGER
       #define CPPIA_STACK_LINE(expr) \
           ctx->getCurrentStackFrame()->lineNumber = expr->line; \
-          if (hx::gShouldCallHandleBreakpoints) \
+          if (hx::gShouldCallHandleBreakpoints.load(std::memory_order_relaxed)) \
               __hxcpp_on_line_changed(ctx);
    #else
       #define CPPIA_STACK_LINE(expr) ctx->getCurrentStackFrame()->lineNumber = expr->line;
