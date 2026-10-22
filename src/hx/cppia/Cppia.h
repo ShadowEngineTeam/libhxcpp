@@ -198,6 +198,8 @@ struct CppiaExpr : public CppiaOwned<CppiaExpr>
    virtual void mark(hx::MarkContext *ctx) { };
    virtual void visit(hx::VisitContext *ctx) { };
    virtual bool isBoolInt() { return false; }
+   // The line the debugger first sees when this runs as a function body
+   virtual int firstLine() { return line; }
 
    // Constant-folding query - lets containers (eg, switch) build dispatch
    // tables at link time when every alternative is a literal int

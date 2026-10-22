@@ -195,6 +195,11 @@ CppiaExpr *ScriptCallable::link(CppiaModule &inModule)
    position.functionName = functionName;
    position.fileName = filename;
    position.fullName = filename;
+   #ifdef HXCPP_STACK_LINE
+   // A breakpoint on the function by name stops where the line hook first
+   // runs in it, the first statement of its body
+   position.firstLineNumber = body ? body->firstLine() : line;
+   #endif
 
    #ifdef HXCPP_DEBUGGER
    position.fileHash = Hash(0,filename);

@@ -393,6 +393,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed script functions' stack frames and script object fields sitting at 4-byte offsets on 64-bit targets, which the debugger and the collector then read misaligned: stack frames now live in aligned native storage, and fields are aligned to their type
 * Fixed the cppia jit boxing Array.contains and Array.remove results, and Array<Bool> elements read or written, as Int instead of Bool where they become Dynamic, as in an Array<Dynamic> literal
 * Fixed the cppia jit storing a Bool set on a dynamic field, such as an optional field of an anonymous structure or a field of a Dynamic, as the Int 1 or 0, so it read back as a number and compared unequal to true (libhxcpp #259)
+* Fixed breakpoints and stepping never stopping in jitted cppia code: the jit kept each line number for stack traces but never called the debugger's line hook, so a script could only be debugged with the jit off (HaxeFoundation/hxcpp#498, libhxcpp #267). A breakpoint on a script function by name stops now too: script functions had no first line for it to match. docs/CppiaDebugging.md describes what debugging a script needs
 
 ### CFFI, ndlls, the debugger and telemetry
 

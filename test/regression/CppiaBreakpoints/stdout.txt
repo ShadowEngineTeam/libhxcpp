@@ -1,0 +1,22 @@
+y=70 z=71
+y=30 z=31
+interpreter
+  stop add Script.hx:3 a=1 b=2 sum=0
+  stop add Script.hx:4 a=1 b=2 sum=3
+  set sum=7
+  stop add Script.hx:5 a=1 b=2 sum=70
+  stop main Script.hx:11 x=1 y=70 z=0
+  stop main Script.hx:12 x=1 y=70 z=71
+  run again with a breakpoint on Script.add
+  stop add Script.hx:3 a=1 b=2 sum=0
+y=70 z=71
+y=30 z=31
+jit
+  stop add Script.hx:3 a=1 b=2 sum=0
+  stop add Script.hx:4 a=1 b=2 sum=3
+  set sum=7
+  stop add Script.hx:5 a=1 b=2 sum=70
+  stop main Script.hx:11 x=1 y=70 z=0
+  stop main Script.hx:12 x=1 y=70 z=71
+  run again with a breakpoint on Script.add
+  stop add Script.hx:3 a=1 b=2 sum=0

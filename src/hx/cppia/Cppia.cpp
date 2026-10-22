@@ -413,6 +413,7 @@ struct BlockExpr : public CppiaExpr
    }
 
    const char *getName() HXCPP_OVERRIDE { return "BlockExpr"; }
+   int firstLine() HXCPP_OVERRIDE { return expressions.size() ? expressions[0]->firstLine() : line; }
    ExprType getType() HXCPP_OVERRIDE
    {
       if (expressions.size()==0)
@@ -453,6 +454,26 @@ struct BlockExpr : public CppiaExpr
 
 
    #ifdef CPPIA_JIT
+   #ifdef HXCPP_DEBUGGER
+   static void SLJIT_CALL onLineChanged(CppiaCtx *ctx)
+   {
+      __hxcpp_on_line_changed(ctx);
+   }
+
+   // As CPPIA_STACK_LINE does in the interpreter: while the debugger has
+   // breakpoints set or is stepping, each line calls the debugger's line hook
+   static void genLineHook(CppiaCompiler *compiler)
+   {
+      // A lock-free std::atomic<bool> is a plain byte
+      static_assert(sizeof(hx::gShouldCallHandleBreakpoints)==1, "the jit reads the flag as a byte");
+      compiler->move( sJitTemp0, JitVal((void *)&hx::gShouldCallHandleBreakpoints) );
+      compiler->move( sJitTemp0, sJitTemp0.star(jtByte,0) );
+      JumpId noHook = compiler->compare( cmpI_EQUAL, sJitTemp0.as(jtInt), (int)0 );
+      compiler->callNative( (void *)onLineChanged, sJitCtx );
+      compiler->comeFrom(noHook);
+   }
+   #endif
+
    void genCode(CppiaCompiler *compiler, const JitVal &inDest, ExprType destType) HXCPP_OVERRIDE
    {
       int n = expressions.size();
@@ -461,7 +482,12 @@ struct BlockExpr : public CppiaExpr
       for(int i=0;i<n;i++)
       {
          if (lineOffset)
+         {
             compiler->move( JitLocalPos(lineOffset, jtInt), expressions[i]->line );
+            #ifdef HXCPP_DEBUGGER
+            genLineHook(compiler);
+            #endif
+         }
          //compiler->traceInt("line",expressions[i]->line);
          if (i<n-1)
             expressions[i]->genCode(compiler);
