@@ -18,7 +18,9 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  # Each push to main or a release branch is its own group, so every commit
+  # there gets a complete result; elsewhere the newest push wins
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || ((github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/')) && github.sha) || github.ref }}
   cancel-in-progress: true
 
 jobs:
