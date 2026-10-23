@@ -79,6 +79,8 @@ public:
       VariantKey *fixed = getFixed() + index;
       fixed->hash = inName.hash();
       fixed->key = inName;
+      // A name built at run time is a collectable string, which this object marks
+      HX_OBJ_WB_GET(this, inName.raw_ptr());
       fixed->value = inValue;
       if (inValue.type == ::cpp::Variant::typeObject) {
         HX_OBJ_WB_GET(this, inValue.valObject);

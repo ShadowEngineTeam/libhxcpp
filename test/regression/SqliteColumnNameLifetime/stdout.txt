@@ -1,0 +1,3 @@
+column name preserved: true
+dynamic column name is collectable: true
+row survives close and collection: true

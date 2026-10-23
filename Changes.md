@@ -329,6 +329,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 
 ### Regular expressions, zlib and databases
 
+* Fixed every SQLite result adding its column names to the permanent string pool, so a program that ran queries with changing column names, such as generated aliases, kept every name it had ever seen. The names are ordinary strings now, collected with the result and its rows: an anonymous object marks the names of its fixed fields, which a full collection of a million of them does not measurably slow (libhxcpp #274)
 * Fixed every failed sys.db.Sqlite.open leaking its native connection handle: SQLite allocates one even when the open fails, and only closing it frees it (libhxcpp #273)
 * Fixed SQLite TEXT values that hold a NUL character coming back cut off at it, from a row's fields and from getResult: they were read as C strings instead of by their byte count (libhxcpp #272)
 * A zlib stream requesting a preset dictionary (FDICT) now throws instead of looping forever (denial of service on hostile input); zlib failures now include the error code and zlib's message text instead of a bare "ZLib Error"

@@ -73,7 +73,12 @@ void Anon_obj::__Mark(hx::MarkContext *__inCtx)
    {
       VariantKey *fixed = getFixed();
       for(int i=0;i<mFixedFields;i++)
+      {
+         // Names from a literal are constants and cost a check; names built at
+         //  run time, such as a database row's column names, need marking
+         HX_MARK_MEMBER(fixed[i].key);
          HX_MARK_MEMBER(fixed[i].value);
+      }
    }
    HX_MARK_MEMBER(mFields);
 }
@@ -85,7 +90,10 @@ void Anon_obj::__Visit(hx::VisitContext *__inCtx)
    {
       VariantKey *fixed = getFixed();
       for(int i=0;i<mFixedFields;i++)
+      {
+         HX_VISIT_MEMBER(fixed[i].key);
          HX_VISIT_MEMBER(fixed[i].value);
+      }
    }
    HX_VISIT_MEMBER(mFields);
 }

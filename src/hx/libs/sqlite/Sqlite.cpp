@@ -39,7 +39,8 @@ struct result : public hx::Object
    sqlite3_stmt *r;
    int ncols;
    int count;
-   String *names;
+   // The column names, collected with the result and the rows that use them
+   Array<String> names;
    int *bools;
    // The column for each of a row's fixed fields, which Anon_obj keeps
    // sorted by name hash
@@ -55,14 +56,15 @@ struct result : public hx::Object
       r = inR;
 
       ncols = sqlite3_column_count(r);
-      names = (String *)malloc(sizeof(String)*ncols);
+      names = Array_obj<String>::__new(ncols, ncols);
+      HX_OBJ_WB_GET(this, names.mPtr);
       bools = (int*)malloc(sizeof(int)*ncols);
       order = (int*)malloc(sizeof(int)*(ncols > 0 ? ncols : 1));
       first = 1;
       done = 0;
       for(int i=0;i<ncols;i++)
       {
-         names[i] = String::createPermanent(sqlite3_column_name(r,i),-1);
+         names[i] = String::create(sqlite3_column_name(r,i));
          for(int j=0;j<i;j++)
             if( names[j] == names[i] )
                hx::Throw(HX_CSTRING("Error, same field is two times in the request ") + sql);
@@ -71,9 +73,20 @@ struct result : public hx::Object
          bools[i] = dtype?(strcmp(dtype,"BOOL") == 0):0;
          order[i] = i;
       }
-      String *n = names;
-      std::sort(order, order+ncols, [n](int a, int b) { return (int)n[a].hash() < (int)n[b].hash(); });
+      Array<String> n = names;
+      std::sort(order, order+ncols, [&n](int a, int b) { return (int)n[a].hash() < (int)n[b].hash(); });
    }
+
+   void __Mark(hx::MarkContext *__inCtx) HXCPP_OVERRIDE
+   {
+      HX_MARK_MEMBER(names);
+   }
+   #ifdef HXCPP_VISIT_ALLOCS
+   void __Visit(hx::VisitContext *__inCtx) HXCPP_OVERRIDE
+   {
+      HX_VISIT_MEMBER(names);
+   }
+   #endif
 
    static void finalize(Dynamic obj) { ((result *)(obj.mPtr))->destroy(false); }
    void destroy(bool inThrowError)
@@ -82,11 +95,6 @@ struct result : public hx::Object
       {
          free(bools);
          bools = 0;
-      }
-      if (names)
-      {
-         free(names);
-         names = 0;
       }
       if (order)
       {
