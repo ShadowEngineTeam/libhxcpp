@@ -1422,9 +1422,15 @@ Array< ::String> __hxcpp_dbg_getFilesFullPath()
         ret->push(String(*ptr));
     }
 
-    #ifdef HXCPP_SCRIPTABLE
-    __hxcpp_dbg_getScriptableFilesFullPath(ret);
-    #endif
+    // Entry i here is the full path of entry i of __hxcpp_dbg_getFiles, as
+    //  debuggers that pair the two lists expect. The script files, whose full
+    //  path is their name, follow the host's in the same order; picking them
+    //  against this list instead left out a different set whenever a script
+    //  file had the name of a host file. A host built without full paths
+    //  gives its file names here too
+    Array< ::String> files = __hxcpp_dbg_getFiles();
+    for(int i=ret->length;i<files->length;i++)
+        ret->push(files[i]);
 
     return ret;
 }

@@ -18,6 +18,15 @@ class Main {
 		var path = haxe.io.Path.join([haxe.io.Path.directory(Sys.programPath()), "script.cppia"]);
 		var module = cpp.cppia.Module.fromData(sys.io.File.getBytes(path).getData());
 		Sys.println('loaded: the callback ran $calls time, Script.hx known $known');
+
+		// A debugger pairs these by index: entry i of one is the full path of entry i of the other
+		var files = Debugger.getFiles();
+		var paths = Debugger.getFilesFullPath();
+		var paired = files.length == paths.length;
+		for (i in 0...files.length)
+			if (paired && !StringTools.endsWith(paths[i].split("\\").join("/"), files[i].split("\\").join("/")))
+				paired = false;
+		Sys.println('file names and full paths pair up: $paired, host Util ' + Util.twice(2));
 		module.boot();
 		module.run();
 	}

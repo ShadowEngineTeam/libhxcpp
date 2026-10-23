@@ -7,6 +7,6 @@ class Script {
 	}
 
 	static function main() {
-		Sys.println("script ran");
+		Sys.println("script ran: " + Util.twice(21));
 	}
 }

@@ -404,6 +404,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * The debugger's script-loaded callback, which Haxe 5's cpp.vm.Debugger sets through __hxcpp_dbg_setOnScriptLoadedFunction, is there at every hxcpp API level, not only 500
 * Fixed breakpoints and stepping never stopping in jitted cppia code: the jit kept each line number for stack traces but never called the debugger's line hook, so a script could only be debugged with the jit off (HaxeFoundation/hxcpp#498, libhxcpp #267). A breakpoint on a script function by name stops now too: script functions had no first line for it to match. docs/CppiaDebugging.md describes what debugging a script needs
 * A debugger that attaches before a cppia script loads, as the VS Code one does, can set breakpoints in the script from the script-loaded callback, which runs after each script loads and before it boots. HXCPP_DBG_ON_SCRIPT_LOADED tells C++ that may build against other hxcpp versions that the callback is there, and setting it again no longer adds the same root twice (libhxcpp #283)
+* Fixed cpp.vm.Debugger.getFilesFullPath() not lining up with getFiles() once a cppia script was loaded: a script file with the name of a host file was left out of one list and not the other, so a debugger that pairs them by index, as the VS Code one does, gave every script file after it the wrong path. Each entry is now the full path of the same entry of getFiles()
 
 ### CFFI, ndlls, the debugger and telemetry
 
