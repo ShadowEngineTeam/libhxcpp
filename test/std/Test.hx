@@ -669,7 +669,7 @@ class Test extends utest.Test
 
       v("rename...");
 
-      Assert.exception(() -> FileSystem.rename("dir/a", "dir/b"), String, null, "No error renaming missing file");
+      Assert.raises(() -> FileSystem.rename("dir/a", "dir/b"), String, "No error renaming missing file");
 
       FileSystem.rename("dir/file.txt","dir/txt.file");
       

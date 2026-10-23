@@ -33,7 +33,7 @@ class TestPointerFields extends Test {
         final h = create_holder_with_null();
 
         if (Assert.isTrue(h.pPtr == null)) {
-            Assert.exception(() -> h.pPtr.x = 7);
+            Assert.raises(() -> h.pPtr.x = 7);
         }
     }
 

@@ -305,7 +305,7 @@ class TestPtr extends Test
       Assert.equals( cpp.NativeArray.address(z, 1), cpp.Pointer.arrayElem(z,1) );
       Assert.notEquals( cpp.NativeArray.address(z, 1), cpp.Pointer.fromHandle(null) );
       Assert.equals(11, cpp.Function.fromStaticFunction(callMe)(1));
-      Assert.exception(() -> cpp.Function.fromStaticFunction(notProcAddress)!=cpp.Function.getProcAddress("nomodule","nofunc!"), String);
+      Assert.raises(() -> cpp.Function.fromStaticFunction(notProcAddress)!=cpp.Function.getProcAddress("nomodule","nofunc!"), String);
    }
 
    static function functionCaller(fn:cpp.Function<Void->Int,cpp.abi.Abi>) {
