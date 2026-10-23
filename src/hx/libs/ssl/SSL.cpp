@@ -235,9 +235,14 @@ struct sslcert : public hx::Object
 
 	mbedtls_x509_crt *c;
 	bool head;
+	// For a certificate in another's chain: that certificate, which owns the
+	//  memory, kept alive as long as this one
+	hx::Object *owner;
 
-	void create(const mbedtls_x509_crt *inC)
+	void create(const mbedtls_x509_crt *inC, hx::Object *inOwner = 0)
 	{
+		owner = inOwner;
+		HX_OBJ_WB_GET(this, owner);
 
 		if( inC ){
 			c = (mbedtls_x509_crt *)inC;
@@ -265,6 +270,11 @@ struct sslcert : public hx::Object
 	{
 		((sslcert *)(obj.mPtr))->destroy();
 	}
+
+	void __Mark(hx::MarkContext *__inCtx) HXCPP_OVERRIDE { HX_MARK_OBJECT(owner); }
+	#ifdef HXCPP_VISIT_ALLOCS
+	void __Visit(hx::VisitContext *__inCtx) HXCPP_OVERRIDE { HX_VISIT_OBJECT(owner); }
+	#endif
 
 	String toString() HXCPP_OVERRIDE { return HX_CSTRING("sslcert"); }
 };
@@ -400,8 +410,15 @@ Dynamic _hx_ssl_get_peer_certificate( Dynamic hssl ){
 	const mbedtls_x509_crt *crt = mbedtls_ssl_get_peer_cert(ssl->s);
 	if( crt == NULL )
 		return null();
+	// The session owns the peer's chain and frees it when the socket closes,
+	//  so the certificate returned gets a copy of its own
 	sslcert *cert = new sslcert();
-	cert->create( crt );
+	cert->create( NULL );
+	for (const mbedtls_x509_crt *c = crt; c && c->raw.p; c = c->next) {
+		int ret = mbedtls_x509_crt_parse_der( cert->c, c->raw.p, c->raw.len );
+		if( ret != 0 )
+			ssl_error( ret );
+	}
 	return cert;
 }
 
@@ -998,8 +1015,10 @@ Dynamic _hx_ssl_cert_get_next( Dynamic hcert ){
 	mbedtls_x509_crt *crt = cert->c->next;
 	if( crt == NULL )
 		return null();
+	// The next certificate lives in the first one's chain, so it keeps that alive
+	hx::Object *owner = cert->owner ? cert->owner : (hx::Object *)cert;
 	cert = new sslcert();
-	cert->create(crt);
+	cert->create(crt, owner);
 	return cert;
 }
 
