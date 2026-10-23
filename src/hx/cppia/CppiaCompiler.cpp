@@ -6,9 +6,77 @@
 
 #include "sljit_src/sljitLir.c"
 
+#if defined(__APPLE__) && (defined(__aarch64__) || defined(__arm64__))
+   #include <pthread.h>
+   #define HX_JIT_WRITE_PROTECT
+#endif
+
 
 namespace hx
 {
+
+// On Apple Silicon, MAP_JIT memory is either writable or executable for the
+// current thread, never both: generating or freeing code makes it writable for
+// that long, and executable again before anything runs it.
+struct JitWritable
+{
+   JitWritable() { set(true); }
+   ~JitWritable() { set(false); }
+   static void set(bool inWritable)
+   {
+      #ifdef HX_JIT_WRITE_PROTECT
+      if (__builtin_available(macOS 11.0, iOS 14.0, tvOS 14.0, *))
+         pthread_jit_write_protect_np(inWritable ? 0 : 1);
+      #endif
+   }
+};
+
+#if (defined(__aarch64__) || defined(__arm64__) || defined(_M_ARM64)) && !defined(HXCPP_CPPIA_JIT_ARM64)
+   // The arm64 code generator had never run before Apple Silicon got executable
+   //  memory, and Haxe's own unit tests end with an uncaught C++ exception under
+   //  it. Until it is brought up, arm64 scripts run in the interpreter, as they
+   //  always did on Apple Silicon; HXCPP_CPPIA_JIT_ARM64 turns it on to work on.
+   #define HX_JIT_NOT_ON_ARM64
+#endif
+
+bool CppiaCompiler::canRun()
+{
+   #ifdef HX_JIT_NOT_ON_ARM64
+   return false;
+   #else
+   static int sCanRun = -1;
+   if (sCanRun<0)
+   {
+      JitWritable writable;
+      void *probe = SLJIT_MALLOC_EXEC(16);
+      if (probe)
+         SLJIT_FREE_EXEC(probe);
+      sCanRun = probe ? 1 : 0;
+   }
+   return sCanRun==1;
+   #endif
+}
+
+// On stderr where there is one, since stdout is the program's own output
+#ifdef HX_ANDROID
+#define JIT_NOTICE CPPIALOG
+#else
+#define JIT_NOTICE(...) fprintf(stderr, __VA_ARGS__)
+#endif
+
+void CppiaCompiler::reportCannotRun()
+{
+   static bool sReported = false;
+   if (!sReported)
+   {
+      sReported = true;
+      #ifdef HX_JIT_NOT_ON_ARM64
+      JIT_NOTICE("cppia: the JIT does not run on arm64 yet, so scripts run in the interpreter\n");
+      #else
+      JIT_NOTICE("cppia: the JIT is enabled but cannot get executable memory here, so scripts run in the interpreter\n");
+      #endif
+   }
+}
 
 static void SLJIT_CALL my_trace_func(const char *inText)
 {
@@ -359,7 +427,11 @@ public:
          onReturn(this, onReturnStackSize);
 
       sljit_emit_return(compiler, SLJIT_UNUSED, SLJIT_UNUSED, 0);
-      CppiaFunc func = (CppiaFunc)sljit_generate_code(compiler);
+      CppiaFunc func;
+      {
+         JitWritable writable;
+         func = (CppiaFunc)sljit_generate_code(compiler);
+      }
       sljit_free_compiler(compiler);
       compiler = 0;
       return func;
@@ -1565,6 +1637,8 @@ public:
 
 void CppiaCompiler::freeCompiled(CppiaFunc inFunc)
 {
+   // The allocator keeps its free list inside the executable chunks
+   JitWritable writable;
    sljit_free_code((void *)inFunc);
 }
 

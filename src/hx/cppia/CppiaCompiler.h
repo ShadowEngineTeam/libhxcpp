@@ -309,6 +309,10 @@ public:
    virtual ~CppiaCompiler() { }
 
    static void freeCompiled(CppiaFunc inFunc);
+   // Whether the JIT can get executable memory here, found once by trying
+   static bool canRun();
+   // Says once, when the JIT is enabled but cannot run, that scripts are interpreted
+   static void reportCannotRun();
 
    virtual void setError(const char *inError) = 0;
    virtual void crash() = 0;

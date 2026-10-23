@@ -817,7 +817,15 @@ CppiaLoadedModule LoadCppia(const unsigned char *inData, int inDataLength)
          throw;
       }
 
-   if (gEnableJit)
+   #ifdef CPPIA_JIT
+   bool jit = gEnableJit && CppiaCompiler::canRun();
+   if (gEnableJit && !jit)
+      CppiaCompiler::reportCannotRun();
+   #else
+   bool jit = false;
+   #endif
+
+   if (jit)
    {
       #ifdef CPPIA_JIT
       if (!error.raw_ptr())
@@ -964,6 +972,15 @@ void __hxcpp_dbg_getScriptableClasses( Array< ::String> ioClasses )
 int __scriptable_cppia_live_modules()
 {
    return hx::sLiveModules;
+}
+
+bool __scriptable_cppia_jit_active()
+{
+   #ifdef CPPIA_JIT
+   return hx::gEnableJit && hx::CppiaCompiler::canRun();
+   #else
+   return false;
+   #endif
 }
 
 ::hx::CppiaLoadedModule __scriptable_cppia_from_string(String inCode)

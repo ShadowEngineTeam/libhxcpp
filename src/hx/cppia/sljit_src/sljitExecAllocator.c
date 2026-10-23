@@ -94,12 +94,22 @@ static SLJIT_INLINE void free_chunk(void *chunk, sljit_uw size)
 
 #else
 
+/* libhxcpp: Apple Silicon refuses a plain read-write-execute mapping, and the
+   hardened runtime allows one only with MAP_JIT (and the allow-jit
+   entitlement). The caller switches such memory between writable and
+   executable for the current thread with pthread_jit_write_protect_np. */
+#if defined(__APPLE__) && defined(MAP_JIT)
+#define SLJIT_MAP_JIT_FLAG MAP_JIT
+#else
+#define SLJIT_MAP_JIT_FLAG 0
+#endif
+
 static SLJIT_INLINE void* alloc_chunk(sljit_uw size)
 {
 	void *retval;
 
 #ifdef MAP_ANON
-	retval = mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANON, -1, 0);
+	retval = mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANON | SLJIT_MAP_JIT_FLAG, -1, 0);
 #else
 	if (dev_zero < 0) {
 		if (open_dev_zero())

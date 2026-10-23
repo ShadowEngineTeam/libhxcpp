@@ -202,6 +202,9 @@ void __scriptable_load_neko_bytes(Array<unsigned char> inBytes);
 void __scriptable_load_abc(Array<unsigned char> inBytes);
 // Modules whose native memory has not been freed yet
 int __scriptable_cppia_live_modules();
+// Whether modules loaded now are compiled by the JIT: it is built in, enabled
+// with cpp.cppia.Host.enableJit, and can get executable memory on this platform
+bool __scriptable_cppia_jit_active();
 
 #define HX_SCRIPTABLE_REGISTER_INTERFACE(name,class) \
    ::hx::ScriptableRegisterInterface( HX_CSTRING(name), __scriptableFunctions, & class##_scriptable )

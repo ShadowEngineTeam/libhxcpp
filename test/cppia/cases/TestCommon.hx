@@ -32,6 +32,16 @@ class TestCommon extends Test {
         Host.main();
     }
 
+    // A JIT that cannot get executable memory leaves every function in the
+    // interpreter without failing anything, so the jit run checks it ran
+    function testJitIsActiveWhenAsked() {
+        final asked = Sys.args().indexOf('-jit') >= 0;
+        // On arm64 the JIT stays off until its code generator is brought up
+        final expected = asked #if (HXCPP_ARM64 && !HXCPP_CPPIA_JIT_ARM64) && false #end;
+        final active:Bool = untyped __global__.__scriptable_cppia_jit_active();
+        Assert.equals(expected, active, expected ? 'Asked for the JIT, but scripts run in the interpreter' : 'The JIT is active, but it was not asked for or is off on this CPU');
+    }
+
     function testStatus() {
         Assert.equals('ok', Common.status);
     }

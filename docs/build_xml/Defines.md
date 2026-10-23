@@ -19,6 +19,7 @@ Defines affecting how the code is generated.  These need to be in the command li
 | *nocppiaast*            | Use legacy cppia generation instead of new more recent changes |
 | *objc*                  | Generate objective-c++ classes |
 | *scriptable*            | Enable extra runtime information required for scripting |
+| *HXCPP_CPPIA_JIT_ARM64* | Lets the cppia JIT run on arm64, where it is off until its code generator is brought up: scripts there run in the interpreter |
 
 
 
