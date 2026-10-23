@@ -33,3 +33,12 @@ runs:
       if: inputs.haxe != 'latest'
       shell: bash
       run: haxelib install utest --always
+
+    # preview.1's Issue12264 expects Type.typeof(0i64) to be TInt on cpp, which
+    # held only because hxcpp boxed Int64s from -1 to 255 out of its Int cache
+    # (HaxeFoundation/hxcpp#1278). libhxcpp fixed that, and Haxe has since
+    # rewritten the test as Type.typeof(256i64).match(TInt64)
+    - name: leave out tests that preview.1 got wrong
+      if: inputs.haxe == '5.0.0-preview.1'
+      shell: bash
+      run: rm haxe/tests/unit/src/unit/issues/Issue12264.hx
