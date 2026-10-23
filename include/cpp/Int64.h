@@ -83,8 +83,10 @@ inline cpp::Int64 _hx_int64_post_decrement(cpp::Int64 &ioVal) {
 inline cpp::Int64 _hx_int64_sub(cpp::Int64 a, cpp::Int64 b) { return a-b; }
 inline cpp::Int64 _hx_int64_add(cpp::Int64 a, cpp::Int64 b) { return a+b; }
 inline cpp::Int64 _hx_int64_mul(cpp::Int64 a, cpp::Int64 b) { return a*b; }
-inline cpp::Int64 _hx_int64_div(cpp::Int64 a, cpp::Int64 b) { return a/b; }
-inline cpp::Int64 _hx_int64_mod(cpp::Int64 a, cpp::Int64 b) { return a%b; }
+// The minimum divided by -1 overflows, which traps on x86: Haxe wraps the
+//  quotient to the minimum and the remainder is 0, as for any b of -1
+inline cpp::Int64 _hx_int64_div(cpp::Int64 a, cpp::Int64 b) { return b==-1 ? (cpp::Int64)(0ULL - (cpp::UInt64)a) : a/b; }
+inline cpp::Int64 _hx_int64_mod(cpp::Int64 a, cpp::Int64 b) { return b==-1 ? 0 : a%b; }
 inline cpp::Int64 _hx_int64_and(cpp::Int64 a, cpp::Int64 b) { return a&b; }
 inline cpp::Int64 _hx_int64_or(cpp::Int64 a, cpp::Int64 b) { return a|b; }
 inline cpp::Int64 _hx_int64_xor(cpp::Int64 a, cpp::Int64 b) { return a^b; }
@@ -130,8 +132,8 @@ inline cpp::Int64Struct _hx_int64_post_decrement(cpp::Int64Struct &ioVal) {
 inline cpp::Int64Struct _hx_int64_sub(cpp::Int64 a, cpp::Int64 b) { return a-b; }
 inline cpp::Int64Struct _hx_int64_add(cpp::Int64 a, cpp::Int64 b) { return a+b; }
 inline cpp::Int64Struct _hx_int64_mul(cpp::Int64 a, cpp::Int64 b) { return a*b; }
-inline cpp::Int64Struct _hx_int64_div(cpp::Int64 a, cpp::Int64 b) { return a/b; }
-inline cpp::Int64Struct _hx_int64_mod(cpp::Int64 a, cpp::Int64 b) { return a%b; }
+inline cpp::Int64Struct _hx_int64_div(cpp::Int64 a, cpp::Int64 b) { return b==-1 ? (cpp::Int64)(0ULL - (cpp::UInt64)a) : a/b; }
+inline cpp::Int64Struct _hx_int64_mod(cpp::Int64 a, cpp::Int64 b) { return b==-1 ? 0 : a%b; }
 inline cpp::Int64Struct _hx_int64_and(cpp::Int64 a, cpp::Int64 b) { return a&b; }
 inline cpp::Int64Struct _hx_int64_or(cpp::Int64 a, cpp::Int64 b) { return a|b; }
 inline cpp::Int64Struct _hx_int64_xor(cpp::Int64 a, cpp::Int64 b) { return a^b; }

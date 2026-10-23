@@ -1,0 +1,4 @@
+minimum Int64 divided by negative one wraps: true
+minimum Int64 remainder by negative one is zero: true
+ordinary signed division and remainder remain correct: true
+zero divisor remains a catchable Haxe exception: true
