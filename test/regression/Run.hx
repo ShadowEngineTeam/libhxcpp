@@ -21,8 +21,8 @@ function main() {
 	var total = 0;
 
 	final args = Sys.args();
-	// Comma-separated tests that the Haxe in use cannot build, such as ones that
-	// need a std library Haxe 5 removed
+	// Comma-separated tests that the Haxe in use cannot build, such as one its
+	// compiler rejects
 	final skipList = Sys.getEnv("REGRESSION_SKIP");
 	final skip = skipList == null ? [] : skipList.split(",");
 

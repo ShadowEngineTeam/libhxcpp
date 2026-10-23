@@ -210,9 +210,8 @@ jobs:
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         working-directory: test/regression
         env:
-          # Haxe 5 has no sys.db in its std, and the preview.1 compiler itself
-          # stops on CppiaArrayAccess
-          REGRESSION_SKIP: ${{ inputs.haxe == '5.0.0-preview.1' && 'Issue971,SqliteOptions,CppiaArrayAccess' || '' }}
+          # The preview.1 compiler itself stops on CppiaArrayAccess
+          REGRESSION_SKIP: ${{ inputs.haxe == '5.0.0-preview.1' && 'CppiaArrayAccess' || '' }}
         run: haxe --run Run -D $HXCPP_ARCH_FLAG
       # Last: it moves the system clock, which the Windows runners don't allow
       - name: clock change build

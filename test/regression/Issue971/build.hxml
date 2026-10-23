@@ -1,2 +1,3 @@
 -cpp bin
 -m Main
+-L hx4compat
