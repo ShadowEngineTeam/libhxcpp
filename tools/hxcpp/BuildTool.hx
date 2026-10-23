@@ -49,10 +49,11 @@ class BuildTool
 
    // Haxe keeps one hxcpp_api_level through a whole release cycle while the code
    // it generates and its cpp std change under it, so the level alone cannot say
-   // which runtime a build needs. A released Haxe whose code was generated for an
-   // earlier runtime than its level says is listed here, by the version its
-   // source_header names, with the level of the runtime it needs. A nightly adds
-   // +<commit> to that version, so it is not listed and builds at its own level.
+   // which runtime a build needs. Every Haxe release at level 500 or above that
+   // libhxcpp supports is listed here, by the version its source_header names,
+   // with the level of the runtime its code needs, which can be lower than the
+   // level it passes. A release missing from the list gets a warning; a nightly
+   // adds +<commit> to its version, so it is never listed and builds at its level.
    public static var haxeRuntimeLevels:Map<String,Int> = [
       // Cut from the nightlies in July 2025, before the runtime changed at level
       // 500, apart from the script-loaded debugger callback, which every level has
@@ -1947,10 +1948,15 @@ class BuildTool
          if (haxeRuntimeLevels.exists(haxeBuild))
          {
             var runtimeLevel = haxeRuntimeLevels.get(haxeBuild);
-            if (Log.verbose)
-               Log.info("", 'Haxe $haxeBuild passes API level $apiLevel but generates code for the level $runtimeLevel runtime, so it builds against that');
-            defines.set("hxcpp_api_level", Std.string(runtimeLevel));
+            if (runtimeLevel!=apiLevel)
+            {
+               if (Log.verbose)
+                  Log.info("", 'Haxe $haxeBuild passes API level $apiLevel but generates code for the level $runtimeLevel runtime, so it builds against that');
+               defines.set("hxcpp_api_level", Std.string(runtimeLevel));
+            }
          }
+         else if (haxeBuild!="" && haxeBuild.indexOf("+")<0 && apiLevel!=null && apiLevel>=500)
+            Log.warn('Haxe $haxeBuild is newer than the Haxe releases libhxcpp $version knows, so it builds at API level $apiLevel as it says. If the build fails, update libhxcpp');
       }
 
       include_path.push(".");
