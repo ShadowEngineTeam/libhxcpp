@@ -329,6 +329,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 
 ### Regular expressions, zlib and databases
 
+* Fixed every failed sys.db.Sqlite.open leaking its native connection handle: SQLite allocates one even when the open fails, and only closing it frees it (libhxcpp #273)
 * Fixed SQLite TEXT values that hold a NUL character coming back cut off at it, from a row's fields and from getResult: they were read as C strings instead of by their byte count (libhxcpp #272)
 * A zlib stream requesting a preset dictionary (FDICT) now throws instead of looping forever (denial of service on hostile input); zlib failures now include the error code and zlib's message text instead of a bare "ZLib Error"
 * MySQL: logs in to MySQL 8 and later servers (caching_sha2_password, sha256_password and auth switch requests, with the password RSA-encrypted under the server's key when the connection is not encrypted) and connects over TLS, with sslMode from disabled to verifying the server's identity. MySQL 8's default collation, utf8mb4_0900_ai_ci, and the other missing charsets are known

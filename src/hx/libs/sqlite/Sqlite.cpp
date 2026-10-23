@@ -228,7 +228,12 @@ Dynamic _hx_sqlite_connect(String filename)
    int err = sqlite3_open(filenameUtf8,&sqlDb);
    __hxcpp_exit_gc_free_zone();
    if (err != SQLITE_OK)
-      sqlite_error(sqlDb);
+   {
+      // SQLite still allocates a handle when the open fails; only close frees it
+      String message = sqlDb ? String(sqlite3_errmsg(sqlDb)) : HX_CSTRING("out of memory");
+      sqlite3_close(sqlDb);
+      hx::Throw( HX_CSTRING("Sqlite error : ") + message );
+   }
 
    database *db = new database();
    db->create(sqlDb);
