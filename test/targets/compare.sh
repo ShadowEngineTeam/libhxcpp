@@ -102,6 +102,16 @@ failed=0
       echo "### Errors"
       echo
       sed 's/^/- /' out/errors.txt
+      # The end of each failing target's own output says why it failed
+      for err in out/*.err; do
+         target=$(basename "$err" .err)
+         grep -q "^$target failed" out/errors.txt || continue
+         echo
+         echo "$target:"
+         echo '```'
+         tail -n 8 "$err"
+         echo '```'
+      done
    fi
 } > out/summary.md
 grep -q '^cpp\(ia\)\? failed\|^cppia' out/errors.txt 2>/dev/null && failed=1
