@@ -170,6 +170,11 @@ public:
    }
    hx::Val __SetField(const String &inName,const hx::Val &inValue, hx::PropertyAccess inCallProp) HXCPP_OVERRIDE
    {
+      // Boxes from -1 to 255 are constants every boxing of that value shares,
+      //  so writing one would change all of them: only a box of its own can change
+      if ( (HX_FIELD_EQ(inName,"hi") || HX_FIELD_EQ(inName,"lo")) &&
+           (((unsigned int *)this)[-1] & HX_GC_CONST_ALLOC_BIT) )
+         hx::Throw( HX_CSTRING("Cannot change a shared boxed Int64 constant") );
       if (HX_FIELD_EQ(inName,"hi") )
       {
          // Combined unsigned, so a low word with its top bit set is not
