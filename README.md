@@ -112,7 +112,7 @@ libhxcpp keeps hxcpp's build XML, defines and API, and works with the code Haxe 
 | Haxe | libhxcpp 6 |
 | --- | --- |
 | 4.2 and 4.3 | Supported. Every change is tested with 4.3.7 |
-| 5.0.0-preview.1 | Supported. Every change runs the regression suite with it |
+| 5.0.0-preview.1 | Supported. Every change runs libhxcpp's suites and Haxe's own unit tests with it on Linux, and the core suites on Windows and macOS |
 | 5 nightly builds | Not supported. libhxcpp supports Haxe 5 releases, and nightlies change between them |
 | Older than 4.2 | Not supported. The build stops and says so |
 
