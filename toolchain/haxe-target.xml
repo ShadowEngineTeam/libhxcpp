@@ -151,7 +151,6 @@
   <depend name="${HXCPP}/src/hx/cppia/sljit_src/sljitNativeARM_64.c" if="CPPIA_JIT" />
   <compilerflag value="-DHX_UNDEFINE_H" />
   <compilerflag value="-DCPPIA_JIT" if="CPPIA_JIT" />
-  <compilerflag value="-DHXCPP_CPPIA_JIT_ARM64" if="HXCPP_CPPIA_JIT_ARM64" />
 
   <file name = "src/hx/cppia/Cppia.cpp" />
   <file name = "src/hx/cppia/CppiaCtx.cpp" />

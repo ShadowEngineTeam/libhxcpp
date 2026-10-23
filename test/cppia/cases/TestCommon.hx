@@ -36,10 +36,8 @@ class TestCommon extends Test {
     // interpreter without failing anything, so the jit run checks it ran
     function testJitIsActiveWhenAsked() {
         final asked = Sys.args().indexOf('-jit') >= 0;
-        // On arm64 the JIT stays off until its code generator is brought up
-        final expected = asked #if (HXCPP_ARM64 && !HXCPP_CPPIA_JIT_ARM64) && false #end;
         final active:Bool = untyped __global__.__scriptable_cppia_jit_active();
-        Assert.equals(expected, active, expected ? 'Asked for the JIT, but scripts run in the interpreter' : 'The JIT is active, but it was not asked for or is off on this CPU');
+        Assert.equals(asked, active, asked ? 'Asked for the JIT, but scripts run in the interpreter' : 'The JIT is active, but it was not asked for');
     }
 
     function testStatus() {
