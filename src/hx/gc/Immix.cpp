@@ -4992,32 +4992,34 @@ public:
 
    // Weak-key hashes are ephemerons: a value is reachable only while the hash and its
    // key are. A value can make keys in other weak hashes reachable, so this repeats
-   // until nothing more is marked.
+   // until nothing more is marked. What a hash's values reach is marked before the
+   // next hash is looked at, so a chain of weak maps whose keys lead from one to the
+   // next resolves in one pass when the scan goes along it, and the scan alternates
+   // direction, so one registered the other way resolves in the next (libhxcpp #203).
+   // Before, what a pass found was marked only at the end of the pass, by restarting
+   // the marking threads, so such a chain gave up one link per pass.
    void MarkWeakHashValues()
    {
       bool marked;
+      bool forward = true;
       do
       {
          marked = false;
-         mMarker.init();
-         for(int i=0;i<hx::sWeakHashList.size();i++)
+         int count = hx::sWeakHashList.size();
+         for(int i=0;i<count;i++)
          {
-            hx::HashRoot *hash = hx::sWeakHashList[i];
+            hx::HashRoot *hash = hx::sWeakHashList[forward ? i : count-1-i];
             if (hx::IsWeakRefValid(hash))
-               marked = hash->markWeakValues(&mMarker) || marked;
-         }
-         if (marked)
-         {
-            #ifdef HX_MULTI_THREAD_MARKING
-            if (!sgCensus)
             {
-               mMarker.releaseJobs();
-               StartThreadJobs(tpjMark, MAX_GC_THREADS, true);
+               mMarker.init();
+               if (hash->markWeakValues(&mMarker))
+               {
+                  marked = true;
+                  mMarker.processMarkStack();
+               }
             }
-            else
-            #endif
-               mMarker.processMarkStack();
          }
+         forward = !forward;
       }
       while(marked);
    }
