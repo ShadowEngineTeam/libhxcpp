@@ -1315,6 +1315,9 @@ struct polldata : public hx::Object
    struct fd_set *fdw;
    struct fd_set *outr;
    struct fd_set *outw;
+   // The exception set: every read socket, then every write socket. Windows
+   //  reports a failed nonblocking connect only there
+   struct fd_set *oute;
    #else
    struct pollfd *fds;
    int rcount;
@@ -1337,6 +1340,7 @@ struct polldata : public hx::Object
       fdw = (fd_set*)malloc(FDSIZE(max));
       outr = (fd_set*)malloc(FDSIZE(max));
       outw = (fd_set*)malloc(FDSIZE(max));
+      oute = (fd_set*)malloc(FDSIZE(max));
       fdr->fd_count = 0;
       fdw->fd_count = 0;
 
@@ -1369,6 +1373,7 @@ struct polldata : public hx::Object
          free(fdw);
          free(outr);
          free(outw);
+         free(oute);
          #else
          // ???
          free(fds);
@@ -1505,16 +1510,19 @@ void _hx_std_socket_poll_events(Dynamic pdata, double timeout)
    memcpy(p->outr, p->fdr, FDSIZE(p->fdr->fd_count));
    memcpy(p->outw, p->fdw, FDSIZE(p->fdw->fd_count));
 
-   // The exception set takes the first FD_SETSIZE read sockets, as FD_SET
-   // filled it - copied, since FD_SET searches the set for a duplicate on
-   // every add and the sockets here are distinct already.
-   fd_set oute;
-   FD_ZERO(&oute);
+   // The exception set is every read socket, then every write socket: a
+   // failed connect is reported only there, for a socket polled for reading
+   // or for writing. It was a stack fd_set of the first FD_SETSIZE (64) read
+   // sockets, so a failed socket after them, or one polled only for writing,
+   // was never reported.
+   fd_set *oute = p->oute;
    {
-      u_int count = p->fdr->fd_count < FD_SETSIZE ? p->fdr->fd_count : FD_SETSIZE;
-      for (u_int i = 0; i < count; ++i)
-         oute.fd_array[i] = p->fdr->fd_array[i];
-      oute.fd_count = count;
+      u_int count = 0;
+      for (u_int i = 0; i < p->fdr->fd_count; ++i)
+         oute->fd_array[count++] = p->fdr->fd_array[i];
+      for (u_int i = 0; i < p->fdw->fd_count; ++i)
+         oute->fd_array[count++] = p->fdw->fd_array[i];
+      oute->fd_count = count;
    }
 
    struct timeval t;
@@ -1525,7 +1533,7 @@ void _hx_std_socket_poll_events(Dynamic pdata, double timeout)
        0,
        p->fdr->fd_count ? p->outr : 0,
        p->fdw->fd_count ? p->outw : 0,
-       p->fdr->fd_count ? &oute : 0,
+       oute->fd_count ? oute : 0,
        tt);
    if (sel == SOCKET_ERROR)
    {
@@ -1549,9 +1557,11 @@ void _hx_std_socket_poll_events(Dynamic pdata, double timeout)
    // half of them ready. Should a set come back in another order the walk
    // misses some, and that pass is decided by FD_ISSET as it always was.
    int k = 0;
+   // The exception set's ready sockets, in order: the read sockets' first
+   u_int e = 0;
    {
       fd_set *ready = p->outr;
-      u_int r = 0, e = 0;
+      u_int r = 0;
       for (u_int i = 0; i < p->fdr->fd_count; ++i)
       {
          SOCKET fd = p->fdr->fd_array[i];
@@ -1561,7 +1571,7 @@ void _hx_std_socket_poll_events(Dynamic pdata, double timeout)
             hit = true;
             r++;
          }
-         if (e < oute.fd_count && oute.fd_array[e] == fd)
+         if (e < oute->fd_count && oute->fd_array[e] == fd)
          {
             hit = true;
             e++;
@@ -1569,13 +1579,15 @@ void _hx_std_socket_poll_events(Dynamic pdata, double timeout)
          if (hit)
             p->ridx[k++] = i;
       }
-      if (r != ready->fd_count || e != oute.fd_count)
+      if (r != ready->fd_count)
+         e = oute->fd_count + 1;
+      if (e > oute->fd_count)
       {
          k = 0;
          for (u_int i = 0; i < p->fdr->fd_count; ++i)
          {
             SOCKET fd = p->fdr->fd_array[i];
-            if (FD_ISSET(fd, p->outr) || FD_ISSET(fd, &oute))
+            if (FD_ISSET(fd, p->outr) || FD_ISSET(fd, oute))
                p->ridx[k++] = i;
          }
       }
@@ -1588,18 +1600,28 @@ void _hx_std_socket_poll_events(Dynamic pdata, double timeout)
       u_int w = 0;
       for (u_int i = 0; i < p->fdw->fd_count; ++i)
       {
-         if (w < ready->fd_count && ready->fd_array[w] == p->fdw->fd_array[i])
+         SOCKET fd = p->fdw->fd_array[i];
+         bool hit = false;
+         if (w < ready->fd_count && ready->fd_array[w] == fd)
          {
-            p->widx[k++] = i;
+            hit = true;
             w++;
          }
+         if (e < oute->fd_count && oute->fd_array[e] == fd)
+         {
+            hit = true;
+            e++;
+         }
+         if (hit)
+            p->widx[k++] = i;
       }
-      if (w != ready->fd_count)
+      if (w != ready->fd_count || e != oute->fd_count)
       {
          k = 0;
          for (u_int i = 0; i < p->fdw->fd_count; ++i)
          {
-            if (FD_ISSET(p->fdw->fd_array[i], p->outw))
+            SOCKET fd = p->fdw->fd_array[i];
+            if (FD_ISSET(fd, p->outw) || FD_ISSET(fd, oute))
                p->widx[k++] = i;
          }
       }

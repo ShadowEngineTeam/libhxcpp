@@ -244,6 +244,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 
 ### Sockets and TLS
 
+* Fixed cpp.net.Poll on Windows missing a failed nonblocking connect after the first 64 read sockets, or on a socket polled only for writing: Windows reports the failure only in the exception set, which held just the first 64 read sockets. It now holds every read and write socket, and a failure is reported for the list its socket is in, as poll's POLLERR is elsewhere (libhxcpp #304)
 * Fixed a prepared cpp.net.Poll not keeping its sockets alive: it held only their descriptors, so once nothing else referenced a registered socket, a collection finalized it and closed the connection while the poll was still watching it. The poll now keeps the sockets of its last prepare (libhxcpp #286)
 * TLS connections now require TLS 1.2 or newer - the bundled mbedtls preset still negotiated the deprecated TLS 1.0/1.1 with downgrade-capable peers
 * A UDP datagram larger than the receive buffer on Windows now returns the truncated data like posix instead of throwing a spurious "EOF" and discarding it (WSAEMSGSIZE)
