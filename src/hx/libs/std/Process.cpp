@@ -197,6 +197,10 @@ struct vprocess : public hx::Object
    HANDLE eread;
    HANDLE iwrite;
    PROCESS_INFORMATION pinf;
+   // Threads inside ReadFile or WriteFile on the pipes, and whether close has
+   // begun: see PipeCall
+   std::atomic<int> pipeCalls;
+   std::atomic<bool> closing;
    #define HANDLE_INIT 0
 #else
    int oread;
@@ -214,7 +218,10 @@ struct vprocess : public hx::Object
       oread = HANDLE_INIT;
       eread = HANDLE_INIT;
       iwrite = HANDLE_INIT;
-      #ifndef NEKO_WINDOWS
+      #ifdef NEKO_WINDOWS
+      pipeCalls = 0;
+      closing = false;
+      #else
       reaped = false;
       exitStatus = 0;
       #endif
@@ -226,6 +233,21 @@ struct vprocess : public hx::Object
       if (open)
       {
          #ifdef NEKO_WINDOWS
+            // CloseHandle on a pipe waits for a ReadFile or WriteFile in
+            // progress on it in another thread, and a descendant of the child
+            // that inherited the pipe can keep that going for as long as it
+            // lives (libhxcpp #261). New calls are refused from here, and the
+            // ones in progress are cancelled until none is left: one that had
+            // taken its handle but not yet entered ReadFile misses the first
+            // cancel, so it is retried.
+            closing = true;
+            for(int spins=0; pipeCalls>0; spins++)
+            {
+               if (oread) CancelIoEx(oread, 0);
+               if (eread) CancelIoEx(eread, 0);
+               if (iwrite) CancelIoEx(iwrite, 0);
+               Sleep(spins<10 ? 0 : 1);
+            }
             if (eread)
                CloseHandle(eread);
             if (oread)
@@ -277,6 +299,24 @@ struct vprocess : public hx::Object
 
    String toString() HXCPP_OVERRIDE { return HX_CSTRING("vprocess"); }
 };
+
+#ifdef NEKO_WINDOWS
+// Counts a ReadFile or WriteFile on one of the process's pipes for close, which
+// cancels it before closing the handles. The count goes up before closing is
+// checked, so close either sees the call and waits for it, or the call sees
+// close and is refused.
+struct PipeCall
+{
+   vprocess *process;
+   HANDLE handle;
+   PipeCall(vprocess *inProcess, HANDLE inHandle) : process(inProcess)
+   {
+      process->pipeCalls++;
+      handle = process->closing ? 0 : inHandle;
+   }
+   ~PipeCall() { process->pipeCalls--; }
+};
+#endif
 
 vprocess *getProcess(Dynamic handle)
 {
@@ -720,8 +760,11 @@ int _hx_std_process_stdout_read( Dynamic handle, Array<unsigned char> buf, int p
    hx::EnterGCFreeZone();
    #ifdef NEKO_WINDOWS
    DWORD nbytes = 0;
-   if( !ReadFile(p->oread,dest+pos,len,&nbytes,0) )
-      nbytes = 0;
+   {
+      PipeCall call(p, p->oread);
+      if( !call.handle || !ReadFile(call.handle,dest+pos,len,&nbytes,0) )
+         nbytes = 0;
+   }
    #else
    POSIX_LABEL(stdout_read_again);
    int nbytes = read(p->oread,dest + pos,len);
@@ -757,8 +800,11 @@ int _hx_std_process_stderr_read( Dynamic handle, Array<unsigned char> buf, int p
    hx::EnterGCFreeZone();
    #ifdef NEKO_WINDOWS
    DWORD nbytes = 0;
-   if( !ReadFile(p->eread,dest+pos,len,&nbytes,0) )
-      nbytes = 0;
+   {
+      PipeCall call(p, p->eread);
+      if( !call.handle || !ReadFile(call.handle,dest+pos,len,&nbytes,0) )
+         nbytes = 0;
+   }
    #else
    POSIX_LABEL(stderr_read_again);
    int nbytes = read(p->eread,dest + pos,len);
@@ -828,7 +874,12 @@ int _hx_std_process_stdin_write( Dynamic handle, Array<unsigned char> buf, int p
    hx::EnterGCFreeZone();
    #ifdef NEKO_WINDOWS
    DWORD nbytes =0;
-   if( !WriteFile(p->iwrite,src+pos,len,&nbytes,0) )
+   bool written;
+   {
+      PipeCall call(p, p->iwrite);
+      written = call.handle && WriteFile(call.handle,src+pos,len,&nbytes,0);
+   }
+   if( !written )
    {
       hx::ExitGCFreeZone();
       // Returning 0 forever makes haxe.io.Output.writeFullBytes spin -

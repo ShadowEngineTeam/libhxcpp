@@ -286,6 +286,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 
 ### Files, processes and the system
 
+* Fixed Process.close on Windows waiting while another thread read the child's output and a descendant of the child still held the pipe, as a runner that reads on a thread and closes at a timeout does: CloseHandle waited for the pending ReadFile until the descendant exited. Close now refuses new pipe reads and writes and cancels the ones in progress with CancelIoEx first (libhxcpp #261)
 * Improved Sys.time() resolution on Windows from ~15.6ms to sub-microsecond (GetSystemTimePreciseAsFileTime with a Win7 fallback)
 * Writing to a dead child process's stdin no longer kills the whole host process via SIGPIPE on Linux/macOS - it throws like other closed-stream writes (SIGPIPE is now ignored process-wide once sys.io.Process is used, and restored to its default in the children it starts)
 * Process.kill/exitCode/getPid after close() now throw instead of operating on a recycled OS handle - kill() could terminate an unrelated process and exitCode() hang forever
