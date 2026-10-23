@@ -996,7 +996,12 @@ static sljit_s32 getput_arg(struct sljit_compiler *compiler, sljit_s32 flags, sl
 				| RT(reg) | RN(TMP_REG3) | ((diff & 0x1ff) << 12));
 		if (emit_set_delta(compiler, TMP_REG3, TMP_REG3, diff) != SLJIT_ERR_UNSUPPORTED) {
 			FAIL_IF(compiler->error);
-			return push_inst(compiler, sljit_mem_imm[flags & 0x3] | (shift << 30) | RT(reg) | RN(arg));
+			/* libhxcpp: TMP_REG3 now holds the address, so it is the base, and
+			   the cache moves with it. The access used RN(arg), where arg still
+			   had SLJIT_MEM set: a wrong base register, with the extra bits in
+			   the offset field (openfl/libhxcpp#271). */
+			compiler->cache_argw = argw;
+			return push_inst(compiler, sljit_mem_imm[flags & 0x3] | (shift << 30) | RT(reg) | RN(TMP_REG3));
 		}
 	}
 
