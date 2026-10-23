@@ -1578,8 +1578,13 @@ void __hxcpp_dbg_setAddStackFrameToThreadInfoFunction(Dynamic function)
 #if defined(HXCPP_SCRIPTABLE)
 void __hxcpp_dbg_setOnScriptLoadedFunction(Dynamic function)
 {
+    static bool rooted = false;
+    if (!rooted)
+    {
+        rooted = true;
+        GCAddRoot(&(hx::g_onScriptLoadedFunction.mPtr));
+    }
     hx::g_onScriptLoadedFunction = function;
-    GCAddRoot(&(hx::g_onScriptLoadedFunction.mPtr));
 }
 #endif
 

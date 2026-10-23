@@ -244,9 +244,9 @@ void CppiaModule::registerDebugger()
    for(std::unordered_set<int>::const_iterator i = allFileIds.begin(); i!=allFileIds.end(); ++i)
       addScriptableFile(strings[*i]);
 
-   if (hx::g_onScriptLoadedFunction != null{}) {
+   // Lets a debugger set breakpoints in the files this script brought
+   if (hx::g_onScriptLoadedFunction.mPtr)
       hx::g_onScriptLoadedFunction();
-   }
 
    #endif
 }

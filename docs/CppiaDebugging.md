@@ -27,6 +27,27 @@ In the stop event, the stack frame argument is the thread's stack depth. Stack f
 
 `test/regression/CppiaBreakpoints` drives a script this way: it stops at a breakpoint, reads and changes locals, steps over, out and in, and breaks on a function by name, in both the interpreter and the JIT.
 
+## Scripts loaded after the debugger attaches
+
+A debugger front end usually attaches when the host starts, before any script is loaded, so the script's files are not in `getFiles()` yet. After each script loads and before it boots, libhxcpp calls the function set with `__hxcpp_dbg_setOnScriptLoadedFunction` (`cpp.vm.Debugger.setOnScriptLoadedFunction` in Haxe 5's std). A debugger can read `getFiles()` again there and set the breakpoints that were waiting for those files:
+
+```haxe
+var onLoaded:Dynamic = () -> setWaitingBreakpoints(cpp.vm.Debugger.getFiles());
+untyped __global__.__hxcpp_dbg_setOnScriptLoadedFunction(onLoaded);
+```
+
+It exists at every API level. Code that also builds against hxcpp versions without it can test for it in C++ with `HXCPP_DBG_ON_SCRIPT_LOADED`.
+
+A script names its files as Haxe was given them, often relative to where it was compiled, such as `Script.hx` or `src/Script.hx`, while an editor asks for a breakpoint by full path. Match the end of the editor's path against the script's file name.
+
+`test/regression/CppiaScriptLoaded` checks that the callback runs once, with the script's files known, before the script boots.
+
+## Debugging from VS Code
+
+The Haxe hxcpp debugger extension (vshaxe.hxcpp-debugger) debugs a host built with `-debug`, `-D scriptable` and `-lib hxcpp-debug-server`. Its launch configuration starts the host with no arguments, in the host's directory, so the host has to find its script itself. Compile the script with `-debug` too.
+
+hxcpp-debug-server 1.2.4 builds its list of files once, as it attaches, and does not use the script-loaded callback, so a breakpoint in a script never stops. With a server that does, breakpoints, stepping and locals work in scripts in the interpreter and with the JIT.
+
 ## Limitations
 
 - Profiler and telemetry builds keep released modules, as described in [CppiaModuleRelease.md](CppiaModuleRelease.md).

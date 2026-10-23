@@ -1,0 +1,3 @@
+loaded: the callback ran 1 time, Script.hx known true
+script booted
+script ran

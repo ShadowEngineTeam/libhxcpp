@@ -403,6 +403,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed the cppia jit storing a Bool set on a dynamic field, such as an optional field of an anonymous structure or a field of a Dynamic, as the Int 1 or 0, so it read back as a number and compared unequal to true (libhxcpp #259)
 * The debugger's script-loaded callback, which Haxe 5's cpp.vm.Debugger sets through __hxcpp_dbg_setOnScriptLoadedFunction, is there at every hxcpp API level, not only 500
 * Fixed breakpoints and stepping never stopping in jitted cppia code: the jit kept each line number for stack traces but never called the debugger's line hook, so a script could only be debugged with the jit off (HaxeFoundation/hxcpp#498, libhxcpp #267). A breakpoint on a script function by name stops now too: script functions had no first line for it to match. docs/CppiaDebugging.md describes what debugging a script needs
+* A debugger that attaches before a cppia script loads, as the VS Code one does, can set breakpoints in the script from the script-loaded callback, which runs after each script loads and before it boots. HXCPP_DBG_ON_SCRIPT_LOADED tells C++ that may build against other hxcpp versions that the callback is there, and setting it again no longer adds the same root twice (libhxcpp #283)
 
 ### CFFI, ndlls, the debugger and telemetry
 

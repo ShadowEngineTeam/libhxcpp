@@ -372,5 +372,11 @@ inline void __hxcpp_dbg_threadCreatedOrTerminated(int, bool) { }
 
 #endif // HXCPP_DEBUGGER
 
+#if defined(HXCPP_SCRIPTABLE)
+// Lets a debugger that also builds against other hxcpp versions tell that
+// __hxcpp_dbg_setOnScriptLoadedFunction exists below API level 500
+#define HXCPP_DBG_ON_SCRIPT_LOADED 1
+#endif
+
 
 #endif // HX_DEBUG_H
