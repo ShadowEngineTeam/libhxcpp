@@ -1,0 +1,4 @@
+strong-root control retains native socket: true
+strong-root control keeps connection open: true
+poll registration retains native socket: true
+poll registration keeps connection open: true

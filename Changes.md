@@ -244,6 +244,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 
 ### Sockets and TLS
 
+* Fixed a prepared cpp.net.Poll not keeping its sockets alive: it held only their descriptors, so once nothing else referenced a registered socket, a collection finalized it and closed the connection while the poll was still watching it. The poll now keeps the sockets of its last prepare (libhxcpp #286)
 * TLS connections now require TLS 1.2 or newer - the bundled mbedtls preset still negotiated the deprecated TLS 1.0/1.1 with downgrade-capable peers
 * A UDP datagram larger than the receive buffer on Windows now returns the truncated data like posix instead of throwing a spurious "EOF" and discarding it (WSAEMSGSIZE)
 * Added the missing EINTR retry to socket send and accept - any signal (profilers, child-process reaping) made them throw a bogus "EOF" and the connection got closed; an interrupted blocking connect now reports "Blocking" (the connect continues asynchronously per posix) instead of "EOF"

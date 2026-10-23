@@ -1322,6 +1322,11 @@ struct polldata : public hx::Object
    #endif
    Array<int> ridx;
    Array<int> widx;
+   // The sockets registered by the last prepare: the poll holds their
+   //  descriptors, so it must keep them, or a collection could finalize one
+   //  and close the connection while it is still being polled
+   Array<Dynamic> rsockets;
+   Array<Dynamic> wsockets;
 
    void create(int nsocks)
    {
@@ -1371,9 +1376,21 @@ struct polldata : public hx::Object
       }
    }
 
-   void __Mark(hx::MarkContext *__inCtx) HXCPP_OVERRIDE { HX_MARK_MEMBER(ridx); HX_MARK_MEMBER(widx); }
+   void __Mark(hx::MarkContext *__inCtx) HXCPP_OVERRIDE
+   {
+      HX_MARK_MEMBER(ridx);
+      HX_MARK_MEMBER(widx);
+      HX_MARK_MEMBER(rsockets);
+      HX_MARK_MEMBER(wsockets);
+   }
    #ifdef HXCPP_VISIT_ALLOCS
-   void __Visit(hx::VisitContext *__inCtx) HXCPP_OVERRIDE { HX_VISIT_MEMBER(ridx); HX_VISIT_MEMBER(widx); }
+   void __Visit(hx::VisitContext *__inCtx) HXCPP_OVERRIDE
+   {
+      HX_VISIT_MEMBER(ridx);
+      HX_VISIT_MEMBER(widx);
+      HX_VISIT_MEMBER(rsockets);
+      HX_VISIT_MEMBER(wsockets);
+   }
    #endif
 
    int __GetType() const HXCPP_OVERRIDE { return pollType; }
@@ -1425,6 +1442,13 @@ Array<Dynamic> _hx_std_socket_poll_prepare( Dynamic pdata, Array<Dynamic> rsocks
    int wlen = wsocks.mPtr ? wsocks->length : 0;
    if( len + wlen > p->max )
       hx::Throw(HX_CSTRING("Too many sockets in poll"));
+
+   // Copies, so that a caller changing its arrays afterwards cannot drop a
+   //  socket the poll still has the descriptor of
+   p->rsockets = len ? rsocks->copy() : null();
+   HX_OBJ_WB_GET(p, p->rsockets.mPtr);
+   p->wsockets = wlen ? wsocks->copy() : null();
+   HX_OBJ_WB_GET(p, p->wsockets.mPtr);
 
    #ifdef NEKO_WINDOWS
    for(int i=0;i<len;i++)
