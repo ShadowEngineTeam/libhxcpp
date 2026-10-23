@@ -76,7 +76,7 @@ jobs:
         id: native
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         working-directory: test/native
-        run: haxe compile.hxml -D $HXCPP_ARCH_FLAG
+        run: haxe compile.hxml -D $HXCPP_ARCH_FLAG ${{ inputs.haxe == '5.0.0-preview.1' && '-D haxe_5_preview_1' || '' }}
       - name: native run
         if: ${{ !cancelled() && steps.native.outcome == 'success' }}
         working-directory: test/native
@@ -85,7 +85,7 @@ jobs:
         id: native_narrow
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         working-directory: test/native
-        run: haxe compile.hxml -D disable_unicode_strings -D $HXCPP_ARCH_FLAG
+        run: haxe compile.hxml -D disable_unicode_strings -D $HXCPP_ARCH_FLAG ${{ inputs.haxe == '5.0.0-preview.1' && '-D haxe_5_preview_1' || '' }}
       - name: native run (no smart strings)
         if: ${{ !cancelled() && steps.native_narrow.outcome == 'success' }}
         working-directory: test/native
@@ -205,6 +205,10 @@ jobs:
       - name: regression
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         working-directory: test/regression
+        env:
+          # Haxe 5 has no sys.db in its std, and the preview.1 compiler itself
+          # stops on CppiaArrayAccess
+          REGRESSION_SKIP: ${{ inputs.haxe == '5.0.0-preview.1' && 'Issue971,SqliteOptions,CppiaArrayAccess' || '' }}
         run: haxe --run Run -D $HXCPP_ARCH_FLAG
       # Last: it moves the system clock, which the Windows runners don't allow
       - name: clock change build

@@ -14,7 +14,12 @@ runs:
     - name: install haxe libraries
       shell: pwsh
       run: |
-        haxelib git utest https://github.com/haxe-utest/utest
+        # git utest's macros do not build with Haxe 5.0.0-preview.1; its haxelib release does
+        if ("${{ inputs.haxe }}".StartsWith("5.0.0-preview")) {
+          haxelib install utest --always
+        } else {
+          haxelib git utest https://github.com/haxe-utest/utest
+        }
         haxelib git hx4compat https://github.com/HaxeFoundation/hx4compat
         haxelib dev libhxcpp ${{ github.workspace }}
         haxelib run libhxcpp setup

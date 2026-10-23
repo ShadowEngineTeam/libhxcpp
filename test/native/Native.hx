@@ -1,6 +1,8 @@
 package;
 
-#if (haxe_ver>=5)
+// The scratch, marshalling and encoding APIs came into Haxe 5's std after
+// 5.0.0-preview.1, so CI leaves their tests out of its runs with that release
+#if (haxe_ver>=5 && !haxe_5_preview_1)
 @:buildXml("<include name='${this_dir}/../tests/marshalling/Build.xml'/>")
 #end
 class Native
@@ -17,7 +19,7 @@ class Native
 			new tests.TestPtr(),
 			new tests.TestNativeEnum(),
 
-			#if (haxe_ver>=5)
+			#if (haxe_ver>=5 && !haxe_5_preview_1)
             new tests.TestScratch(),
 
             new tests.marshalling.classes.TestLocalValueType(),
