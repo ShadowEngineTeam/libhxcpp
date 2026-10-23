@@ -37,6 +37,9 @@ struct result : public hx::Object
 
    sqlite3 *db;
    sqlite3_stmt *r;
+   // The connection: while a result is reachable, its connection must not be
+   //  finalized, which would close the database under the live statement
+   hx::Object *connection;
    int ncols;
    int count;
    // The column names, collected with the result and the rows that use them
@@ -48,10 +51,12 @@ struct result : public hx::Object
    int done;
    int first;
 
-   void create(sqlite3 *inDb, sqlite3_stmt *inR, String sql)
+   void create(hx::Object *inConnection, sqlite3 *inDb, sqlite3_stmt *inR, String sql)
    {
       _hx_set_finalizer(this, finalize);
 
+      connection = inConnection;
+      HX_OBJ_WB_GET(this, connection);
       db = inDb;
       r = inR;
 
@@ -80,11 +85,13 @@ struct result : public hx::Object
    void __Mark(hx::MarkContext *__inCtx) HXCPP_OVERRIDE
    {
       HX_MARK_MEMBER(names);
+      HX_MARK_OBJECT(connection);
    }
    #ifdef HXCPP_VISIT_ALLOCS
    void __Visit(hx::VisitContext *__inCtx) HXCPP_OVERRIDE
    {
       HX_VISIT_MEMBER(names);
+      HX_VISIT_OBJECT(connection);
    }
    #endif
 
@@ -318,7 +325,7 @@ Dynamic _hx_sqlite_request(Dynamic handle,String sql)
    int i,j;
 
    result *r = new result();
-   r->create(db->db, statement,sql);
+   r->create(db, db->db, statement,sql);
 
    db->setResult(r);
 

@@ -1,0 +1,2 @@
+held connection preserves rows: true
+result alone preserves rows: true
