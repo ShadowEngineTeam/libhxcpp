@@ -1,0 +1,32 @@
+name: haxe releases
+# Once a day: fails when Haxe has published a release at 5.0 or above that the
+# build tool's table of Haxe builds (BuildTool.haxeRuntimeLevels) does not list,
+# so a new release is tested and added before users build with it.
+on:
+  schedule:
+    - cron: '30 5 * * *'
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: Haxe releases the build tool knows
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@v7
+      with:
+        sparse-checkout: tools/hxcpp
+
+    - name: compare
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        missing=""
+        for tag in $(gh api repos/HaxeFoundation/haxe/releases --paginate --jq '.[].tag_name' | grep -E '^([5-9]|[1-9][0-9])\.'); do
+          grep -qF "\"$tag\" =>" tools/hxcpp/BuildTool.hx || missing="$missing $tag"
+        done
+        if [ -n "$missing" ]; then
+          echo "::error::Haxe releases missing from BuildTool.haxeRuntimeLevels:$missing. Test each with libhxcpp and add it with the API level its code needs"
+          exit 1
+        fi
+        echo "Every Haxe release from 5.0 on is in the table"
