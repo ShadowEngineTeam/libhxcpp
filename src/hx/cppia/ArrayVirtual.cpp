@@ -74,7 +74,7 @@ static hx::Object * SLJIT_CALL runCopy( ArrayAnyImpl *inArray)
 static void SLJIT_CALL runJoin( ArrayAnyImpl *inArray, String *ioValue)
 {
    TRY_NATIVE
-   *ioValue = inArray->join( *ioValue );
+   JitStore(ioValue, inArray->join( JitLoad(ioValue) ));
    CATCH_NATIVE
 }
 
@@ -90,11 +90,11 @@ static int SLJIT_CALL arrayPushObject( ArrayAnyImpl *inArray, hx::Object *inVal)
 }
 static int SLJIT_CALL arrayPushFloat( ArrayAnyImpl *inArray, double *inVal)
 {
-   return inArray->push(*inVal);
+   return inArray->push(JitLoad(inVal));
 }
 static int SLJIT_CALL arrayPushString( ArrayAnyImpl *inArray, String *inVal)
 {
-   return inArray->push(*inVal);
+   return inArray->push(JitLoad(inVal));
 }
 
 
@@ -111,11 +111,11 @@ static hx::Object * SLJIT_CALL arraySetObject( ArrayAnyImpl *inArray, int inInde
 }
 static void SLJIT_CALL arraySetFloat( ArrayAnyImpl *inArray, int inIndex, double *inVal)
 {
-   inArray->set(inIndex,*inVal);
+   inArray->set(inIndex,JitLoad(inVal));
 }
 static void SLJIT_CALL arraySetString( ArrayAnyImpl *inArray, int inIndex, String *inVal)
 {
-   inArray->set(inIndex,*inVal);
+   inArray->set(inIndex,JitLoad(inVal));
 }
 
 
@@ -130,12 +130,12 @@ static void SLJIT_CALL arrayUnshiftObject( ArrayAnyImpl *inArray, hx::Object *in
 }
 static void SLJIT_CALL arrayUnshiftFloat( ArrayAnyImpl *inArray, double *inVal)
 {
-   inArray->unshift(*inVal);
+   inArray->unshift(JitLoad(inVal));
 }
 
 static void SLJIT_CALL arrayUnshiftString( ArrayAnyImpl *inArray, String *inVal)
 {
-   inArray->unshift(*inVal);
+   inArray->unshift(JitLoad(inVal));
 }
 
 

@@ -58,11 +58,11 @@ struct SubStrExpr : public StringExpr
    #ifdef CPPIA_JIT
    static void SLJIT_CALL runSubstr(String *ioValue, int start, hx::Object *end)
    {
-      *ioValue = ioValue->substr(start, Dynamic(end));
+      JitStore(ioValue, JitLoad(ioValue).substr(start, Dynamic(end)));
    }
    static void SLJIT_CALL runSubstring(String *ioValue, int start, hx::Object *end)
    {
-      *ioValue = ioValue->substring(start, Dynamic(end));
+      JitStore(ioValue, JitLoad(ioValue).substring(start, Dynamic(end)));
    }
    void genCode(CppiaCompiler *compiler, const JitVal &inDest,ExprType destType) HXCPP_OVERRIDE
    {
@@ -102,7 +102,8 @@ struct StringIteratorExpr : public StringExpr
    #ifdef CPPIA_JIT
    static hx::Object *SLJIT_CALL run(String *inValue)
    {
-      return ( KEYS ? inValue->keyValueIterator() : inValue->iterator() ).mPtr;
+      String value = JitLoad(inValue);
+      return ( KEYS ? value.keyValueIterator() : value.iterator() ).mPtr;
    }
 
    void genCode(CppiaCompiler *compiler, const JitVal &inDest,ExprType destType) HXCPP_OVERRIDE
@@ -135,10 +136,8 @@ struct ToCaseExpr : public StringExpr
    #ifdef CPPIA_JIT
    static void SLJIT_CALL strToCase(String *ioVal)
    {
-      if (UPPER)
-         *ioVal = ioVal->toUpperCase();
-      else
-         *ioVal = ioVal->toLowerCase();
+      String value = JitLoad(ioVal);
+      JitStore(ioVal, UPPER ? value.toUpperCase() : value.toLowerCase());
    }
 
    void genCode(CppiaCompiler *compiler, const JitVal &inDest,ExprType destType) HXCPP_OVERRIDE
@@ -228,15 +227,15 @@ struct CharAtExpr : public StringExpr
    #ifdef CPPIA_JIT
    static hx::Object *SLJIT_CALL runCharCodeAt(String *inValue, int inIndex)
    {
-      return (inValue->charCodeAt(inIndex)).mPtr;
+      return (JitLoad(inValue).charCodeAt(inIndex)).mPtr;
    }
    static int SLJIT_CALL runCca(String *inValue, int inIndex)
    {
-      return (inValue->cca(inIndex));
+      return (JitLoad(inValue).cca(inIndex));
    }
    static void SLJIT_CALL runCharAt(String *ioValue, int inIndex)
    {
-      *ioValue = ioValue->charAt(inIndex);
+      JitStore(ioValue, JitLoad(ioValue).charAt(inIndex));
    }
 
    void genCode(CppiaCompiler *compiler, const JitVal &inDest,ExprType destType) HXCPP_OVERRIDE
@@ -316,7 +315,7 @@ struct SplitExpr : public CppiaExpr
    #ifdef CPPIA_JIT
    static hx::Object *SLJIT_CALL runSplit(String *inValue, String *sep)
    {
-      return (inValue->split(*sep)).mPtr;
+      return (JitLoad(inValue).split(JitLoad(sep))).mPtr;
    }
    void genCode(CppiaCompiler *compiler, const JitVal &inDest,ExprType destType) HXCPP_OVERRIDE
    {
@@ -380,11 +379,11 @@ struct IndexOfExpr : public CppiaExpr
    #ifdef CPPIA_JIT
    static int SLJIT_CALL runIndexOf(String *ioValue, String *sought, hx::Object *first)
    {
-      return ioValue->indexOf(*sought, Dynamic(first));
+      return JitLoad(ioValue).indexOf(JitLoad(sought), Dynamic(first));
    }
    static int SLJIT_CALL runLastIndexOf(String *ioValue, String *sought, hx::Object *first)
    {
-      return ioValue->lastIndexOf(*sought, Dynamic(first));
+      return JitLoad(ioValue).lastIndexOf(JitLoad(sought), Dynamic(first));
    }
    void genCode(CppiaCompiler *compiler, const JitVal &inDest,ExprType destType) HXCPP_OVERRIDE
    {

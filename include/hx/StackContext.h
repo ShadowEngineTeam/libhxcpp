@@ -4,6 +4,7 @@
 #include "QuickVec.h"
 #include <exception>
 #include <atomic>
+#include <string.h>
 
 #ifdef HXCPP_SINGLE_THREADED_APP
   #define HX_CTX_GET ::hx::gMainThreadContext
@@ -591,10 +592,27 @@ struct StackContext : public hx::ImmixAllocator
    unsigned int breakContReturn;
    int  byteMarkId;
 
+   // Script frame slots are packed at 4-byte offsets, which code that Haxe
+   //  generates for scriptable host classes relies on, so an 8-byte value
+   //  can sit unaligned. Slots are copied in and out with memcpy, which is a
+   //  single load or store wherever the target allows unaligned access
+   template<typename T>
+   static T getSlot(const void *inSlot)
+   {
+      T result;
+      memcpy((void *)&result, inSlot, sizeof(T));
+      return result;
+   }
+   template<typename T>
+   static void setSlot(void *inSlot, const T &inValue)
+   {
+      memcpy(inSlot, (const void *)&inValue, sizeof(T));
+   }
+
    template<typename T>
    void push(T inValue)
    {
-      *(T *)pointer = inValue;
+      setSlot(pointer, inValue);
       pointer += sizeof(T);
    }
    unsigned char *stackAlloc(int inSize)
@@ -637,7 +655,7 @@ struct StackContext : public hx::ImmixAllocator
    inline Float getFloat(int inPos=0);
    inline String getString(int inPos=0);
    inline Dynamic getObject(int inPos=0);
-   inline hx::Object *getObjectPtr(int inPos=0) { return *(hx::Object **)(frame+inPos); }
+   inline hx::Object *getObjectPtr(int inPos=0) { return getSlot<hx::Object *>(frame+inPos); }
 
 
    void breakFlag() { breakContReturn |= bcrBreak; }

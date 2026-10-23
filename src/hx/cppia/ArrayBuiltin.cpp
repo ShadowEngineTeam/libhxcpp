@@ -182,9 +182,10 @@ struct ArraySetter : public ArrayBuiltinBase
 
    static void * SLJIT_CALL nativeRunInt(JitMultiArg *args)
    {
-      Array_obj<ELEM> *thisVal = reinterpret_cast<Array_obj<ELEM> *>(args[0].obj);
-      ELEM &elem = thisVal->Item( args[1].ival );
-      FUNC::apply(elem, args[2].ival);
+      Array_obj<ELEM> *thisVal = reinterpret_cast<Array_obj<ELEM> *>(JitArg(args,0).obj);
+      ELEM &elem = thisVal->Item( JitArg(args,1).ival );
+      JitMultiArg arg2 = JitArg(args,2);
+      FUNC::apply(elem, arg2.ival);
       #ifdef HXCPP_GC_GENERATIONAL
       if (hx::ContainsPointers<ELEM>())
          HX_OBJ_WB_GET(thisVal,hx::PointerOf(elem));
@@ -194,9 +195,10 @@ struct ArraySetter : public ArrayBuiltinBase
 
    static void * SLJIT_CALL nativeRunFloat(JitMultiArg *args)
    {
-      Array_obj<ELEM> *thisVal = reinterpret_cast<Array_obj<ELEM> *>(args[0].obj);
-      ELEM &elem = thisVal->Item( args[1].ival );
-      FUNC::apply(elem, args[2].dval);
+      Array_obj<ELEM> *thisVal = reinterpret_cast<Array_obj<ELEM> *>(JitArg(args,0).obj);
+      ELEM &elem = thisVal->Item( JitArg(args,1).ival );
+      JitMultiArg arg2 = JitArg(args,2);
+      FUNC::apply(elem, arg2.dval);
       #ifdef HXCPP_GC_GENERATIONAL
       if (hx::ContainsPointers<ELEM>())
          HX_OBJ_WB_GET(thisVal,hx::PointerOf(elem));
@@ -206,9 +208,9 @@ struct ArraySetter : public ArrayBuiltinBase
 
    static void * SLJIT_CALL nativeRunObject(JitMultiArg *args)
    {
-      Array_obj<ELEM> *thisVal = reinterpret_cast<Array_obj<ELEM> *>(args[0].obj);
-      ELEM &elem = thisVal->Item( args[1].ival );
-      Dynamic obj(args[2].obj);
+      Array_obj<ELEM> *thisVal = reinterpret_cast<Array_obj<ELEM> *>(JitArg(args,0).obj);
+      ELEM &elem = thisVal->Item( JitArg(args,1).ival );
+      Dynamic obj(JitArg(args,2).obj);
       FUNC::apply(elem, obj);
       #ifdef HXCPP_GC_GENERATIONAL
       if (hx::ContainsPointers<ELEM>())
@@ -219,9 +221,10 @@ struct ArraySetter : public ArrayBuiltinBase
 
    static void * SLJIT_CALL nativeRunString(JitMultiArg *args)
    {
-      Array_obj<ELEM> *thisVal = reinterpret_cast<Array_obj<ELEM> *>(args[0].obj);
-      ELEM &elem = thisVal->Item( args[1].ival );
-      FUNC::apply(elem, (* ((String *)(&args[2].sval) )) );
+      Array_obj<ELEM> *thisVal = reinterpret_cast<Array_obj<ELEM> *>(JitArg(args,0).obj);
+      ELEM &elem = thisVal->Item( JitArg(args,1).ival );
+      JitMultiArg arg2 = JitArg(args,2);
+      FUNC::apply(elem, (* ((String *)(&arg2.sval) )) );
       #ifdef HXCPP_GC_GENERATIONAL
       if (hx::ContainsPointers<ELEM>())
          HX_OBJ_WB_GET(thisVal,hx::PointerOf(elem));
@@ -1123,7 +1126,7 @@ struct ArrayBuiltin : public ArrayBuiltinBase
    static void SLJIT_CALL runJoin( Array_obj<ELEM> *inArray, String *ioValue)
    {
       TRY_NATIVE
-      *ioValue = inArray->join( *ioValue );
+      JitStore(ioValue, inArray->join( JitLoad(ioValue) ));
       CATCH_NATIVE
    }
 
@@ -1151,7 +1154,7 @@ struct ArrayBuiltin : public ArrayBuiltinBase
    static void SLJIT_CALL runFloatCrement( Array_obj<ELEM> *inArray, int inIndex, double *d)
    {
       ELEM &t = Array<ELEM>(inArray)[inIndex];
-      *d = ValToFloat( CREMENT::run(t) );
+      JitStore(d, ValToFloat( CREMENT::run(t) ));
       #ifdef HXCPP_GC_GENERATIONAL
       if (hx::ContainsPointers<ELEM>())
          HX_OBJ_WB_GET(inArray,hx::PointerOf(t));
@@ -1256,7 +1259,7 @@ struct ArrayBuiltin : public ArrayBuiltinBase
    static void SLJIT_CALL runToString( Array_obj<ELEM> *inArray, String *outString )
    {
       TRY_NATIVE
-      *outString = inArray->toString();
+      JitStore(outString, inArray->toString());
       CATCH_NATIVE
    }
 

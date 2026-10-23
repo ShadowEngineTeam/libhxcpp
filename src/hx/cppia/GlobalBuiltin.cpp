@@ -158,9 +158,9 @@ public:
    static void SLJIT_CALL setFloat(Array_obj<unsigned char> *inBuffer, int inAddr, double *inValue)
    {
       if (sizeof(ARG2)==sizeof(float))
-         __hxcpp_memory_set_float(inBuffer,inAddr,*inValue);
+         __hxcpp_memory_set_float(inBuffer,inAddr,JitLoad(inValue));
       else
-         __hxcpp_memory_set_double(inBuffer,inAddr,*inValue);
+         __hxcpp_memory_set_double(inBuffer,inAddr,JitLoad(inValue));
    }
 
    void genCode(CppiaCompiler *compiler, const JitVal &inDest,ExprType destType) HXCPP_OVERRIDE
@@ -203,7 +203,7 @@ public:
    #ifdef CPPIA_JIT
    static void SLJIT_CALL run(double *outResult)
    {
-      *outResult = FUNC();
+      JitStore(outResult, FUNC());
    }
 
    void genCode(CppiaCompiler *compiler, const JitVal &inDest,ExprType destType) HXCPP_OVERRIDE

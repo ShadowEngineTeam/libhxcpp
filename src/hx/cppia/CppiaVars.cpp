@@ -413,10 +413,10 @@ void CppiaStackVar::setInFrame(unsigned char *inFrame,Dynamic inValue)
          SetFloatAligned(ptr,inValue);
          break;
       case fsString:
-         *(String *)(ptr) = inValue;
+         CppiaCtx::setSlot(ptr, String(inValue));
          break;
       case fsObject:
-         *(hx::Object **)(ptr) = inValue.mPtr;
+         CppiaCtx::setSlot(ptr, inValue.mPtr);
          break;
       case fsUnknown:
          break;
@@ -437,9 +437,9 @@ Dynamic CppiaStackVar::getInFrame(const unsigned char *inFrame)
       case fsByte: return (unsigned char) *(int *)ptr;
       case fsBool: return (bool) *(int *)ptr;
       case fsInt: return *(int *)ptr;
-      case fsFloat: return *(Float *)ptr;
-      case fsString: return *(String *)ptr;
-      case fsObject: return  *(hx::Object **)ptr;
+      case fsFloat: return GetFloatAligned(ptr);
+      case fsString: return CppiaCtx::getSlot<String>(ptr);
+      case fsObject: return CppiaCtx::getSlot<hx::Object *>(ptr);
       case fsUnknown:
          break;
    }
@@ -569,7 +569,7 @@ static int SLJIT_CALL objToInt(hx::Object *inVal)
 }
 static void SLJIT_CALL objToFloat(hx::Object *inVal,double *outFloat)
 {
-   *outFloat =  inVal->__ToDouble();
+   JitStore(outFloat, inVal->__ToDouble());
 }
 static hx::Object *SLJIT_CALL intToObject(int inVal)
 {
@@ -577,11 +577,11 @@ static hx::Object *SLJIT_CALL intToObject(int inVal)
 }
 static hx::Object *SLJIT_CALL floatToObject(double * inVal)
 {
-   return Dynamic(*inVal).mPtr;
+   return Dynamic(JitLoad(inVal)).mPtr;
 }
 static hx::Object *SLJIT_CALL stringToObject(String * inVal)
 {
-   return Dynamic(*inVal).mPtr;
+   return Dynamic(JitLoad(inVal)).mPtr;
 }
 
 

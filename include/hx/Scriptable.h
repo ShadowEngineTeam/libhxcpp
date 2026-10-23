@@ -63,13 +63,13 @@ inline void StackContext::pushFloat(Float f)
 }
 inline void StackContext::pushString(const String &s)
 {
-   *(String *)pointer = s;
+   setSlot(pointer, s);
    pointer += sizeof(String);
 }
 
 inline void StackContext::pushObject(Dynamic d)
 {
-   *(hx::Object **)pointer = d.mPtr;
+   setSlot(pointer, d.mPtr);
    pointer += sizeof(hx::Object *);
 }
 
@@ -79,25 +79,26 @@ inline void StackContext::returnFloat(Float f)
 }
 inline void StackContext::returnString(const String &s)
 {
-   *(String *)frame = s;
+   setSlot(frame, s);
 }
 inline void StackContext::returnObject(Dynamic d)
 {
-   *(hx::Object **)frame = d.mPtr;
+   setSlot(frame, d.mPtr);
 }
 
 inline hx::Object *StackContext::getThis(bool inCheckPtr)
 {
+   hx::Object *thiz = getSlot<hx::Object *>(frame);
    #ifdef HXCPP_CHECK_POINTER
       if (inCheckPtr)
       {
-         if (!*(hx::Object **)frame) NullReference("This", false);
+         if (!thiz) NullReference("This", false);
          #ifdef HXCPP_GC_CHECK_POINTER
-         GCCheckPointer(*(hx::Object **)frame);
+         GCCheckPointer(thiz);
          #endif
       }
    #endif
-   return *(hx::Object **)frame;
+   return thiz;
 }
 
 
@@ -107,11 +108,11 @@ inline Float StackContext::getFloat(int inPos)
 }
 inline String StackContext::getString(int inPos)
 {
-   return *(String *)(frame+inPos);
+   return getSlot<String>(frame+inPos);
 }
 inline Dynamic StackContext::getObject(int inPos)
 {
-   return *(hx::Object **)(frame+inPos);
+   return getSlot<hx::Object *>(frame+inPos);
 }
 
 

@@ -908,51 +908,54 @@ void SLJIT_CALL callDynamic(CppiaCtx *ctx, hx::Object *inFunction, int inArgs)
       __hx_stack_set_last_exception();
       return;
    }
-   // ctx.frame points to 0th arg
-   hx::Object **base = ((hx::Object **)(ctx->frame) );
+   // ctx.frame points to 0th arg. The arguments are frame slots, which can
+   //  be unaligned, so they are copied out and the result copied back
+   unsigned char *base = ctx->frame;
    unsigned char *oldPointer = ctx->pointer;
    ctx->pointer = ctx->frame;
 
-   //hx::Object **base = ((hx::Object **)(ctx->pointer) ) - inArgs;
-   //ctx->pointer = (unsigned char *)base;
+   #define CALL_DYNAMIC_ARG(n) CppiaCtx::getSlot<hx::Object *>(base + (n)*sizeof(hx::Object *))
 
    TRY_NATIVE
+      hx::Object *result = 0;
 #if (HXCPP_API_LEVEL>=500)
        Array<Dynamic> argArray = Array_obj<Dynamic>::__new(inArgs, inArgs);
        for (int s = 0; s < inArgs; s++)
-           argArray[s] = base[s];
-       base[0] = inFunction->__Run(argArray).mPtr;
+           argArray[s] = CALL_DYNAMIC_ARG(s);
+       result = inFunction->__Run(argArray).mPtr;
 #else
       switch(inArgs)
       {
          case 0:
-            base[0] = inFunction->__run().mPtr;
+            result = inFunction->__run().mPtr;
             break;
          case 1:
-            base[0] = inFunction->__run(base[0]).mPtr;
+            result = inFunction->__run(CALL_DYNAMIC_ARG(0)).mPtr;
             break;
          case 2:
-            base[0] = inFunction->__run(base[0],base[1]).mPtr;
+            result = inFunction->__run(CALL_DYNAMIC_ARG(0),CALL_DYNAMIC_ARG(1)).mPtr;
             break;
          case 3:
-            base[0] = inFunction->__run(base[0],base[1],base[2]).mPtr;
+            result = inFunction->__run(CALL_DYNAMIC_ARG(0),CALL_DYNAMIC_ARG(1),CALL_DYNAMIC_ARG(2)).mPtr;
             break;
          case 4:
-            base[0] = inFunction->__run(base[0],base[1],base[2],base[3]).mPtr;
+            result = inFunction->__run(CALL_DYNAMIC_ARG(0),CALL_DYNAMIC_ARG(1),CALL_DYNAMIC_ARG(2),CALL_DYNAMIC_ARG(3)).mPtr;
             break;
          case 5:
-            base[0] = inFunction->__run(base[0],base[1],base[2],base[3],base[4]).mPtr;
+            result = inFunction->__run(CALL_DYNAMIC_ARG(0),CALL_DYNAMIC_ARG(1),CALL_DYNAMIC_ARG(2),CALL_DYNAMIC_ARG(3),CALL_DYNAMIC_ARG(4)).mPtr;
             break;
          default:
             {
             Array<Dynamic> argArray = Array_obj<Dynamic>::__new(inArgs,inArgs);
             for(int s=0;s<inArgs;s++)
-               argArray[s] = base[s];
-            base[0] = inFunction->__Run(argArray).mPtr;
+               argArray[s] = CALL_DYNAMIC_ARG(s);
+            result = inFunction->__Run(argArray).mPtr;
             }
       }
 #endif
+      CppiaCtx::setSlot(base, result);
    CATCH_NATIVE
+   #undef CALL_DYNAMIC_ARG
    ctx->pointer = oldPointer;
 }
 #endif
@@ -1562,8 +1565,8 @@ static void *SLJIT_CALL createArrayAny(int n) {
 static void SLJIT_CALL varraySetInt(cpp::VirtualArray_obj *varray, int i, int value) { varray->init(i,value); }
 static void SLJIT_CALL varraySetBool(cpp::VirtualArray_obj *varray, int i, int value) { varray->init(i,(bool)value); }
 static void SLJIT_CALL varraySetObject(cpp::VirtualArray_obj *varray, int i, hx::Object *value) { varray->init(i,Dynamic(value)); }
-static void SLJIT_CALL varraySetString(cpp::VirtualArray_obj *varray, int i, String *value) { varray->init(i,*value); }
-static void SLJIT_CALL varraySetFloat(cpp::VirtualArray_obj *varray, int i, double *value) { varray->init(i,*value); }
+static void SLJIT_CALL varraySetString(cpp::VirtualArray_obj *varray, int i, String *value) { varray->init(i,JitLoad(value)); }
+static void SLJIT_CALL varraySetFloat(cpp::VirtualArray_obj *varray, int i, double *value) { varray->init(i,JitLoad(value)); }
 
 static void *SLJIT_CALL runConstructor(void *inConstructor,  Array_obj<Dynamic> *inArgs)
 {
@@ -2552,14 +2555,14 @@ static hx::Object * SLJIT_CALL getFieldObject( hx::Object *instance, String *nam
 static void SLJIT_CALL getFieldFloat( hx::Object *instance, String *name, double *outValue )
 {
    TRY_NATIVE
-   *outValue = instance->__Field(*name, HX_PROP_DYNAMIC);
+   JitStore(outValue, instance->__Field(*name, HX_PROP_DYNAMIC));
    CATCH_NATIVE
 }
 
 static void SLJIT_CALL getFieldString( hx::Object *instance, String *name, String *outValue )
 {
    TRY_NATIVE
-   *outValue = instance->__Field(*name, HX_PROP_DYNAMIC);
+   JitStore(outValue, instance->__Field(*name, HX_PROP_DYNAMIC));
    CATCH_NATIVE
 }
 
@@ -2613,28 +2616,28 @@ static void SLJIT_CALL setFieldObjectV( hx::Object *instance, String *name, hx::
 static void SLJIT_CALL setFieldFloat( hx::Object *instance, String *name, const double *inValue )
 {
    TRY_NATIVE
-   instance->__SetField(*name, *inValue, HX_PROP_DYNAMIC);
+   instance->__SetField(*name, JitLoad(inValue), HX_PROP_DYNAMIC);
    CATCH_NATIVE
 }
 
 static void SLJIT_CALL setFieldString( hx::Object *instance, String *name, const String *inValue )
 {
    TRY_NATIVE
-   instance->__SetField(*name, *inValue, HX_PROP_DYNAMIC);
+   instance->__SetField(*name, JitLoad(inValue), HX_PROP_DYNAMIC);
    CATCH_NATIVE
 
 }
 static void SLJIT_CALL setFieldVariantV( hx::Object *instance, String *name, cpp::Variant *value )
 {
    TRY_NATIVE
-   instance->__SetField(*name, *value, HX_PROP_DYNAMIC);
+   instance->__SetField(*name, JitLoad(value), HX_PROP_DYNAMIC);
    CATCH_NATIVE
 }
 
 static cpp::Variant * SLJIT_CALL setFieldVariant( hx::Object *instance, String *name, cpp::Variant *value )
 {
    TRY_NATIVE
-   instance->__SetField(*name, *value, HX_PROP_DYNAMIC);
+   instance->__SetField(*name, JitLoad(value), HX_PROP_DYNAMIC);
    return value;
    CATCH_NATIVE
    return 0;
@@ -2644,7 +2647,7 @@ static cpp::Variant * SLJIT_CALL setFieldVariant( hx::Object *instance, String *
 static void SLJIT_CALL getFieldVariant( hx::Object *instance, String *name, cpp::Variant *outValue )
 {
    TRY_NATIVE
-   *outValue = instance->__Field(*name, HX_PROP_DYNAMIC);
+   JitStore(outValue, instance->__Field(*name, HX_PROP_DYNAMIC));
    CATCH_NATIVE
 }
 
@@ -2652,79 +2655,79 @@ static void SLJIT_CALL getFieldVariant( hx::Object *instance, String *name, cpp:
 static void SLJIT_CALL addVariantObject( cpp::Variant *ioVar, hx::Object *inValue )
 {
    TRY_NATIVE
-   *ioVar = *ioVar + Dynamic(inValue);
+   JitStore(ioVar, JitLoad(ioVar) + Dynamic(inValue));
    CATCH_NATIVE
 }
 
 
 static void SLJIT_CALL addVariantInt( cpp::Variant *ioVar, int inValue )
 {
-   *ioVar = *ioVar + inValue;
+   JitStore(ioVar, JitLoad(ioVar) + inValue);
 }
 
 
 static void SLJIT_CALL addVariantString( cpp::Variant *ioVar, String *inValue )
 {
    TRY_NATIVE
-   *ioVar = *ioVar + *inValue;
+   JitStore(ioVar, JitLoad(ioVar) + JitLoad(inValue));
    CATCH_NATIVE
 }
 
 
 static void SLJIT_CALL addVariantFloat( cpp::Variant *ioVar, double *inValue )
 {
-   *ioVar = *ioVar + *inValue;
+   JitStore(ioVar, JitLoad(ioVar) + JitLoad(inValue));
 }
 
 static void SLJIT_CALL subVariantFloat( cpp::Variant *ioVar, double *inValue )
 {
-   *ioVar = *ioVar - *inValue;
+   JitStore(ioVar, JitLoad(ioVar) - JitLoad(inValue));
 }
 
 static void SLJIT_CALL divVariantFloat( cpp::Variant *ioVar, double *inValue )
 {
-   *ioVar = *ioVar / *inValue;
+   JitStore(ioVar, JitLoad(ioVar) / JitLoad(inValue));
 }
 
 static void SLJIT_CALL multVariantFloat( cpp::Variant *ioVar, double *inValue )
 {
-   *ioVar = *ioVar * *inValue;
+   JitStore(ioVar, JitLoad(ioVar) * JitLoad(inValue));
 }
 
 static void SLJIT_CALL modVariantFloat( cpp::Variant *ioVar, double *inValue )
 {
-   *ioVar = hx::Mod(*ioVar,*inValue);
+   JitStore(ioVar, hx::Mod(JitLoad(ioVar),JitLoad(inValue)));
 }
 
 static void SLJIT_CALL andVariantInt( cpp::Variant *ioVar, int inValue )
 {
-   *ioVar = (int)(*ioVar) & inValue;
+   JitStore(ioVar, (int)(JitLoad(ioVar)) & inValue);
 }
 
 
 static void SLJIT_CALL orVariantInt( cpp::Variant *ioVar, int inValue )
 {
-   *ioVar = (int)(*ioVar) | inValue;
+   JitStore(ioVar, (int)(JitLoad(ioVar)) | inValue);
 }
 
 static void SLJIT_CALL xorVariantInt( cpp::Variant *ioVar, int inValue )
 {
-   *ioVar = (int)(*ioVar) ^ inValue;
+   JitStore(ioVar, (int)(JitLoad(ioVar)) ^ inValue);
 }
 
 static void SLJIT_CALL shlVariantInt( cpp::Variant *ioVar, int inValue )
 {
-   *ioVar = (int)(*ioVar) << inValue;
+   JitStore(ioVar, (int)(JitLoad(ioVar)) << inValue);
 }
 
 static void SLJIT_CALL shrVariantInt( cpp::Variant *ioVar, int inValue )
 {
-   *ioVar = (int)(*ioVar) >> inValue;
+   JitStore(ioVar, (int)(JitLoad(ioVar)) >> inValue);
 }
 
 static void SLJIT_CALL ushrVariantInt( cpp::Variant *ioVar, int inValue )
 {
-   *ioVar = (unsigned int)(int)(*ioVar) >> inValue;
+   JitStore(ioVar, (unsigned int)(int)(JitLoad(ioVar)) >> inValue);
 }
 
 
@@ -2746,8 +2749,8 @@ static void SLJIT_CALL decByNameV( hx::Object *inObj, String *inName )
 static cpp::Variant * SLJIT_CALL preIncByName( hx::Object *inObj, String *inName, cpp::Variant *ioBuf )
 {
    TRY_NATIVE
-   *ioBuf =  inObj->__Field(*inName, HX_PROP_DYNAMIC) + 1;
-   inObj->__SetField( *inName, *ioBuf, HX_PROP_DYNAMIC);
+   JitStore(ioBuf, inObj->__Field(*inName, HX_PROP_DYNAMIC) + 1);
+   inObj->__SetField( *inName, JitLoad(ioBuf), HX_PROP_DYNAMIC);
    return ioBuf;
    CATCH_NATIVE
    return 0;
@@ -2757,8 +2760,8 @@ static cpp::Variant * SLJIT_CALL preIncByName( hx::Object *inObj, String *inName
 static cpp::Variant * SLJIT_CALL postIncByName( hx::Object *inObj, String *inName, cpp::Variant *ioBuf )
 {
    TRY_NATIVE
-   *ioBuf =  inObj->__Field(*inName, HX_PROP_DYNAMIC);
-   inObj->__SetField( *inName, *ioBuf + 1, HX_PROP_DYNAMIC);
+   JitStore(ioBuf, inObj->__Field(*inName, HX_PROP_DYNAMIC));
+   inObj->__SetField( *inName, JitLoad(ioBuf) + 1, HX_PROP_DYNAMIC);
    return ioBuf;
    CATCH_NATIVE
    return 0;
@@ -2768,8 +2771,8 @@ static cpp::Variant * SLJIT_CALL postIncByName( hx::Object *inObj, String *inNam
 static cpp::Variant * SLJIT_CALL postDecByName( hx::Object *inObj, String *inName, cpp::Variant *ioBuf )
 {
    TRY_NATIVE
-   *ioBuf =  inObj->__Field(*inName, HX_PROP_DYNAMIC);
-   inObj->__SetField( *inName, *ioBuf - 1, HX_PROP_DYNAMIC);
+   JitStore(ioBuf, inObj->__Field(*inName, HX_PROP_DYNAMIC));
+   inObj->__SetField( *inName, JitLoad(ioBuf) - 1, HX_PROP_DYNAMIC);
    return ioBuf;
    CATCH_NATIVE
    return 0;
@@ -2779,8 +2782,8 @@ static cpp::Variant * SLJIT_CALL postDecByName( hx::Object *inObj, String *inNam
 static cpp::Variant * SLJIT_CALL preDecByName( hx::Object *inObj, String *inName, cpp::Variant *ioBuf )
 {
    TRY_NATIVE
-   *ioBuf =  inObj->__Field(*inName, HX_PROP_DYNAMIC) - 1;
-   inObj->__SetField( *inName, *ioBuf, HX_PROP_DYNAMIC);
+   JitStore(ioBuf, inObj->__Field(*inName, HX_PROP_DYNAMIC) - 1);
+   inObj->__SetField( *inName, JitLoad(ioBuf), HX_PROP_DYNAMIC);
    return ioBuf;
    CATCH_NATIVE
    return 0;
@@ -3665,13 +3668,17 @@ struct MemReference : public CppiaExpr
    CppiaExpr *object;
 
 
+   // A stack slot wider than 4 bytes can be unaligned (see
+   //  StackContext::getSlot), so its value is copied out; fields, statics and
+   //  4-byte slots are aligned and read in place
    #define MEMGETVAL \
+     ( REFMODE==locStack && alignof(T)>4 ? CppiaCtx::getSlot<T>(ctx->frame + offset) : \
      *(T *)( \
          ( REFMODE==locObj      ?(char *)CheckNotNull(object->runObject(ctx)) : \
            REFMODE==locAbsolute ?(char *)pointer : \
            REFMODE==locThis     ?(char *)ctx->getThis() : \
                                  (char *)ctx->frame \
-         ) + offset )
+         ) + offset ) )
 
    #define MEMGETPTR \
       (T *)( \
@@ -3732,10 +3739,10 @@ struct MemReference : public CppiaExpr
       return ValToFloat( MEMGETVAL );
    }
    ::String    runString(CppiaCtx *ctx) HXCPP_OVERRIDE {
-      T &t = MEMGETVAL;
+      T t = MEMGETVAL;
       BCR_CHECK;
       if (isBoolInt())
-         return ValToString( MEMGETVAL ? true : false );
+         return ValToString( t ? true : false );
       return ValToString(t);
    }
    hx::Object *runObject(CppiaCtx *ctx) HXCPP_OVERRIDE
@@ -3831,13 +3838,13 @@ CppiaExpr *createStaticAccess(CppiaExpr *inSrc,FieldStorage inType, void *inPtr)
 static void SLJIT_CALL stringCat(String *ioValue, String *inValue)
 {
    // Not +=, which skips a null right-hand side
-   *ioValue = *ioValue + *inValue;
+   JitStore(ioValue, JitLoad(ioValue) + JitLoad(inValue));
 }
 
 static hx::Object * SLJIT_CALL dynamicCatString(hx::Object *inLeft, String *inRight)
 {
    TRY_NATIVE
-   return Dynamic( Dynamic(inLeft) + *inRight ).mPtr;
+   return Dynamic( Dynamic(inLeft) + JitLoad(inRight) ).mPtr;
    CATCH_NATIVE
    return 0;
 }
@@ -3850,19 +3857,19 @@ static hx::Object * SLJIT_CALL dynamicCatDynamic(hx::Object *inLeft, hx::Object 
 
 static int SLJIT_CALL modIntFloat(int inI, double *inMod)
 {
-   return hx::Mod(inI, *inMod);
+   return hx::Mod(inI, JitLoad(inMod));
 }
 
 
 static void SLJIT_CALL modFloatFloat(double *ioVal, double *inMod)
 {
-   *ioVal =  hx::Mod(*ioVal, *inMod);
+   JitStore(ioVal, hx::Mod(JitLoad(ioVal), JitLoad(inMod)));
 }
 
 
 static hx::Object * SLJIT_CALL modObjectFloat(hx::Object *inVal, double *inMod)
 {
-   return Dynamic(hx::Mod(Dynamic(inVal), *inMod)).mPtr;
+   return Dynamic(hx::Mod(Dynamic(inVal), JitLoad(inMod))).mPtr;
 }
 
 
@@ -4085,6 +4092,34 @@ void genWriteBarrier(CppiaCompiler *compiler, JitReg objVal, JitVal valuePtr)
 #endif
 
 
+// What a setter or crement changes: the value in place for a field, a static
+//  or a stack slot that is always aligned, as an Int is, or a copy of a wider
+//  stack slot, which can be unaligned, written back only if the operation
+//  changed it, as an in-place write would
+template<typename T, int REFMODE>
+struct MemSlot
+{
+   enum { COPY = REFMODE==locStack && alignof(T)>4 };
+   T *ptr;
+   T copy;
+   unsigned char before[sizeof(T)];
+
+   MemSlot(T *inPtr) : ptr(inPtr)
+   {
+      if (COPY)
+      {
+         memcpy((void *)&copy, ptr, sizeof(T));
+         memcpy(before, ptr, sizeof(T));
+      }
+   }
+   T &get() { return COPY ? copy : *ptr; }
+   void store()
+   {
+      if (COPY && memcmp(before, (const void *)&copy, sizeof(T)))
+         memcpy((void *)ptr, (const void *)&copy, sizeof(T));
+   }
+};
+
 template<typename T, int REFMODE, typename Assign>
 struct MemReferenceSetter : public CppiaExpr
 {
@@ -4113,39 +4148,49 @@ struct MemReferenceSetter : public CppiaExpr
    void runVoid(CppiaCtx *ctx) HXCPP_OVERRIDE
    {
       T *t = MEMGETPTR;
+      MemSlot<T,REFMODE> slot(t);
       BCR_VCHECK;
-      Assign::run( *t, ctx, value);
+      Assign::run(slot.get(), ctx, value);
+      slot.store();
       MEM_WB_CHECK;
    }
    int runInt(CppiaCtx *ctx) HXCPP_OVERRIDE
    {
       T *t = MEMGETPTR;
+      MemSlot<T,REFMODE> slot(t);
       BCR_CHECK;
-      int val = ValToInt( Assign::run(*t,ctx, value ) );
+      int val = ValToInt( Assign::run(slot.get(),ctx, value ) );
+      slot.store();
       MEM_WB_CHECK;
       return val;
    }
    Float runFloat(CppiaCtx *ctx) HXCPP_OVERRIDE
    {
       T *t = MEMGETPTR;
+      MemSlot<T,REFMODE> slot(t);
       BCR_CHECK;
-      Float val = ValToFloat( Assign::run(*t,ctx, value) );
+      Float val = ValToFloat( Assign::run(slot.get(),ctx, value) );
+      slot.store();
       MEM_WB_CHECK;
       return val;
    }
    ::String runString(CppiaCtx *ctx) HXCPP_OVERRIDE
    {
       T *t = MEMGETPTR;
+      MemSlot<T,REFMODE> slot(t);
       BCR_CHECK;
-      String val = ValToString( Assign::run(*t,ctx, value) );
+      String val = ValToString( Assign::run(slot.get(),ctx, value) );
+      slot.store();
       MEM_WB_CHECK;
       return val;
    }
    hx::Object *runObject(CppiaCtx *ctx) HXCPP_OVERRIDE
    {
       T *t = MEMGETPTR;
+      MemSlot<T,REFMODE> slot(t);
       BCR_CHECK;
-      Dynamic result( Assign::run(*t,ctx,value) );
+      Dynamic result( Assign::run(slot.get(),ctx,value) );
+      slot.store();
       MEM_WB_CHECK;
       return result.mPtr;
    }
@@ -4323,35 +4368,35 @@ static double sMinusOne = -1.0;
 
 static void SLJIT_CALL objDec(hx::Object **ioVal)
 {
-   *ioVal = (Dynamic(*ioVal)-1).mPtr;
+   JitStore(ioVal, (Dynamic(JitLoad(ioVal))-1).mPtr);
 }
 static void SLJIT_CALL objInc(hx::Object **ioVal)
 {
-   *ioVal = (Dynamic(*ioVal)+1).mPtr;
+   JitStore(ioVal, (Dynamic(JitLoad(ioVal))+1).mPtr);
 }
 
 static hx::Object * SLJIT_CALL objPostInc(hx::Object **ioVal)
 {
-   hx::Object *result = *ioVal;
-   *ioVal = (Dynamic(*ioVal)+1).mPtr;
+   hx::Object *result = JitLoad(ioVal);
+   JitStore(ioVal, (Dynamic(JitLoad(ioVal))+1).mPtr);
    return result;
 }
 static hx::Object * SLJIT_CALL objPostDec(hx::Object **ioVal)
 {
-   hx::Object *result = *ioVal;
-   *ioVal = (Dynamic(*ioVal)-1).mPtr;
+   hx::Object *result = JitLoad(ioVal);
+   JitStore(ioVal, (Dynamic(JitLoad(ioVal))-1).mPtr);
    return result;
 }
 
 static hx::Object * SLJIT_CALL objPreInc(hx::Object **ioVal)
 {
-   *ioVal = (Dynamic(*ioVal)+1).mPtr;
-   return *ioVal;
+   JitStore(ioVal, (Dynamic(JitLoad(ioVal))+1).mPtr);
+   return JitLoad(ioVal);
 }
 static hx::Object * SLJIT_CALL objPreDec(hx::Object **ioVal)
 {
-   *ioVal = (Dynamic(*ioVal)-1).mPtr;
-   return *ioVal;
+   JitStore(ioVal, (Dynamic(JitLoad(ioVal))-1).mPtr);
+   return JitLoad(ioVal);
 }
 
 #ifdef HXCPP_GC_GENERATIONAL
@@ -4425,35 +4470,45 @@ struct MemReferenceCrement : public CppiaExpr
 
    void        runVoid(CppiaCtx *ctx) HXCPP_OVERRIDE {
       T *t = MEMGETPTR;
-      CREMENT::run( *t );
+      MemSlot<T,REFMODE> slot(t);
+      CREMENT::run(slot.get());
+      slot.store();
       MEM_WB_CHECK;
    }
    int runInt(CppiaCtx *ctx) HXCPP_OVERRIDE {
       T *t = MEMGETPTR;
+      MemSlot<T,REFMODE> slot(t);
       BCR_CHECK;
-      int result = ValToInt( CREMENT::run(*t) );
+      int result = ValToInt( CREMENT::run(slot.get()) );
+      slot.store();
       MEM_WB_CHECK;
       return result;
    }
    Float       runFloat(CppiaCtx *ctx) HXCPP_OVERRIDE {
       T *t = MEMGETPTR;
+      MemSlot<T,REFMODE> slot(t);
       BCR_CHECK;
-      Float result = ValToFloat( CREMENT::run(*t));
+      Float result = ValToFloat( CREMENT::run(slot.get()));
+      slot.store();
       MEM_WB_CHECK;
       return result;
    }
    ::String    runString(CppiaCtx *ctx) HXCPP_OVERRIDE {
       T *t = MEMGETPTR;
+      MemSlot<T,REFMODE> slot(t);
       BCR_CHECK;
-      String result = ValToString( CREMENT::run(*t) );
+      String result = ValToString( CREMENT::run(slot.get()) );
+      slot.store();
       MEM_WB_CHECK;
       return result;
    }
 
    hx::Object *runObject(CppiaCtx *ctx) HXCPP_OVERRIDE {
       T *t = MEMGETPTR;
+      MemSlot<T,REFMODE> slot(t);
       BCR_CHECK;
-      Dynamic result( CREMENT::run(*t) );
+      Dynamic result( CREMENT::run(slot.get()) );
+      slot.store();
       MEM_WB_CHECK;
       return result.mPtr;
    }
@@ -6022,23 +6077,23 @@ struct ArrayAccessI : public CppiaDynamicExpr
    // args: this expression, the object, the index, the operand, the value read
    static hx::Object * SLJIT_CALL jitGet(JitMultiArg *args)
    {
-      ArrayAccessI *expr = (ArrayAccessI *)args[0].obj;
-      return expr->callGet(CppiaCtx::getCurrent(), args[1].obj, args[2].ival).mPtr;
+      ArrayAccessI *expr = (ArrayAccessI *)JitArg(args,0).obj;
+      return expr->callGet(CppiaCtx::getCurrent(), JitArg(args,1).obj, JitArg(args,2).ival).mPtr;
    }
 
    static hx::Object * SLJIT_CALL jitSet(JitMultiArg *args)
    {
-      ArrayAccessI *expr = (ArrayAccessI *)args[0].obj;
-      expr->callSet(CppiaCtx::getCurrent(), args[1].obj, args[2].ival, args[3].obj);
-      return args[3].obj;
+      ArrayAccessI *expr = (ArrayAccessI *)JitArg(args,0).obj;
+      expr->callSet(CppiaCtx::getCurrent(), JitArg(args,1).obj, JitArg(args,2).ival, JitArg(args,3).obj);
+      return JitArg(args,3).obj;
    }
 
    static hx::Object * SLJIT_CALL jitUpdate(JitMultiArg *args)
    {
-      ArrayAccessI *expr = (ArrayAccessI *)args[0].obj;
-      Dynamic before = args[4].obj;
-      Dynamic after = expr->update(before, args[3].obj);
-      expr->callSet(CppiaCtx::getCurrent(), args[1].obj, args[2].ival, after);
+      ArrayAccessI *expr = (ArrayAccessI *)JitArg(args,0).obj;
+      Dynamic before = JitArg(args,4).obj;
+      Dynamic after = expr->update(before, JitArg(args,3).obj);
+      expr->callSet(CppiaCtx::getCurrent(), JitArg(args,1).obj, JitArg(args,2).ival, after);
       return expr->crement==coPostInc || expr->crement==coPostDec ? before.mPtr : after.mPtr;
    }
 
@@ -6214,8 +6269,8 @@ struct VarDecl : public CppiaVoidExpr
          {
             case etInt: *(int *)(ctx->frame+var.stackPos) = init->runInt(ctx); break;
             case etFloat: SetFloatAligned(ctx->frame+var.stackPos,init->runFloat(ctx)); break;
-            case etString: *(String *)(ctx->frame+var.stackPos) = init->runString(ctx); break;
-            case etObject: *(hx::Object **)(ctx->frame+var.stackPos) = init->runObject(ctx); break;
+            case etString: CppiaCtx::setSlot(ctx->frame+var.stackPos, init->runString(ctx)); break;
+            case etObject: CppiaCtx::setSlot(ctx->frame+var.stackPos, init->runObject(ctx)); break;
             case etVoid:
             case etNull:
                break;
@@ -7630,7 +7685,7 @@ struct BitShiftL : public BitOpBase
 
 void SLJIT_CALL dynamicAddStr(hx::Object *inObj1, hx::Object *inObj2, String *outString) {
    TRY_NATIVE
-   *outString = Dynamic(inObj1) + Dynamic(inObj2);
+   JitStore(outString, Dynamic(inObj1) + Dynamic(inObj2));
    CATCH_NATIVE
 }
 void *SLJIT_CALL dynamicAddObj(hx::Object *inObj1, hx::Object *inObj2) {
@@ -7647,19 +7702,19 @@ int SLJIT_CALL dynamicAddInt(hx::Object *inObj1, hx::Object *inObj2) {
 }
 void SLJIT_CALL dynamicAddFloat(hx::Object *inObj1, hx::Object *inObj2, double *outResult) {
    TRY_NATIVE
-   *outResult = (Dynamic(inObj1) + Dynamic(inObj2));
+   JitStore(outResult, (Dynamic(inObj1) + Dynamic(inObj2)));
    CATCH_NATIVE
 }
 
 void SLJIT_CALL strAddStrToStrOver(String *ioStr, String *inStr1) {
-   *ioStr = *ioStr + *inStr1;
+   JitStore(ioStr, JitLoad(ioStr) + JitLoad(inStr1));
 }
 void SLJIT_CALL strAddStrToStr(String *inStr0, String *inStr1, String *outStr) {
-   *outStr = *inStr0 + *inStr1;
+   JitStore(outStr, JitLoad(inStr0) + JitLoad(inStr1));
 }
 hx::Object *SLJIT_CALL strAddStrToObj(String *inStr0, String *inStr1) {
    TRY_NATIVE
-   hx::Object *result = Dynamic(*inStr0 + *inStr1).mPtr;
+   hx::Object *result = Dynamic(JitLoad(inStr0) + JitLoad(inStr1)).mPtr;
    return result;
    CATCH_NATIVE
    return 0;
@@ -7984,7 +8039,7 @@ struct OpAdd : public BinOp
 #ifdef CPPIA_JIT
 static void SLJIT_CALL double_mod(double *params)
 {
-   params[0] = hx::DoubleMod(params[0], params[1]);
+   JitStore(params, hx::DoubleMod(JitArg(params,0), JitArg(params,1)));
 }
 #endif
 
@@ -8212,7 +8267,7 @@ struct OpCompare : public OpCompareBase
 
    static int SLJIT_CALL stringCompare(String *s0, String *s1)
    {
-      return s0->compare(*s1);
+      return JitLoad(s0).compare(JitLoad(s1));
    }
 
    static int SLJIT_CALL dynamicCompare(hx::Object *o0, hx::Object *o1)

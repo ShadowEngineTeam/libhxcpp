@@ -88,7 +88,7 @@ static void SLJIT_CALL my_trace_strings(const char *inText, const char *inValue)
 }
 static void SLJIT_CALL my_trace_string(const char *inText, String *inValue)
 {
-   printf("%s%s\n", inText, inValue->out_str());
+   printf("%s%s\n", inText, JitLoad(inValue).out_str());
 }
 
 static void SLJIT_CALL my_trace_ptr_func(const char *inText, hx::Object **inPtr)
@@ -103,7 +103,7 @@ static void SLJIT_CALL my_trace_int_func(const char *inText, int inValue)
 }
 static void SLJIT_CALL my_trace_float_func(const char *inText, double *inValue)
 {
-   printf("%s = %f\n",inText, *inValue);
+   printf("%s = %f\n",inText, JitLoad(inValue));
 }
 
 static void SLJIT_CALL my_trace_obj_func(const char *inText, hx::Object *inPtr)
@@ -117,11 +117,11 @@ static hx::Object *SLJIT_CALL intToObj(int inVal)
 }
 static void SLJIT_CALL intToStr(int inVal, String *outString)
 {
-   *outString = String(inVal);
+   JitStore(outString, String(inVal));
 }
 static void SLJIT_CALL objToStr(hx::Object *inVal, String *outString)
 {
-   *outString = inVal ? inVal->toString() : String();
+   JitStore(outString, inVal ? inVal->toString() : String());
 }
 int SLJIT_CALL objToInt(hx::Object *inVal)
 {
@@ -129,53 +129,55 @@ int SLJIT_CALL objToInt(hx::Object *inVal)
 }
 static void SLJIT_CALL objToFloat(hx::Object *inVal,double *outFloat)
 {
-   *outFloat =  inVal ? inVal->__ToDouble() : 0.0;
+   JitStore(outFloat, inVal ? inVal->__ToDouble() : 0.0);
 }
 
 static void *SLJIT_CALL strToObj(String *inStr)
 {
-   return Dynamic(*inStr).mPtr;
+   return Dynamic(JitLoad(inStr)).mPtr;
 }
 static void *SLJIT_CALL floatToObj(double *inDouble)
 {
-   return Dynamic(*inDouble).mPtr;
+   return Dynamic(JitLoad(inDouble)).mPtr;
 }
 
 static void SLJIT_CALL floatToStr(double *inDouble, String *outStr)
 {
-   *outStr = String(*inDouble);
+   JitStore(outStr, String(JitLoad(inDouble)));
 
 }
 
 static hx::Object * SLJIT_CALL variantToObject(cpp::Variant *inVariant)
 {
-   return Dynamic( *inVariant ).mPtr;
+   return Dynamic( JitLoad(inVariant) ).mPtr;
 }
 
 
 static int SLJIT_CALL variantToInt(cpp::Variant *inVariant)
 {
-   return *inVariant;
+   return JitLoad(inVariant);
 }
 
 static void SLJIT_CALL variantToFloat(cpp::Variant *inVariant, double *outValue)
 {
-   *outValue = *inVariant;
+   JitStore(outValue, (double)JitLoad(inVariant));
 }
 
 static void SLJIT_CALL variantToString(cpp::Variant *inVariant, String *outValue)
 {
-   *outValue = *inVariant;
+   String value;
+   value = JitLoad(inVariant);
+   JitStore(outValue, value);
 }
 
 static int SLJIT_CALL strEqual(const String *inS0, const String *inS1)
 {
-   return *inS0 == *inS1;
+   return JitLoad(inS0) == JitLoad(inS1);
 }
 
 static int SLJIT_CALL strNotEqual(const String *inS0, const String *inS1)
 {
-   return *inS0 != *inS1;
+   return JitLoad(inS0) != JitLoad(inS1);
 }
 
 
