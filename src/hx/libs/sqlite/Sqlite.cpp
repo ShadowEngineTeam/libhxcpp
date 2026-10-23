@@ -179,6 +179,16 @@ struct database : public hx::Object
    String toString() HXCPP_OVERRIDE { return HX_CSTRING("Sqlite Databse"); }
 };
 
+// A column as text, all its bytes: TEXT values can hold NUL characters. The
+//  byte count is read after the text, as SQLite asks
+static String columnText(sqlite3_stmt *inStatement, int inColumn)
+{
+   const char *text = (const char *)sqlite3_column_text(inStatement,inColumn);
+   if (!text)
+      return String();
+   return String::create(text, sqlite3_column_bytes(inStatement,inColumn));
+}
+
 static void sqlite_error( sqlite3 *db ) {
    hx::Throw( HX_CSTRING("Sqlite error : ") + String(sqlite3_errmsg(db)) );
 }
@@ -379,7 +389,7 @@ Dynamic _hx_sqlite_result_next(Dynamic handle)
                f = Float(sqlite3_column_double(r->r,i));
                break;
             case SQLITE_TEXT:
-               f = String((char*)sqlite3_column_text(r->r,i));
+               f = columnText(r->r,i);
                break;
             case SQLITE_BLOB:
                {
@@ -445,7 +455,7 @@ static sqlite3_stmt *prepStatement(Dynamic handle,int n)
 String  _hx_sqlite_result_get(Dynamic handle,int n)
 {
    sqlite3_stmt *r = prepStatement(handle,n);
-   return String((char*)sqlite3_column_text(r,n));
+   return columnText(r,n);
 }
 
 /**
