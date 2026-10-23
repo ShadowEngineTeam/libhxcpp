@@ -413,6 +413,10 @@ public:
    const char                      *creatingFunction;
    int                             scriptId;
 
+   // What the script uses that the host does not have, found while linking.
+   //  Linking goes on past each one, so the load fails once, naming them all
+   std::vector< std::string >      linkMisses;
+
    ScriptCallable                  *main;
    std::vector< hx::Resource >     resources;
 
@@ -435,6 +439,7 @@ public:
    void setDebug(CppiaExpr *outExpr, int inFileId, int inLine);
    void boot(CppiaCtx *ctx);
    void where(CppiaExpr *e);
+   void linkMiss(CppiaExpr *inWhere, const std::string &inWhat);
    void mark(hx::MarkContext *ctx);
    void visit(hx::VisitContext *ctx);
    int  getInterfaceSlot(const std::string &inName);

@@ -1053,11 +1053,10 @@ hx::Class *CppiaClassInfo::getSuperClass()
       throw "Unknown super type!";
    if (superType->cppiaClass)
       return &superType->cppiaClass->mClass;
+   // Nothing in the class can be laid out without its super class, so this fails at once
    if (!superType->haxeClass.mPtr)
-   {
-      printf("Invalid super class '%s' for '%s'.\n", superType->name.c_str(), name.c_str());
-      throw "Missing super class";
-   }
+      hx::Throw( HX_CSTRING("Could not link class ") + String(name.c_str()) +
+                 HX_CSTRING(": the host has no super class ") + superType->name );
 
    return &superType->haxeClass;
 }
@@ -1312,7 +1311,8 @@ void CppiaClassInfo::linkTypes()
          {
             idx = cppia.getInterfaceSlot(memberFunctions[i]->name);
             if (idx==-1)
-               throw "Missing function in interface";
+               hx::Throw( HX_CSTRING("Could not link interface ") + String(name.c_str()) +
+                          HX_CSTRING(": the host has no interface with ") + String(memberFunctions[i]->name.c_str()) );
             if (idx>interfaceSlotSize)
                interfaceSlotSize = idx;
             idx = -idx;

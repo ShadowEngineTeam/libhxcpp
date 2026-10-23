@@ -1598,6 +1598,33 @@ static void *SLJIT_CALL allocHaxe(CppiaCtx *inCtx, CppiaClassInfo *inInfo )
 #endif
 
 
+// Whether the host class, by its reflected fields, has no field of this name.
+//  A class that lists no fields at all says nothing either way
+static bool hostLacksField(hx::Class inClass, const String &inName, bool inStatic)
+{
+   if (!inClass.mPtr)
+      return false;
+   Array<String> fields = inStatic ? inClass->GetClassFields() : inClass->GetInstanceFields();
+   return fields.mPtr && fields->length>0 && fields->Find(inName)<0;
+}
+
+// Stands for a field the host does not have, so that linking can go on past
+//  it, also when the script assigns to it. The module fails to load, so this
+//  never runs
+struct LinkMissExpr : public CppiaDynamicExpr
+{
+   LinkMissExpr(const CppiaExpr *inSrc) : CppiaDynamicExpr(inSrc) { }
+   const char *getName() HXCPP_OVERRIDE { return "LinkMissExpr"; }
+   CppiaExpr *makeSetter(AssignOp op,CppiaExpr *inValue) HXCPP_OVERRIDE { return this; }
+   CppiaExpr *makeCrement(CrementOp inOp) HXCPP_OVERRIDE { return this; }
+   hx::Object *runObject(CppiaCtx *ctx) HXCPP_OVERRIDE
+   {
+      hx::Throw( HX_CSTRING("Could not link") );
+      return 0;
+   }
+};
+
+
 struct NewExpr : public CppiaDynamicExpr
 {
    int classId;
@@ -1621,12 +1648,9 @@ struct NewExpr : public CppiaDynamicExpr
          constructor = type->haxeClass.mPtr->mConstructArgs;
 
       // Nothing to construct: runObject and genCode would dereference the null cppiaClass.
+      // The module never runs: linking goes on to find anything else missing
       if (!type->arrayType && !constructor && !type->cppiaClass)
-      {
-         CPPIALOG("Could not link new %s\n", type->name.c_str());
-         // The host sees this from Module.fromData, where stdout may not be visible
-         hx::Throw( HX_CSTRING("Could not link new ") + type->name );
-      }
+         inModule.linkMiss(this, std::string("new ") + type->name.c_str());
 
       LinkExpressions(args,inModule);
       return this;
@@ -2086,9 +2110,8 @@ struct CallStatic : public CppiaExpr
          return replace;
       }
 
-      CPPIALOG("Unknown static call to %s::%s (%d)\n", type->name.out_str(), field.out_str(), type->cppiaClass!=0);
-      inModule.where(this);
-      hx::Throw( HX_CSTRING("Could not link static function ") + type->name + HX_CSTRING("::") + field );
+      inModule.linkMiss(this, std::string("static function ") + type->name.c_str() + "." + field.c_str());
+      LinkExpressions(args,inModule);
       return this;
    }
 };
@@ -3122,13 +3145,15 @@ struct GetFieldByName : public CppiaDynamicExpr
          staticClass = type->haxeClass;
          if (!staticClass.mPtr)
          {
-            inModule.where(this);
-            if (type->cppiaClass)
-               type->cppiaClass->dump();
-            CPPIALOG("Could not link static %s::%s (%d)\n", type->name.c_str(), inModule.strings[nameId].out_str(), nameId );
-            hx::Throw( HX_CSTRING("Could not link static ") + type->name + HX_CSTRING("::") + inModule.strings[nameId] );
+            inModule.linkMiss(this, std::string("static ") + type->name.c_str() + "." + inModule.strings[nameId].c_str());
+            return new LinkMissExpr(this);
          }
          name = inModule.strings[nameId];
+         if (hostLacksField(staticClass, name, true))
+         {
+            inModule.linkMiss(this, std::string("static ") + type->name.c_str() + "." + name.c_str());
+            return new LinkMissExpr(this);
+         }
          const StaticInfo *info = staticClass->GetStaticStorage(name);
 
          // Do not use a MemReference for static access to objects.
@@ -3468,9 +3493,10 @@ struct CallMember : public CppiaExpr
          {
             if (field!=HX_CSTRING("__SetField") && field!=HX_CSTRING("__Field") && field!=HX_CSTRING("__Index"))
             {
-               CPPIALOG("Bad array field '%s'\n", field.out_str());
-               inModule.where(this);
-               throw "Unknown array field name";
+               inModule.linkMiss(this, std::string("Array.") + field.c_str());
+               thisExpr = thisExpr ? thisExpr->link(inModule) : 0;
+               LinkExpressions(args,inModule);
+               return this;
             }
          }
       }
@@ -3589,9 +3615,14 @@ struct CallMember : public CppiaExpr
          return replace;
       }
 
-      if (!type->isDynamic)
+      // A typed call that found nothing to bind to: if the host class has no
+      //  such member either, the dynamic call would only fail when it ran
+      if (!type->isDynamic && !type->cppiaClass && hostLacksField(type->haxeClass, field, false))
       {
-         CPPIALOG("   CallMember %s (%p %p) '%s' fallback\n", type->name.out_str(), type->haxeClass.mPtr, type->cppiaClass, field.out_str());
+         inModule.linkMiss(this, std::string(type->name.c_str()) + "." + field.c_str());
+         thisExpr = thisExpr ? thisExpr->link(inModule) : 0;
+         LinkExpressions(args,inModule);
+         return this;
       }
 
       {
@@ -4895,6 +4926,17 @@ struct GetFieldByLinkage : public CppiaExpr
 
       // It is ok for interfaces to look up members by name - and variables that turn
       //  out to actaully be Dynamic (eg template types)
+      // A typed read of a host object's field that its class does not have
+      //  would only give null when it ran
+      if (!type->isInterface && !type->isDynamic && !forceNamedAccess && !type->cppiaClass &&
+            hostLacksField(type->haxeClass, field, false))
+      {
+         inModule.linkMiss(this, std::string(type->name.c_str()) + "." + field.c_str());
+         if (object)
+            object = object->link(inModule);
+         return new LinkMissExpr(this);
+      }
+
       if (!type->isInterface && !type->isDynamic && !forceNamedAccess)
       {
          CPPIALOG("   GetFieldByLinkage %s (%p %p %p) '%s' fallback\n", type->name.out_str(), object, type->haxeClass.mPtr, type->cppiaClass, field.out_str());

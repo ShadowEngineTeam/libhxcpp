@@ -76,11 +76,22 @@ class TestCommon extends Test {
 
         Assert.raises(() -> cpp.cppia.Module.fromData(source.getData()), String, 'Linked a new of a class the host does not have');
 
-        // The message names what is missing, for a host to show its user
+        // The message names everything missing, once each, for a host to show its user
         try {
             cpp.cppia.Module.fromData(source.getData());
         } catch (e:String) {
-            Assert.equals('Could not link new Unlinked', e);
+            Assert.equals('Could not link new Unlinked, static function Unlinked.make, static Unlinked.count, HostBase.notInHost, HostBase.notInHostVar, static HostBase.notInHostStatic', e);
+        }
+    }
+
+    function testSuperClassNotInHost() {
+        final source = sys.io.File.getBytes('bin/unlinked-super.cppia');
+
+        try {
+            cpp.cppia.Module.fromData(source.getData());
+            Assert.fail('Linked a class whose super class the host does not have');
+        } catch (e:String) {
+            Assert.equals('Could not link class UnlinkedChild: the host has no super class UnlinkedBase', e);
         }
     }
 

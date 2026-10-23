@@ -6,3 +6,8 @@
 
 -m ClientUnlinked
 --cppia bin/unlinked.cppia
+
+--next
+
+-m ClientUnlinkedSuper
+--cppia bin/unlinked-super.cppia

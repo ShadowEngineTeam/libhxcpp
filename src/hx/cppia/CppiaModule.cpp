@@ -204,6 +204,18 @@ void CppiaModule::link()
 
    if (main)
       main = (ScriptCallable *)main->link(*this);
+
+   if (!linkMisses.empty())
+   {
+      std::string message = "Could not link ";
+      for(size_t i=0;i<linkMisses.size();i++)
+      {
+         if (i)
+            message += ", ";
+         message += linkMisses[i];
+      }
+      hx::Throw( String::create(message.c_str(), (int)message.size()) );
+   }
 }
 
 #ifdef CPPIA_JIT
@@ -331,6 +343,20 @@ int CppiaModule::findInterfaceSlot(const std::string &inName)
 
 
 
+
+// Each thing is named once, at the first place the script uses it
+void CppiaModule::linkMiss(CppiaExpr *inWhere, const std::string &inWhat)
+{
+   for(size_t i=0;i<linkMisses.size();i++)
+      if (linkMisses[i].compare(0, inWhat.size(), inWhat)==0 &&
+          (linkMisses[i].size()==inWhat.size() || linkMisses[i][inWhat.size()]==' '))
+         return;
+
+   std::string miss = inWhat;
+   if (inWhere && inWhere->filename && inWhere->line>0 && strcmp(inWhere->filename,"?"))
+      miss += " (" + std::string(inWhere->filename) + ":" + std::to_string(inWhere->line) + ")";
+   linkMisses.push_back(miss);
+}
 
 void CppiaModule::where(CppiaExpr *e)
 {
