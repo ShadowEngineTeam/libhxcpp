@@ -1,0 +1,4 @@
+low top bit clear: true
+low top bit set: true
+all low bits set: true
+negative high word: true

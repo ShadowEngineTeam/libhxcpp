@@ -170,6 +170,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 
 ### Strings, numbers, Dynamic and reflection
 
+* Fixed setting `hi` on a boxed Int64 through reflection giving a high word of all ones whenever the low word's top bit was set: the low word was sign-extended before being combined (libhxcpp #296)
 * Fixed dividing the minimum Int64 by -1, or taking its remainder, ending the process with an integer overflow trap on x86. The quotient now wraps to the minimum and the remainder is 0, as on the other Haxe targets (libhxcpp #326)
 * Made Std.parseFloat and Float-to-String formatting independent of the process locale: host frameworks (GUI toolkits, audio libraries, plugin containers) that call setlocale after startup no longer flip the decimal separator and break float parsing, printing, and serialization (uses explicit "C" numeric locale on Windows, macOS, glibc and Android 21+)
 * Calling a Dynamic value that is not a function now throws "Cannot call ..." at API level 500 (Haxe 5) instead of silently returning null, matching the other targets; API level 430 and below keep the old behavior
