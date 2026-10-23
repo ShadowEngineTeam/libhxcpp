@@ -218,6 +218,10 @@ StackContext::StackContext()
    #endif
 
    #ifdef HXCPP_SCRIPTABLE
+   // The jit's write barrier compares an object's mark with this, so it must
+   //  match from the start: left at 0 until the first collection, it took
+   //  every nursery object for an old one
+   byteMarkId = ::hx::gByteMarkID;
    stack = new unsigned char[128*1024];
    // Leave a 16K margin - argument pushes precede the callee's frame check
    stackEnd = stack + 128*1024 - 16*1024;
