@@ -351,6 +351,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 ### cppia
 
 * The cppia JIT says when it does not run, instead of quietly running scripts in the interpreter: loading prints that once, and __scriptable_cppia_jit_active() tells a host whether modules it loads now are compiled. On Apple Silicon it could never run, since its memory was mapped read-write-execute, which macOS on arm64 refuses; it now maps with MAP_JIT and makes the memory writable only while code is generated or freed (a hardened-runtime app also needs the com.apple.security.cs.allow-jit entitlement). The JIT stays off on arm64 for now, as it always was on Apple Silicon: its arm64 code had never run, and Haxe's unit tests end with an uncaught exception under it. HXCPP_CPPIA_JIT_ARM64 turns it on for work on that (libhxcpp #266)
+* A cppia module that uses a class or static the host does not have now fails to load with a message naming it, such as "Could not link new Foo" or "Could not link static Foo::bar", instead of "Bad link" (libhxcpp #262)
 * Added a script stack overflow guard to cppia: deep recursion now throws a catchable "Stack Overflow" instead of silently corrupting the heap past the fixed script stack (checked in the interpreter entries and in jitted function prologues)
 * Fixed cppia array access through host-class getters returning garbage (the linked getter was validated but never invoked - the argument frame was read back as the result)
 * Fixed cppia float constants parsing locale-dependently (comma-decimal hosts)

@@ -1624,7 +1624,8 @@ struct NewExpr : public CppiaDynamicExpr
       if (!type->arrayType && !constructor && !type->cppiaClass)
       {
          CPPIALOG("Could not link new %s\n", type->name.c_str());
-         throw "Bad link";
+         // The host sees this from Module.fromData, where stdout may not be visible
+         hx::Throw( HX_CSTRING("Could not link new ") + type->name );
       }
 
       LinkExpressions(args,inModule);
@@ -2087,7 +2088,7 @@ struct CallStatic : public CppiaExpr
 
       CPPIALOG("Unknown static call to %s::%s (%d)\n", type->name.out_str(), field.out_str(), type->cppiaClass!=0);
       inModule.where(this);
-      throw "Bad link";
+      hx::Throw( HX_CSTRING("Could not link static function ") + type->name + HX_CSTRING("::") + field );
       return this;
    }
 };
@@ -3125,7 +3126,7 @@ struct GetFieldByName : public CppiaDynamicExpr
             if (type->cppiaClass)
                type->cppiaClass->dump();
             CPPIALOG("Could not link static %s::%s (%d)\n", type->name.c_str(), inModule.strings[nameId].out_str(), nameId );
-            throw "Bad link";
+            hx::Throw( HX_CSTRING("Could not link static ") + type->name + HX_CSTRING("::") + inModule.strings[nameId] );
          }
          name = inModule.strings[nameId];
          const StaticInfo *info = staticClass->GetStaticStorage(name);

@@ -75,6 +75,13 @@ class TestCommon extends Test {
         final source = sys.io.File.getBytes('bin/unlinked.cppia');
 
         Assert.raises(() -> cpp.cppia.Module.fromData(source.getData()), String, 'Linked a new of a class the host does not have');
+
+        // The message names what is missing, for a host to show its user
+        try {
+            cpp.cppia.Module.fromData(source.getData());
+        } catch (e:String) {
+            Assert.equals('Could not link new Unlinked', e);
+        }
     }
 
     @:depends(testStatus)
