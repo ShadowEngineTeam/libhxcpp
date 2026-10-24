@@ -4,27 +4,72 @@ import sys.FileSystem;
 
 using StringTools;
 
-function runOutput(test:String):String {
+// With -D emscripten each test runs under node, through this script, which
+// stops it after the timeout: a stack overflow there can hang a program
+// instead of crashing it. Exits with 124 on a timeout.
+final nodeWithTimeout = "const r = require('child_process').spawnSync(process.execPath, [process.argv[1]], {stdio: 'inherit', timeout: +process.argv[2]});"
+	+ "if (r.error || r.signal) { console.error('timed out'); process.exit(124); }"
+	+ "process.exit(r.status);";
+final emscriptenTimeoutSeconds = 120;
+
+function runOutput(test:String, emscripten:Bool):String {
 	final slash = Sys.systemName() == "Windows" ? "\\" : "/";
-	final proc = new Process([test, "bin", 'Main'].join(slash));
+	final proc = emscripten
+		? new Process("node", ["-e", nodeWithTimeout, '$test/bin/Main.js', Std.string(emscriptenTimeoutSeconds * 1000)])
+		: new Process([test, "bin", 'Main'].join(slash));
+	final stdout = proc.stdout.readAll().toString();
 	final code = proc.exitCode();
 
+	if (emscripten && code == 124) {
+		throw 'timed out after $emscriptenTimeoutSeconds s';
+	}
 	if (code != 0) {
 		throw 'return code was $code';
 	}
 
-	return proc.stdout.readAll().toString().replace("\r\n", "\n");
+	return stdout.replace("\r\n", "\n");
+}
+
+function isEmscripten(args:Array<String>) {
+	for (i in 0...args.length) {
+		if (args[i] == "-Demscripten" || ((args[i] == "-D" || args[i] == "--define") && args[i + 1] == "emscripten")) {
+			return true;
+		}
+	}
+	return false;
+}
+
+// emscripten-skip.txt: one "Test: reason" per line, for the tests that need
+// what a program under node does not have
+function emscriptenSkips():Map<String, String> {
+	final skips = new Map<String, String>();
+	for (line in File.getContent("emscripten-skip.txt").split("\n")) {
+		line = line.trim();
+		if (line == "" || line.startsWith("#")) {
+			continue;
+		}
+		final colon = line.indexOf(":");
+		skips[line.substr(0, colon).trim()] = line.substr(colon + 1).trim();
+	}
+	return skips;
 }
 
 function main() {
 	var successes = 0;
 	var total = 0;
 
-	final args = Sys.args();
+	var args = Sys.args();
 	// Comma-separated tests that the Haxe in use cannot build, such as one its
 	// compiler rejects
 	final skipList = Sys.getEnv("REGRESSION_SKIP");
 	final skip = skipList == null ? [] : skipList.split(",");
+
+	final emscripten = isEmscripten(args);
+	final emscriptenSkip = emscripten ? emscriptenSkips() : new Map<String, String>();
+	if (emscripten) {
+		// Tests read their own files, and cppia hosts load their scripts
+		args = args.concat(["-D", "HXCPP_LINK_NODERAWFS"]);
+	}
 
 	for (test in FileSystem.readDirectory(".")) {
 		if (!FileSystem.isDirectory(test)) {
@@ -32,6 +77,10 @@ function main() {
 		}
 		if (skip.contains(test)) {
 			Sys.println('Skipping $test');
+			continue;
+		}
+		if (emscriptenSkip.exists(test)) {
+			Sys.println('Skipping $test on Emscripten: ${emscriptenSkip[test]}');
 			continue;
 		}
 
@@ -50,7 +99,7 @@ function main() {
 
 		final expectedStdout = File.getContent('$test/stdout.txt').replace("\r\n", "\n");
 		final actualStdout = try {
-			runOutput(test);
+			runOutput(test, emscripten);
 		} catch (e) {
 			Sys.println('Test $test failed: $e');
 			continue;

@@ -228,6 +228,52 @@ jobs:
       if: ${{ !cancelled() }}
       run: cat /tmp/sanitizer/report.* 2>/dev/null || echo "No sanitizer reports"
 
+  # The regression tests built for Emscripten and run under node, with the
+  # tests in test/regression/emscripten-skip.txt left out, and the memory and
+  # stack test in test/emscripten. No other job builds for Emscripten, so a
+  # platform guard that leaves it out would otherwise pass (libhxcpp #335).
+  check-emscripten:
+    name: Check Emscripten
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      EMSDK_VERSION: 3.1.74
+      # Each test would otherwise recompile the whole runtime
+      HXCPP_COMPILE_CACHE: ${{ github.workspace }}/.hxcpp-cache
+    steps:
+    - name: checkout
+      uses: actions/checkout@v7
+
+    - name: setup
+      id: setup
+      uses: ./.github/workflows/setup
+      with:
+        haxe: 4.3.7
+
+    - name: cache emsdk
+      uses: actions/cache@v4
+      with:
+        path: emsdk
+        key: emsdk-${{ env.EMSDK_VERSION }}-${{ runner.os }}
+
+    - name: install emsdk
+      run: |
+        [ -d emsdk ] || git clone --depth 1 https://github.com/emscripten-core/emsdk.git
+        emsdk/emsdk install $EMSDK_VERSION
+        emsdk/emsdk activate $EMSDK_VERSION
+        echo "EMSDK=$PWD/emsdk" >> $GITHUB_ENV
+        echo "EM_CONFIG=$PWD/emsdk/.emscripten" >> $GITHUB_ENV
+        echo "$PWD/emsdk/upstream/emscripten" >> $GITHUB_PATH
+
+    - name: Run the regression tests
+      if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+      working-directory: test/regression
+      run: haxe --run Run -D emscripten
+
+    - name: Run the memory and stack test
+      if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+      run: timeout 600 sh test/emscripten/run.sh
+
   check-haxelib:
     name: Check installing with haxelib
     strategy:

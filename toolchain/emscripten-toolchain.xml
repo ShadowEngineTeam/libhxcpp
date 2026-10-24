@@ -210,6 +210,12 @@
      <flag value="--emrun" />
   </section>
 
+  <!-- Under node, reach the host's files directly instead of an empty in-memory file system -->
+  <section if="HXCPP_LINK_NODERAWFS" >
+     <flag value="-s" />
+     <flag value="NODERAWFS=1" />
+  </section>
+
   <section if="HXCPP_DEBUG_LINK" >
      <flag value="-debug" />
   </section>
