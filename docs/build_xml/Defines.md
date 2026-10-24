@@ -111,6 +111,9 @@ Defines affecting target architecture.
 | *tizen*                 | Compile for Tizen |
 | *blackberry*            | Compile for Blackberry |
 | *emscripten*            | Compile for Emscripten |
+| *HXCPP_LINK_NO_MEMORY_GROWTH* | Emscripten: link with fixed memory (HXCPP_LINK_TOTAL_MEMORY, else Emscripten's 16 MB) instead of letting it grow |
+| *HXCPP_LINK_STACK_SIZE* | Emscripten: the stack size, in bytes or with a suffix such as 1MB. Default 5MB |
+| *HXCPP_LINK_NO_STACK_SIZE* | Emscripten: leave the stack size to Emscripten, whose default is 64 KB |
 | *cygwin*                | Compile for windows using cygwin |
 | *linux*                 | (Cross) Compile for linux |
 | *rpi*                   | (Cross) Compile for raspberry pi |

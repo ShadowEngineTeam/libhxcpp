@@ -838,11 +838,16 @@ static struct timeval *init_timeval( double f, struct timeval *t ) {
    return t;
 }
 
-#ifdef NEKO_POSIX
+// Not only NEKO_POSIX: poll_events uses it on every non-Windows system,
+// Emscripten included
+#ifndef NEKO_WINDOWS
 static double monotonicSeconds()
 {
    return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
+#endif
+
+#ifdef NEKO_POSIX
 
 // A finite wait that a signal interrupted goes on for what is left of it,
 // not for its whole length again

@@ -21,11 +21,9 @@ class Stripper
       args = args.concat(mFlags);
       args.push(inTarget);
 
-      var split = mExe.split(" ");
-      var exe = split.shift();
-      args = split.concat(args);
-
-      var result = ProcessManager.runCommand("", exe, args);
+      // runCommand splits a command like 'python "emstrip.py"' itself, keeping
+      // quoted words whole
+      var result = ProcessManager.runCommand("", mExe, args);
       if (result!=0)
       {
          Tools.exit(result);

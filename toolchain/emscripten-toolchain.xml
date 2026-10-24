@@ -37,6 +37,15 @@
 
     emscripten target will default to single-threaded, which allows for some GC optimizations
 
+  Memory and stack:
+    Memory grows as needed, from HXCPP_LINK_TOTAL_MEMORY if given. Specify HXCPP_LINK_NO_MEMORY_GROWTH
+      for fixed memory, which is Emscripten's 16MB unless HXCPP_LINK_TOTAL_MEMORY says otherwise.
+
+    The stack is 5MB, Emscripten's default before 3.1.27, which cut it to 64KB. Haxe code often needs
+      more than that, and the spill-pointers pass keeps pointers on the stack too.
+      Specify HXCPP_LINK_STACK_SIZE (eg 1MB) to change it, or HXCPP_LINK_NO_STACK_SIZE to leave it to Emscripten.
+      The STACK_SIZE setting needs Emscripten 3.1.25 or later: use HXCPP_LINK_NO_STACK_SIZE with older ones.
+
 
 -->
 
@@ -46,6 +55,9 @@
 <set name="EMSCRIPTEN_ROOT" value="${EMSDK}/upstream/emscripten" if="EMSDK" unless="EMSCRIPTEN_ROOT" />
 
 <set name="HXCPP_SINGLE_THREADED_APP" value="1" unless="HXCPP_MULTI_THREADED_APP" />
+
+<set name="HXCPP_LINK_MEMORY_GROWTH" value="1" unless="HXCPP_LINK_NO_MEMORY_GROWTH" />
+<set name="HXCPP_LINK_STACK_SIZE" value="5MB" unless="HXCPP_LINK_STACK_SIZE || HXCPP_LINK_NO_STACK_SIZE" />
 
 <path name="${EMSDK}" if="EMSDK" />
 <path name="${EMSCRIPTEN_ROOT}" if="EMSCRIPTEN_ROOT" />
@@ -173,9 +185,14 @@
   <fromfile value="" if="GCC_OLD" />
   <flag value="${HXCPP_LINK_OPTIM_LEVEL}" />
 
-  <section if="HXCPP_LINK_MEMORY_GROWTH" >
+  <section if="HXCPP_LINK_MEMORY_GROWTH" unless="HXCPP_LINK_NO_MEMORY_GROWTH" >
      <flag value="-s" />
      <flag value="ALLOW_MEMORY_GROWTH=1" />
+  </section>
+
+  <section if="HXCPP_LINK_STACK_SIZE" unless="HXCPP_LINK_NO_STACK_SIZE" >
+     <flag value="-s" />
+     <flag value="STACK_SIZE=${HXCPP_LINK_STACK_SIZE}" />
   </section>
 
 
