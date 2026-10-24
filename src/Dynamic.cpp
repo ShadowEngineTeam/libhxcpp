@@ -391,8 +391,9 @@ Dynamic::Dynamic(short inVal)
    mPtr = fromInt(inVal);
 }
 
-#if !defined(__GNUC__) || defined(__MINGW32__) || defined(__APPLE__) || (defined(__WORDSIZE) && (__WORDSIZE != 64))
-// long is 64 bits on 64-bit macOS, where int64_t is long long
+#if !defined(__GNUC__) || defined(__MINGW32__) || defined(__APPLE__) || defined(__EMSCRIPTEN__) || (defined(__WORDSIZE) && (__WORDSIZE != 64))
+// long is 64 bits on 64-bit macOS, where int64_t is long long. Emscripten
+// defines no __WORDSIZE, and there long is 32 bits but not int
 Dynamic::Dynamic(unsigned long inVal)
 {
    mPtr = inVal==(unsigned int)inVal ? fromInt((unsigned int)inVal) : Dynamic((cpp::UInt64)inVal).mPtr;
