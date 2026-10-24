@@ -5,6 +5,7 @@
 # Emscripten job fails.
 
 AnonConcurrentString: threads
+ArrayConcurrentString: threads
 AttachedThreadId: threads (std::thread, which needs a pthreads build)
 CppiaArrayAccess: its host is the first --next section, which -D emscripten does not reach
 CppiaBreakpoints: threads
