@@ -231,9 +231,19 @@ static unsigned char *scriptableBase(unsigned char *inStack, int stackSize,
    return inStack - stackSize - sizeof(hx::Object *) - argBytes;
 }
 
+// Without the JIT, as on Emscripten, every frame is interpreted
+static bool isJitted(const ScriptCallable *inFunc)
+{
+   #ifdef CPPIA_JIT
+   return inFunc->compiled!=0;
+   #else
+   return false;
+   #endif
+}
+
 void ScriptCallable::getScriptableVariables(unsigned char *inStack, Array<Dynamic> outNames)
 {
-   unsigned char *base = scriptableBase(inStack, stackSize, args, compiled!=0);
+   unsigned char *base = scriptableBase(inStack, stackSize, args, isJitted(this));
 
    hx::Object *thizz = CppiaCtx::getSlot<hx::Object *>(base);
    if (thizz && !staticEntry)
@@ -249,7 +259,7 @@ void ScriptCallable::getScriptableVariables(unsigned char *inStack, Array<Dynami
 
 bool ScriptCallable::getScriptableValue(unsigned char *inStack, String inName, ::Dynamic &outValue)
 {
-   unsigned char *base = scriptableBase(inStack, stackSize, args, compiled!=0);
+   unsigned char *base = scriptableBase(inStack, stackSize, args, isJitted(this));
    if (inName == HX_CSTRING("this") && !staticEntry)
    {
       outValue = CppiaCtx::getSlot<hx::Object *>(base);
@@ -273,7 +283,7 @@ bool ScriptCallable::getScriptableValue(unsigned char *inStack, String inName, :
 
 bool ScriptCallable::setScriptableValue(unsigned char *inStack, String inName, ::Dynamic inValue)
 {
-   unsigned char *base = scriptableBase(inStack, stackSize, args, compiled!=0);
+   unsigned char *base = scriptableBase(inStack, stackSize, args, isJitted(this));
    for(CppiaStackVarMap::iterator i=varMap.begin();i!=varMap.end();++i)
    {
       CppiaStackVar *var = i->second;
