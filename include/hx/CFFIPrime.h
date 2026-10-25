@@ -142,6 +142,7 @@ inline const T *from_utf8(const char *inStr,int len,hx::IStringAlloc *inAlloc)
 typedef std::string HxString;
 
 #else
+#include <string>
 
 #ifdef _MSC_VER
 #pragma warning( disable : 4190 )
@@ -453,7 +454,87 @@ inline value ToValue(bool inVal) { return alloc_bool(inVal); }
 #ifdef HXCPP_JS_PRIME
 inline value ToValue(HxString inVal) { return inVal.c_str() ? alloc_string_len(inVal.c_str(),inVal.size()) : alloc_null() ; }
 #else
-inline value ToValue(HxString inVal) { return inVal.__s ? alloc_string_len(inVal.c_str(),inVal.size()) : alloc_null() ; }
+// The UTF-8 for inLength UTF-16 code units, embedded NULs included
+inline std::string Utf16ToUtf8(const char16_t *inChars, int inLength)
+{
+   std::string result;
+   for(int i=0;i<inLength;i++)
+   {
+      unsigned int c = inChars[i];
+      if (c>=0xd800 && c<0xdc00 && i+1<inLength && inChars[i+1]>=0xdc00 && inChars[i+1]<0xe000)
+         c = 0x10000 + ((c-0xd800)<<10) + (inChars[++i]-0xdc00);
+      if (c<0x80)
+         result += (char)c;
+      else if (c<0x800)
+      {
+         result += (char)(0xc0 | (c>>6));
+         result += (char)(0x80 | (c & 0x3f));
+      }
+      else if (c<0x10000)
+      {
+         result += (char)(0xe0 | (c>>12));
+         result += (char)(0x80 | ((c>>6) & 0x3f));
+         result += (char)(0x80 | (c & 0x3f));
+      }
+      else
+      {
+         result += (char)(0xf0 | (c>>18));
+         result += (char)(0x80 | ((c>>12) & 0x3f));
+         result += (char)(0x80 | ((c>>6) & 0x3f));
+         result += (char)(0x80 | (c & 0x3f));
+      }
+   }
+   return result;
+}
+
+// An HxString is the Haxe String itself, so with smart strings it may hold
+// UTF-16, its length in code units, as one from alloc_hxs_utf8 does. That is
+// converted to UTF-8 here, as alloc_string_len takes; it was passed as bytes.
+inline value ToValue(HxString inVal)
+{
+   if (!inVal.__s)
+      return alloc_null();
+   if (hxs_encoding(inVal)==hx::StringUtf16)
+   {
+      std::string utf8 = Utf16ToUtf8(hxs_utf16(inVal,0), inVal.size());
+      return alloc_string_len(utf8.c_str(),(int)utf8.size());
+   }
+   return alloc_string_len(inVal.c_str(),inVal.size());
+}
+
+// The bytes of val_string's UTF-8 that hold inUnits UTF-16 code units
+inline int Utf8BytesForUnits(const char *inUtf8, int inUnits)
+{
+   const unsigned char *p = (const unsigned char *)inUtf8;
+   int units = 0;
+   int bytes = 0;
+   while(units<inUnits && p[bytes])
+   {
+      unsigned char c = p[bytes];
+      int n = c<0x80 ? 1 : c<0xe0 ? 2 : c<0xf0 ? 3 : 4;
+      units += n==4 ? 2 : 1;
+      bytes += n;
+   }
+   return bytes;
+}
+
+// The HxString of a String value. val_string is its UTF-8 but val_strlen its
+// length, in UTF-16 code units for a string with smart strings that is not
+// ASCII, so the two did not fit together. Such a string is made again from
+// its UTF-8, as the direct Prime call would have it. A string held as bytes
+// is used as it is, embedded NULs included; in one that is not ASCII, a NUL
+// ends it, as it does val_string.
+inline HxString ValueToHxString(value inValue)
+{
+   const char *utf8 = val_string(inValue);
+   int length = val_strlen(inValue);
+   if (hxs_encoding(HxString(utf8,length,false))==hx::StringUtf8)
+      return HxString(utf8,length,false);
+   int bytes = Utf8BytesForUnits(utf8,length);
+   if (bytes==length)
+      return HxString(utf8,length,false);
+   return alloc_hxs_utf8(utf8,bytes);
+}
 #endif
 
 struct AutoValue
@@ -467,7 +548,11 @@ struct AutoValue
    inline operator float() { return val_number(mValue); }
    inline operator bool() { return val_bool(mValue); }
    inline operator const char *() { return val_string(mValue); }
+   #ifdef HXCPP_JS_PRIME
    inline operator HxString() { return val_is_null(mValue) ? HxString(0,0) : HxString(val_string(mValue), val_strlen(mValue), false); }
+   #else
+   inline operator HxString() { return val_is_null(mValue) ? HxString(0,0) : ValueToHxString(mValue); }
+   #endif
 };
 
 

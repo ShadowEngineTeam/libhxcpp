@@ -18,6 +18,13 @@ for test in */; do
       tail -30 "$test/bin/build.log"
       continue
    fi
+   # An ndll the test loads was built where Haxe ran, for that system, so it
+   # is built again here
+   if [ -f "$test/native/Build.xml" ] && ! (cd "$test/native" && rm -rf obj ndll && neko "$root/hxcpp.n" Build.xml -DHXCPP="$root/" > build.log 2>&1); then
+      echo "Failed to build the native fixture of test $test"
+      tail -30 "$test/native/build.log"
+      continue
+   fi
    if ! actual=$("$test/bin/Main"); then
       echo "Test $test failed: return code was $?"
       continue

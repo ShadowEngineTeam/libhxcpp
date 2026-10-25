@@ -432,6 +432,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 
 ### CFFI, ndlls, the debugger and telemetry
 
+* Fixed the ordinary CFFI wrapper of a DEFINE_PRIME function losing the characters of a string that is not ASCII, in an argument or a result, though the direct Prime call kept them: an argument paired val_string's UTF-8 with a length in UTF-16 code units, and a result was read as UTF-8 when it held UTF-16 (libhxcpp #323)
 * Fixed CFFI field IDs for names that are not ASCII, such as `café`: val_id made the name from its UTF-8 bytes undecoded, so val_field and alloc_field missed the field Haxe code had set, and alloc_field added a second one. JS Prime bindings read the name as Latin-1, with the same result. Both now decode it as UTF-8 (libhxcpp #288)
 * The plugin loader (module registry, primitive cache, kind registry, search paths) is now thread-safe; failed lookups no longer permanently grow the registries; __hxcpp_unload_all_libraries clears the caches so later loads cannot use freed module handles or call into unmapped libraries
 * "Could not load module" errors now include the OS loader detail (dlerror/Windows error code) - a missing dependent library or wrong bitness was indistinguishable from file-not-found
