@@ -3359,6 +3359,10 @@ public:
       mLargeAllocated = 0;
       mLargeMin = (size_t)-1;
       mLargeMax = 0;
+      mLargeOld = 0;
+      mLargeOldMin = (size_t)-1;
+      mLargeOldMax = 0;
+      mLargeOldReleased = false;
       mRecycleSize = 0;
       mLargeAllocSpace = sLargeAllocSpaceFloor;
       mLargeAllocForceRefresh = mLargeAllocSpace;
@@ -3456,9 +3460,11 @@ public:
 
       ((unsigned char *)inLarge)[HX_ENDIAN_MARK_ID_BYTE] = 0;
       mLargeListLock.lock();
-      // With no room to recycle it, the sweep frees it instead
+      // With no room to recycle it, the sweep frees it instead, so the next
+      //  sweep must look at the old allocations too
       if (!largeObjectRecycle.hasExtraCapacity(1))
       {
+         mLargeOldReleased = true;
          mLargeListLock.unlock();
          return;
       }
@@ -3472,7 +3478,7 @@ public:
       for(int i=mLargeList.size()-1;i>=0;i--)
          if (mLargeList[i]==blob)
          {
-            mLargeList.qerase(i);
+            eraseLarge(i);
             break;
          }
       largeObjectRecycle.push(blob);
@@ -3596,6 +3602,22 @@ public:
 #endif
 
       return result+2;
+   }
+
+   // Removes mLargeList[inIdx], keeping the old allocations before the new.
+   //  Under mLargeListLock or in a collection
+   void eraseLarge(int inIdx)
+   {
+      if (inIdx<mLargeOld)
+      {
+         // The last old one fills the gap, and the last new one its place
+         mLargeIndexReady = false;
+         mLargeOld--;
+         mLargeList[inIdx] = mLargeList[mLargeOld];
+         mLargeList.qerase(mLargeOld);
+      }
+      else
+         mLargeList.qerase(inIdx);
    }
 
    // Under mLargeListLock or in a collection. Callers can release more
@@ -4864,8 +4886,10 @@ public:
    double tMarked;
    void MarkAll(bool inGenerational)
    {
-      mLargeIndexReady = false;
+      // The old allocations' index stays: only a change to them drops it
       mLargeLookups = 0;
+      mYoungLargeIndexReady = false;
+      mYoungLargeLookups = 0;
 
       if (!inGenerational)
       {
@@ -5383,11 +5407,23 @@ public:
          recycleRemaining = mLargeAllocForceRefresh;
       #endif
 
-      int idx = 0;
+      // The allocations that survived a collection come first in the list. A
+      // minor collection cannot free one, so it sweeps only those made since,
+      // unless an old one was released for the sweep to free. It used to
+      // sweep them all, touching every long-lived buffer (libhxcpp #318).
+      bool sweepOld = !generational || mLargeOldReleased;
+      mLargeOldReleased = false;
+      int firstNew = mLargeOld;
+      int idx = sweepOld ? 0 : mLargeOld;
+      if (sweepOld)
+      {
+         mLargeOld = 0;
+         mLargeIndexReady = false;
+      }
       int l0 = mLargeList.size();
       // Bounds of the survivors, so a past burst does not keep them wide
-      size_t largeMin = (size_t)-1;
-      size_t largeMax = 0;
+      size_t largeMin = sweepOld ? (size_t)-1 : mLargeOldMin;
+      size_t largeMax = sweepOld ? 0 : mLargeOldMax;
       while(idx<mLargeList.size())
       {
          unsigned int *blob = mLargeList[idx];
@@ -5417,8 +5453,18 @@ public:
             idx++;
          }
       }
-      mLargeMin = largeMin;
-      mLargeMax = largeMax;
+      // Every survivor is old now. A kept index takes the new survivors' bases
+      if (mLargeIndexReady && mLargeList.size()>firstNew)
+      {
+         size_t had = mLargeIndex.size();
+         for(int i=firstNew;i<mLargeList.size();i++)
+            mLargeIndex.push_back( reinterpret_cast<uintptr_t>(mLargeList[i] + 2) );
+         std::sort(mLargeIndex.begin()+had, mLargeIndex.end());
+         std::inplace_merge(mLargeIndex.begin(), mLargeIndex.begin()+had, mLargeIndex.end());
+      }
+      mLargeOld = mLargeList.size();
+      mLargeOldMin = mLargeMin = largeMin;
+      mLargeOldMax = mLargeMax = largeMax;
       mRecycleSize.store((int)largeObjectRecycle.size(), std::memory_order_relaxed);
 
       int l1 = mLargeList.size();
@@ -5908,19 +5954,42 @@ public:
 
       // Only the collector looks up while marking, with the list fixed, so once
       // a collection has seen several candidates in range it sorts the bases
-      // and searches them instead of scanning the list for each
-      if (!mLargeIndexReady && mLargeList.size()>64 && ++mLargeLookups>8)
+      // and searches them instead of scanning the list for each. The old
+      // allocations' sorted bases are kept while they do not change, which a
+      // minor collection cannot do: sorting them again in each collection
+      // took longer than sweeping them did (libhxcpp #318).
+      if (!mLargeIndexReady && mLargeOld>64 && ++mLargeLookups>8)
       {
-         uintptr_t *index = mLargeIndex.setSize(mLargeList.size());
-         for(int i=0;i<mLargeList.size();i++)
-            index[i] = reinterpret_cast<uintptr_t>(mLargeList[i] + 2);
-         std::sort(index, index + mLargeList.size());
+         mLargeIndex.resize(mLargeOld);
+         for(int i=0;i<mLargeOld;i++)
+            mLargeIndex[i] = reinterpret_cast<uintptr_t>(mLargeList[i] + 2);
+         std::sort(mLargeIndex.begin(), mLargeIndex.end());
          mLargeIndexReady = true;
       }
       if (mLargeIndexReady)
-         return std::binary_search(&mLargeIndex[0], &mLargeIndex[0] + mLargeIndex.size(), inPtr) ? memLarge : memUnmanaged;
+      {
+         if (std::binary_search(mLargeIndex.begin(), mLargeIndex.end(), inPtr))
+            return memLarge;
+      }
+      else
+         for(int i=0;i<mLargeOld;i++)
+            if (reinterpret_cast<uintptr_t>(mLargeList[i] + 2)==inPtr)
+               return memLarge;
 
-      for(int i=0;i<mLargeList.size();i++)
+      // Those made since the last collection, which change in each
+      int young = mLargeList.size() - mLargeOld;
+      if (!mYoungLargeIndexReady && young>64 && ++mYoungLargeLookups>8)
+      {
+         mYoungLargeIndex.resize(young);
+         for(int i=0;i<young;i++)
+            mYoungLargeIndex[i] = reinterpret_cast<uintptr_t>(mLargeList[mLargeOld+i] + 2);
+         std::sort(mYoungLargeIndex.begin(), mYoungLargeIndex.end());
+         mYoungLargeIndexReady = true;
+      }
+      if (mYoungLargeIndexReady)
+         return std::binary_search(mYoungLargeIndex.begin(), mYoungLargeIndex.end(), inPtr) ? memLarge : memUnmanaged;
+
+      for(int i=mLargeOld;i<mLargeList.size();i++)
       {
          uintptr_t blob{ reinterpret_cast<uintptr_t>(mLargeList[i] + 2) };
          if (blob==inPtr)
@@ -5939,9 +6008,20 @@ public:
    std::atomic_size_t mLargeAllocated;
    size_t mLargeMin;
    size_t mLargeMax;
-   hx::QuickVec<uintptr_t> mLargeIndex;
+   // mLargeList[0..mLargeOld) survived a collection, and the rest are newer.
+   //  The bounds are of the old ones, at the last sweep
+   int mLargeOld;
+   size_t mLargeOldMin;
+   size_t mLargeOldMax;
+   // An old allocation was released for the sweep to free
+   bool mLargeOldReleased;
+   // The sorted bases of mLargeList[0..mLargeOld), and of the rest
+   std::vector<uintptr_t> mLargeIndex;
    bool mLargeIndexReady = false;
    int mLargeLookups = 0;
+   std::vector<uintptr_t> mYoungLargeIndex;
+   bool mYoungLargeIndexReady = false;
+   int mYoungLargeLookups = 0;
    size_t mTotalAfterLastCollect;
    size_t mAllBlocksCount;
    size_t mLiveBytes;

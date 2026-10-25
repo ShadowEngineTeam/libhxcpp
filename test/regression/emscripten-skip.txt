@@ -18,6 +18,7 @@ GcRunKeepsHeap: expects the desktop 20 MB working target; other platforms, Emscr
 GcScopeOwnership: counts thread attachments, which single-threaded Emscripten builds do not make
 GcWeakMapChain: threads
 GenerationalFinalizerLifecycle: threads (std::thread, which needs a pthreads build)
+GenerationalLargeBufferLifecycle: threads (std::thread, which needs a pthreads build)
 GenerationalWeakRefLifecycle: threads (std::thread, which needs a pthreads build)
 Int64DivisionBoundary: processes (runs itself)
 IntBoxesAcrossThreads: threads
