@@ -517,7 +517,11 @@ HXCPP_EXTERN_CLASS_ATTRIBUTES extern unsigned int gPrevMarkIdMask;
 
 #ifdef HXCPP_GC_GENERATIONAL
 class ArrayBase;
-// The write barrier's slow path for a young value stored in an old array
+// The write barrier's slow path for young values stored in an old container
+//  with inLength elements: logs those of inValues that are young, or
+//  remembers inOwner whole. ioLogged is the container's count for the cycle
+HXCPP_EXTERN_CLASS_ATTRIBUTES void YoungStore(hx::Object *inOwner, unsigned int &ioLogged, int inLength, const void *const *inValues, int inCount, StackContext *inCtx);
+// The same for one value stored in an old array
 HXCPP_EXTERN_CLASS_ATTRIBUTES void ArrayYoungStore(ArrayBase *inArray, const void *inValue, StackContext *inCtx);
 #endif
 

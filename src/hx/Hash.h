@@ -287,6 +287,10 @@ struct HashRoot : public Object
    int       size;
    int       mask;
    int       bucketCount;
+   #ifdef HXCPP_GC_GENERATIONAL
+   // The young values logged for this map in the cycle (hx::YoungStore)
+   unsigned int mYoungLogged;
+   #endif
 
     HX_IS_INSTANCE_OF enum { _hx_ClassId = hx::clsIdHash };
 
@@ -305,6 +309,9 @@ struct HashBase : public HashRoot
       size = 0;
       mask = 0;
       bucketCount = 0;
+      #ifdef HXCPP_GC_GENERATIONAL
+      mYoungLogged = 0;
+      #endif
    }
 
 
@@ -751,6 +758,30 @@ struct Hash : public HashBase< typename ELEMENT::Key >
       return inPtr && !(((unsigned char *)inPtr)[ HX_ENDIAN_MARK_ID_BYTE]);
    }
 
+   #ifdef HXCPP_GC_GENERATIONAL
+   // The barrier for young values stored in this map while it is old. A
+   //  large strong map logs them (hx::YoungStore) rather than be remembered
+   //  whole. A weak map's values live only with their keys, which marking
+   //  the map decides, so it is remembered whole
+   void rememberYoung(const void *inA, const void *inB, const void *inC)
+   {
+      unsigned char &mark =  ((unsigned char *)(this))[ HX_ENDIAN_MARK_ID_BYTE];
+      if (mark == hx::gByteMarkID && (IsNursery(inA) || IsNursery(inB) || IsNursery(inC)) )
+      {
+         if (Element::WeakKeys)
+         {
+            mark|=HX_GC_REMEMBERED;
+            (HX_CTX_GET)->pushReferrer(this);
+         }
+         else
+         {
+            const void *values[] = { inA, inB, inC };
+            hx::YoungStore(this, this->mYoungLogged, size, values, 3, HX_CTX_GET);
+         }
+      }
+   }
+   #endif
+
    template<typename SET>
    void TSet(Key inKey, const SET &inValue)
    {
@@ -771,8 +802,10 @@ struct Hash : public HashBase< typename ELEMENT::Key >
       if (el)
       {
          CopyValue(el->value,inValue);
+         #ifdef HXCPP_GC_GENERATIONAL
          if (hx::ContainsPointers<Value>())
-            HX_OBJ_WB_GET(this,hx::PointerOf(el->value));
+            rememberYoung(hx::PointerOf(el->value), 0, 0);
+         #endif
          return;
       }
       el = allocElement();
@@ -785,17 +818,9 @@ struct Hash : public HashBase< typename ELEMENT::Key >
       bucket[hash&mask] = el;
 
       #ifdef HXCPP_GC_GENERATIONAL
-      unsigned char &mark =  ((unsigned char *)(this))[ HX_ENDIAN_MARK_ID_BYTE];
-      if (mark == hx::gByteMarkID)
-      {
-         // Look for nursery objects...
-         if ( IsNursery(el) || IsNursery(hx::PointerOf(el->key)) ||
-             (hx::ContainsPointers<Value>() && IsNursery(hx::PointerOf(el->value)) ) )
-         {
-            mark|=HX_GC_REMEMBERED;
-            (HX_CTX_GET)->pushReferrer(this);
-         }
-      }
+      // The new element, and its key and value, may be nursery objects
+      rememberYoung(el, hx::PointerOf(el->key),
+                    hx::ContainsPointers<Value>() ? hx::PointerOf(el->value) : 0);
       #endif
    }
 

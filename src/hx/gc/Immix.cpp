@@ -1892,51 +1892,63 @@ struct GlobalChunks
 GlobalChunks sGlobalChunks;
 
 #ifdef HXCPP_GC_GENERATIONAL
-// A young value stored in an old array made the whole array a remembered
-// referrer, so the next minor collection marked every element of it, however
-// few changed: one store in an old four-million-element array added 2-3 ms to
-// it (libhxcpp #301). For a large array, the young value itself is logged now,
-// and the minor collection marks it as a root. That keeps it alive wherever it
-// is moved to in the array, by a sort, splice or blit, which a range of dirty
-// slots would not. A value overwritten before then lives one collection
-// longer. Past a thirty-second of the array's length in one cycle, marking the
-// array is cheaper, so it is remembered whole, as before.
+// A young value stored in an old array or map made the whole of it a
+// remembered referrer, so the next minor collection marked every element,
+// however few changed: one store in an old four-million-element array added
+// 2-3 ms to it (libhxcpp #301), and one in an old million-entry map 1.3 ms
+// (#305). For a large one, the young values themselves are logged now, and the
+// minor collection marks them as roots. That keeps a value alive wherever it
+// is moved to, by a sort, splice or blit in an array or a rehash in a map,
+// which a range of dirty slots would not. A value overwritten before then
+// lives one collection longer. Past a thirty-second of the length in one
+// cycle, marking the whole is cheaper, so it is remembered whole, as before.
 static MarkChunk *sYoungValueChunks = 0;
 static hx::FastMutex sYoungValueLock;
 static unsigned int sCollectCycle = 1;
 
 enum { YOUNG_LOG_MIN_LENGTH = 1024 };
 
-void ArrayYoungStore(ArrayBase *inArray, const void *inValue, StackContext *inCtx)
+void YoungStore(hx::Object *inOwner, unsigned int &ioLogged, int inLength, const void *const *inValues, int inCount, StackContext *inCtx)
 {
-   MarkChunk *chunk = inCtx->mYoungValues;
-   if (chunk && inArray->length>=YOUNG_LOG_MIN_LENGTH)
+   if (inCtx->mYoungValues && inLength>=YOUNG_LOG_MIN_LENGTH)
    {
       // Counted per cycle: the cycle is in the top 12 bits. A lost update
       //  between threads only logs more than the limit
-      unsigned int logged = inArray->mYoungLogged;
+      unsigned int logged = ioLogged;
       unsigned int cycle = sCollectCycle & 0xfff;
       unsigned int count = (logged>>20)==cycle ? (logged & 0xfffff) : 0;
-      unsigned int limit = std::min( (unsigned int)inArray->length>>5, 0xfffffu );
+      unsigned int limit = std::min( (unsigned int)inLength>>5, 0xfffffu );
       if (count<limit)
       {
-         inArray->mYoungLogged = (cycle<<20) | (count+1);
-         chunk->push( (hx::Object *)inValue );
-         if (chunk->count==MarkChunk::SIZE)
+         ioLogged = (cycle<<20) | (count+1);
+         for(int v=0;v<inCount;v++)
          {
+            const void *value = inValues[v];
+            if (!value || ((unsigned char *)value)[HX_ENDIAN_MARK_ID_BYTE])
+               continue;
+            MarkChunk *chunk = inCtx->mYoungValues;
+            chunk->push( (hx::Object *)value );
+            if (chunk->count==MarkChunk::SIZE)
             {
-               std::lock_guard<hx::FastMutex> lock(sYoungValueLock);
-               chunk->next = sYoungValueChunks;
-               sYoungValueChunks = chunk;
+               {
+                  std::lock_guard<hx::FastMutex> lock(sYoungValueLock);
+                  chunk->next = sYoungValueChunks;
+                  sYoungValueChunks = chunk;
+               }
+               inCtx->mYoungValues = sGlobalChunks.alloc();
             }
-            inCtx->mYoungValues = sGlobalChunks.alloc();
          }
          return;
       }
    }
-   unsigned char &mark = ((unsigned char *)inArray)[HX_ENDIAN_MARK_ID_BYTE];
+   unsigned char &mark = ((unsigned char *)inOwner)[HX_ENDIAN_MARK_ID_BYTE];
    mark |= HX_GC_REMEMBERED;
-   inCtx->pushReferrer(inArray);
+   inCtx->pushReferrer(inOwner);
+}
+
+void ArrayYoungStore(ArrayBase *inArray, const void *inValue, StackContext *inCtx)
+{
+   YoungStore(inArray, inArray->mYoungLogged, inArray->length, &inValue, 1, inCtx);
 }
 
 // Takes a thread's log, under the lock or with the world stopped
