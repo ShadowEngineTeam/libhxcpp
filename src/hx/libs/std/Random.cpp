@@ -163,7 +163,20 @@ int _hx_std_random_int( Dynamic handle, int max )
 {
    if( max <= 0 )
       return 0;
-   return (rnd_int( getRnd(handle)) & 0x3FFFFFFF) % max;
+   rnd *r = getRnd(handle);
+   // Up to 2^30, as before, so a seed gives the same values it always has
+   if( max <= 0x40000000 )
+      return (rnd_int(r) & 0x3FFFFFFF) % max;
+   // Above it, 30 bits cannot reach the top of the range: all 32 bits, with
+   //  draws past the last whole multiple of max skipped, so that no value is
+   //  more likely than another
+   unsigned int range = (unsigned int)max;
+   unsigned int limit = 0xFFFFFFFFu - (0xFFFFFFFFu % range + 1) % range;
+   unsigned int v;
+   do
+      v = rnd_int(r);
+   while( v > limit );
+   return (int)(v % range);
 }
 
 /**

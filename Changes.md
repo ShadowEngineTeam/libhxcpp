@@ -175,6 +175,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 
 ### Strings, numbers, Dynamic and reflection
 
+* Fixed cpp.Random.int with a bound above 2^30 never returning values from 2^30 up: it used 30 bits of each draw. Such a bound now uses all 32, without favouring any value. Smaller bounds give the same values for a seed as before (libhxcpp #276)
 * Fixed String.substr with a large length and a positive start, such as `"abc".substr(1, 0x7fffffff)`, ending the process with Memory Exhausted: the length plus the start overflowed an Int, so the length was not clamped to the characters left (libhxcpp #279)
 * Fixed an ObjectMap holding Int64 values rounding them all to the nearest Float when a Float was set: it converted its Int64 storage to Float storage, which loses every value past 2^53. It now converts to Dynamic storage, as the other maps do (libhxcpp #282)
 * Fixed a field write through reflection to a boxed Int64 from -1 to 255 changing every other boxing of that value: those boxes are shared constants. Writing `hi` or `lo` on one now throws, and a box of a value outside that range can still be changed (libhxcpp #295)
