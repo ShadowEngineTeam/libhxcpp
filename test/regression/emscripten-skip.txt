@@ -55,3 +55,4 @@ ThreadEndsAtExitDebugger: threads
 ThreadEndsWhileCollecting: threads
 ThreadWaitTimeouts: threads
 TimerStampFirstCall: threads
+WeakMapSparseCapacity: threads (std::thread, which needs a pthreads build)

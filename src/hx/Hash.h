@@ -360,6 +360,9 @@ struct Hash : public HashBase< typename ELEMENT::Key >
 
 
    ELEMENT **bucket;
+   // A collection folded the buckets down in place, so the array is bigger
+   //  than bucketCount needs until the next insert or remove reallocates it
+   bool bucketsOversized;
 
    // Int keys start on the identity hash: it matches stock hxcpp and spreads
    // arithmetic keys (ids, i*odd, offsets) with no collisions at all. Keys
@@ -376,6 +379,7 @@ struct Hash : public HashBase< typename ELEMENT::Key >
    Hash() : HashBase<Key>( StoreOf<Value>::store )
    {
       bucket = 0;
+      bucketsOversized = false;
       mixIntKeys = false;
       if (ELEMENT::WeakKeys && Element::ManageKeys)
          RegisterWeakHash(this);
@@ -466,7 +470,54 @@ struct Hash : public HashBase< typename ELEMENT::Key >
             bucket = 0;
             bucketCount = 0;
             mask = 0;
+            bucketsOversized = false;
          }
+         // Most keys gone: fold the buckets down, in place, to the count that
+         // remove() would compact to, so the collections that follow scan the
+         // buckets in use rather than the most there ever were. The array keeps
+         // its size until the next insert or remove, which may allocate
+         // (libhxcpp #204)
+         else if (bucketCount>8 && size < (bucketCount>>2))
+         {
+            int newCount = bucketCount;
+            while(newCount>8 && size < (newCount>>2))
+               newCount >>= 1;
+            foldBuckets(newCount);
+            bucketsOversized = true;
+         }
+      }
+   }
+
+   // Moves the elements of buckets [inNewCount,bucketCount) into the first
+   // inNewCount, which becomes the count. Allocates nothing
+   void foldBuckets(int inNewCount)
+   {
+      int newMask = inNewCount-1;
+      for(int b=inNewCount; b<bucketCount; b++)
+      {
+         Element *head = bucket[b];
+         if (head)
+         {
+            Element **lastPtr = &(head->next);
+            while(*lastPtr)
+               lastPtr = & (*lastPtr)->next;
+            *lastPtr = bucket[b & newMask];
+            bucket[b & newMask] = head;
+            bucket[b] = 0;
+         }
+      }
+      mask = newMask;
+      bucketCount = inNewCount;
+   }
+
+   // An array a collection folded down gets the size its count needs
+   void releaseOversizedBuckets()
+   {
+      if (bucketsOversized)
+      {
+         bucketsOversized = false;
+         bucket = (Element **)InternalRealloc(bucketCount*sizeof(ELEMENT *),bucket, sizeof(ELEMENT *)*bucketCount );
+         HX_OBJ_WB_GET(this, bucket);
       }
    }
 
@@ -547,31 +598,10 @@ struct Hash : public HashBase< typename ELEMENT::Key >
 
    void compact()
    {
-      int origSize = bucketCount;
-      int newSize = bucketCount>>1;
-      // printf("compact -> %d\n", newSize);
-      mask = newSize-1;
-      for(int b=newSize; b<bucketCount; b++)
-      {
-         Element *head = bucket[b];
-         if (head)
-         {
-            Element *oldHead = bucket[b-newSize];
-            bucket[b-newSize] = head;
-
-            if (oldHead)
-            {
-               // Append to last element
-               Element **lastPtr = &(head->next);
-               while(*lastPtr)
-                  lastPtr = & (*lastPtr)->next;
-               *lastPtr = oldHead;
-            }
-            bucket[b] = 0;
-         }
-      }
-      bucketCount = newSize;
-      bucket = (Element **)InternalRealloc(origSize*sizeof(ELEMENT *),bucket, sizeof(ELEMENT *)*bucketCount );
+      // printf("compact -> %d\n", bucketCount>>1);
+      foldBuckets(bucketCount>>1);
+      bucketsOversized = false;
+      bucket = (Element **)InternalRealloc(bucketCount*sizeof(ELEMENT *),bucket, sizeof(ELEMENT *)*bucketCount );
       HX_OBJ_WB_GET(this, bucket);
    }
 
@@ -579,6 +609,7 @@ struct Hash : public HashBase< typename ELEMENT::Key >
    {
       if (!bucket)
          return false;
+      releaseOversizedBuckets();
       unsigned int hash = keyHash(inKey);
       Element **head = bucket + (hash&mask);
       while(*head)
@@ -603,6 +634,7 @@ struct Hash : public HashBase< typename ELEMENT::Key >
 
    ELEMENT *allocElement()
    {
+      releaseOversizedBuckets();
       ELEMENT *result = (ELEMENT *)InternalNew( sizeof(ELEMENT), false );
       size++;
       expandBuckets(size);
@@ -777,6 +809,7 @@ struct Hash : public HashBase< typename ELEMENT::Key >
    void clear() HXCPP_OVERRIDE
    {
       bucket = 0;
+      bucketsOversized = false;
       size = 0;
       mask = 0;
       bucketCount = 0;
