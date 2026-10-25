@@ -1,0 +1,13 @@
+--main ScriptA
+-cppia bin/a.cppia
+--resource a.txt@a
+--next
+--main ScriptB
+-cppia bin/b.cppia
+--resource b.txt@b
+--next
+--main Main
+-cpp bin
+-D scriptable
+--dce no
+--resource host.txt@host

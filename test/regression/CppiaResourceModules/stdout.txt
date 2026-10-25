@@ -1,0 +1,7 @@
+first module resource: true
+host resource remains: true
+first module still readable: true
+second module readable: true
+first module bytes remain: true
+both modules enumerated: true
+first module remains after second release: true

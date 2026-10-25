@@ -93,21 +93,51 @@ namespace hx
 //typedef std::map<std::wstring,Resource> ResourceSet;
 //static ResourceSet sgResources;
 
+// The host's resources are registered first and stay. Each cppia module
+// registers its own while it is loaded: there used to be room for one, so a
+// second module hid the first's. Modules load and release on any thread, so
+// the list is locked, and nothing is allocated from the collector while it is
+// held: a thread waiting for it is not at a safe point.
 Resource *sgResources = 0;
-Resource *sgSecondResources = 0;
+static std::vector<Resource *> &sgScriptResources = *new std::vector<Resource *>();
+static hx::FastMutex &sgScriptResourceMutex = *new hx::FastMutex();
 
 void RegisterResources(Resource *inResources)
 {
    if (sgResources)
-      sgSecondResources = inResources;
+   {
+      std::lock_guard<hx::FastMutex> lock(sgScriptResourceMutex);
+      sgScriptResources.push_back(inResources);
+   }
    else
       sgResources = inResources;
 }
 
 void UnregisterResources(Resource *inResources)
 {
-   if (sgSecondResources==inResources)
-      sgSecondResources = 0;
+   std::lock_guard<hx::FastMutex> lock(sgScriptResourceMutex);
+   for(size_t i=0;i<sgScriptResources.size();i++)
+      if (sgScriptResources[i]==inResources)
+      {
+         sgScriptResources.erase(sgScriptResources.begin()+i);
+         break;
+      }
+}
+
+// A copy of the data of the script resource named inName, from the module
+// loaded last that has one: the module could be released, and its data freed,
+// once the lock is let go
+static bool findScriptResource(const String &inName, std::string &outData)
+{
+   std::lock_guard<hx::FastMutex> lock(sgScriptResourceMutex);
+   for(int t=(int)sgScriptResources.size()-1;t>=0;t--)
+      for(Resource *reso = sgScriptResources[t]; reso->mData; reso++)
+         if (reso->mName == inName)
+         {
+            outData.assign((const char *)reso->mData, reso->mDataLength);
+            return true;
+         }
+   return false;
 }
 
 }
@@ -122,9 +152,29 @@ Array<String> __hxcpp_resource_names()
       for(Resource *reso  = sgResources; reso->mData; reso++)
          result->push( reso->mName );
 
-   if (sgSecondResources)
-      for(Resource *reso  = sgSecondResources; reso->mData; reso++)
-         result->push( reso->mName );
+   // The scripts' names, in load order. The array is allocated with the lock
+   //  let go, then filled with it held, again if a module came or went
+   for(;;)
+   {
+      int count = 0;
+      {
+         std::lock_guard<hx::FastMutex> lock(sgScriptResourceMutex);
+         for(size_t t=0;t<sgScriptResources.size();t++)
+            for(Resource *reso = sgScriptResources[t]; reso->mData; reso++)
+               count++;
+      }
+      int base = result->length;
+      result->__SetSizeExact(base + count);
+      std::lock_guard<hx::FastMutex> lock(sgScriptResourceMutex);
+      int n = 0;
+      for(size_t t=0;t<sgScriptResources.size();t++)
+         for(Resource *reso = sgScriptResources[t]; reso->mData; reso++)
+            if (n++<count)
+               result->__unsafe_set(base + n - 1, reso->mName);
+      if (n==count)
+         break;
+      result->__SetSizeExact(base);
+   }
 
    return result;
 }
@@ -150,20 +200,18 @@ String __hxcpp_resource_string(String inName)
          #endif
       }
 
-   if (sgSecondResources)
+   std::string data;
+   if (findScriptResource(inName, data))
    {
-      for(Resource *reso  = sgSecondResources; reso->mData; reso++)
-         if (reso->mName == inName)
-         {
-            #ifdef HX_SMART_STRINGS
-            const unsigned char *p = reso->mData;
-            for(int i=0;i<reso->mDataLength;i++)
-               if (p[i]>127)
-                  return _hx_utf8_to_utf16(p, reso->mDataLength,false);
-            #endif
-            // A script's resources are freed with its module
-            return String::create((const char *) reso->mData, reso->mDataLength );
-         }
+      int len = (int)data.size();
+      #ifdef HX_SMART_STRINGS
+      const unsigned char *p = (const unsigned char *)data.data();
+      for(int i=0;i<len;i++)
+         if (p[i]>127)
+            return _hx_utf8_to_utf16(p, len,false);
+      #endif
+      // A copy: a script's resources are freed with its module
+      return String::create(data.data(), len );
    }
    return null();
 }
@@ -181,17 +229,14 @@ Array<unsigned char> __hxcpp_resource_bytes(String inName)
             return result;
          }
       }
-   if (sgSecondResources)
-      for(Resource *reso  = sgSecondResources; reso->mData; reso++)
-      {
-         if (reso->mName == inName)
-         {
-            int len = reso->mDataLength;
-            Array<unsigned char> result( len, 0);
-            memcpy( result->GetBase() , reso->mData, len );
-            return result;
-         }
-      }
+   std::string data;
+   if (findScriptResource(inName, data))
+   {
+      int len = (int)data.size();
+      Array<unsigned char> result( len, 0);
+      memcpy( result->GetBase() , data.data(), len );
+      return result;
+   }
 
    return null();
 }
