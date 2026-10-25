@@ -118,6 +118,9 @@ Array<Dynamic> ArrayBase::__new(int inSize,int inReserve)
 
 ArrayBase::ArrayBase(int inSize,int inReserve,int inElementSize,bool inAtomic)
 {
+   #ifdef HXCPP_GC_GENERATIONAL
+   mYoungLogged = 0;
+   #endif
    int alloc = inSize < inReserve ? inReserve : inSize;
    if ((unsigned int)alloc > 0x7fffffffU/inElementSize)
    {

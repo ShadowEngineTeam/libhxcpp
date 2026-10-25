@@ -450,6 +450,9 @@ struct StackContext : public hx::ImmixAllocator
    #endif
 
    #ifdef HXCPP_GC_GENERATIONAL
+   // Young values stored in large old arrays, for the next minor collection
+   //  to mark (ArrayYoungStore)
+   MarkChunk *mYoungValues;
    MarkChunk *mOldReferrers;
    inline void pushReferrer(hx::Object *inObj)
    {

@@ -417,6 +417,11 @@ public:
    int getArrayConvertId() const { return mArrayConvertId; }
 
    mutable int length;
+   #ifdef HXCPP_GC_GENERATIONAL
+   // How many young values the write barrier logged for this array in the
+   //  current collection cycle, with the cycle in the top bits (ArrayYoungStore)
+   unsigned int mYoungLogged;
+   #endif
 
    static inline int baseOffset() { return (int)offsetof(ArrayBase,mBase); }
    static inline int allocOffset() { return (int)offsetof(ArrayBase,mAlloc); }

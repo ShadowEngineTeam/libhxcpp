@@ -1891,6 +1891,94 @@ struct GlobalChunks
 
 GlobalChunks sGlobalChunks;
 
+#ifdef HXCPP_GC_GENERATIONAL
+// A young value stored in an old array made the whole array a remembered
+// referrer, so the next minor collection marked every element of it, however
+// few changed: one store in an old four-million-element array added 2-3 ms to
+// it (libhxcpp #301). For a large array, the young value itself is logged now,
+// and the minor collection marks it as a root. That keeps it alive wherever it
+// is moved to in the array, by a sort, splice or blit, which a range of dirty
+// slots would not. A value overwritten before then lives one collection
+// longer. Past a thirty-second of the array's length in one cycle, marking the
+// array is cheaper, so it is remembered whole, as before.
+static MarkChunk *sYoungValueChunks = 0;
+static hx::FastMutex sYoungValueLock;
+static unsigned int sCollectCycle = 1;
+
+enum { YOUNG_LOG_MIN_LENGTH = 1024 };
+
+void ArrayYoungStore(ArrayBase *inArray, const void *inValue, StackContext *inCtx)
+{
+   MarkChunk *chunk = inCtx->mYoungValues;
+   if (chunk && inArray->length>=YOUNG_LOG_MIN_LENGTH)
+   {
+      // Counted per cycle: the cycle is in the top 12 bits. A lost update
+      //  between threads only logs more than the limit
+      unsigned int logged = inArray->mYoungLogged;
+      unsigned int cycle = sCollectCycle & 0xfff;
+      unsigned int count = (logged>>20)==cycle ? (logged & 0xfffff) : 0;
+      unsigned int limit = std::min( (unsigned int)inArray->length>>5, 0xfffffu );
+      if (count<limit)
+      {
+         inArray->mYoungLogged = (cycle<<20) | (count+1);
+         chunk->push( (hx::Object *)inValue );
+         if (chunk->count==MarkChunk::SIZE)
+         {
+            {
+               std::lock_guard<hx::FastMutex> lock(sYoungValueLock);
+               chunk->next = sYoungValueChunks;
+               sYoungValueChunks = chunk;
+            }
+            inCtx->mYoungValues = sGlobalChunks.alloc();
+         }
+         return;
+      }
+   }
+   unsigned char &mark = ((unsigned char *)inArray)[HX_ENDIAN_MARK_ID_BYTE];
+   mark |= HX_GC_REMEMBERED;
+   inCtx->pushReferrer(inArray);
+}
+
+// Takes a thread's log, under the lock or with the world stopped
+static void TakeYoungValues(MarkChunk *&ioChunk)
+{
+   if (ioChunk)
+   {
+      if (ioChunk->count)
+      {
+         ioChunk->next = sYoungValueChunks;
+         sYoungValueChunks = ioChunk;
+      }
+      else
+         sGlobalChunks.free(ioChunk);
+      ioChunk = 0;
+   }
+}
+
+// Marks the logged values in a minor collection, and drops the log
+static void MarkYoungValues(bool inMark, hx::MarkContext *inCtx)
+{
+   while(sYoungValueChunks)
+   {
+      MarkChunk *c = sYoungValueChunks;
+      sYoungValueChunks = c->next;
+      if (inMark)
+         for(int i=0;i<c->count;i++)
+         {
+            void *value = c->stack[i];
+            // An object with members to mark has the container bit; a string's
+            //  data or a plain buffer is marked as an allocation
+            if ( ((unsigned int *)value)[-1] & IMMIX_ALLOC_IS_CONTAINER )
+               hx::MarkObjectAlloc((hx::Object *)value, inCtx);
+            else
+               hx::MarkAlloc(value, inCtx);
+         }
+      c->count = 0;
+      sGlobalChunks.free(c);
+   }
+}
+#endif
+
 class MarkContext
 {
     #ifdef HXCPP_DEBUG
@@ -3405,6 +3493,8 @@ public:
       // Under the lock, so a collection cannot switch modes between the
       //  check and the push
       ((hx::StackContext *)inAlloc)->mOldReferrers =
+         sGcMode==gcmGenerational ? hx::sGlobalChunks.alloc() : 0;
+      ((hx::StackContext *)inAlloc)->mYoungValues =
          sGcMode==gcmGenerational ? hx::sGlobalChunks.alloc() : 0;
       #endif
       mLocalAllocs.push(inAlloc);
@@ -5007,6 +5097,15 @@ public:
       #endif
 
 
+      #ifdef HXCPP_GC_GENERATIONAL
+      {
+      hx::AutoMarkPush info(&mMarker,"Young array values","young");
+      // The first mark of a collection takes the log: a full one has no use
+      //  for it, and one that follows a minor mark has marked these already
+      hx::MarkYoungValues(inGenerational, &mMarker);
+      }
+      #endif
+
       {
       hx::AutoMarkPush info(&mMarker,"Zombies","zombie");
       // Mark zombies too....
@@ -5251,8 +5350,10 @@ public:
             else
                 hx::sGlobalChunks.free( ctx->mOldReferrers );
             ctx->mOldReferrers = 0;
+            hx::TakeYoungValues( ctx->mYoungValues );
          }
       }
+      hx::sCollectCycle++;
 
       generational = !inMajor && !inForceCompact && sGcMode == gcmGenerational;
       if (sGcMode==gcmGenerational)
@@ -5746,6 +5847,7 @@ public:
          {
             hx::StackContext *ctx = (hx::StackContext *)mLocalAllocs[i];
             ctx->mOldReferrers = hx::sGlobalChunks.alloc();
+            ctx->mYoungValues = hx::sGlobalChunks.alloc();
          }
       #endif
 
@@ -6323,6 +6425,7 @@ public:
 
       #ifdef HXCPP_GC_GENERATIONAL
       mOldReferrers = 0;
+      mYoungValues = 0;
       #endif
 
       AttachThread(inTopOfStack);
@@ -6386,6 +6489,10 @@ public:
          else
             hx::sGlobalChunks.free( mOldReferrers );
          mOldReferrers = 0;
+      }
+      {
+         std::lock_guard<hx::FastMutex> lock(hx::sYoungValueLock);
+         hx::TakeYoungValues( mYoungValues );
       }
       #endif
 

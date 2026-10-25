@@ -1,0 +1,7 @@
+moved young values survive: true
+overwritten slot keeps its last value: true
+young strings survive: true
+whole-array fallback keeps every value: true
+small array keeps its young values: true
+stores from two threads survive: true
+full collection keeps every value: true
