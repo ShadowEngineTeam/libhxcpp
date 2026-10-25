@@ -1,0 +1,4 @@
+live old finalizers do not run: true
+dead finalizers run exactly once: true
+unregistered finalizers do not run: true
+later collections do not repeat callbacks: true

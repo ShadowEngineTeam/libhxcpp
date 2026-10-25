@@ -45,6 +45,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 
 ### Performance
 
+* Sped up minor collections under HXCPP_GC_GENERATIONAL with many long-lived finalized objects or weak references: a minor collection looked at every registered finalizer and weak reference, though one whose object survived a collection can only die in a full one. It now looks at those made since the last collection. With 500,000 finalized objects a minor collection went from 25.6 ms to 0.085 ms, and with a million weak references from 2.16 ms to 0.29 ms, the same as without them (libhxcpp #302, #314)
 * Added an opt-in PCRE2 JIT for EReg (-D HXCPP_PCRE_JIT): 3-5x faster matching, search and replace. A match that runs out of JIT stack is retried on the interpreter, so results never change; off on iOS, tvOS, watchOS, emscripten and WinRT
 * Improved Map/StringMap/IntMap lookup performance by ~16-26% by lowering the default hash table load factor
 * Applied the same hash mixing to Int64 and object map keys (fixes ~168x slower lookups for strided Int64 keys; modest gain for object keys)

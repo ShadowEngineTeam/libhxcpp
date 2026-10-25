@@ -2591,8 +2591,16 @@ void GcRemoveOffsetRoot(void *inRoot)
 class WeakRef;
 typedef hx::QuickVec<WeakRef *> WeakRefs;
 
+// The finalizer tables and the weak references are each in two parts. An
+// entry is new until a collection finds its object alive, and then old: an
+// old object dies only in a full collection, so a minor collection looks at
+// the new entries alone, and moves those that survive to the old part. It used
+// to walk every entry, which made a minor collection with many long-lived
+// finalized objects or weak references take as long as their number
+// (libhxcpp #302, #314).
 FILE_SCOPE std::mutex *sFinalizerLock = 0;
 FILE_SCOPE WeakRefs &sWeakRefs = *new WeakRefs();
+FILE_SCOPE WeakRefs &sOldWeakRefs = *new WeakRefs();
 
 class WeakRef : public hx::Object
 {
@@ -2623,13 +2631,16 @@ public:
 typedef hx::QuickVec<InternalFinalizer *> FinalizerList;
 
 FILE_SCOPE FinalizerList *sgFinalizers = 0;
+FILE_SCOPE FinalizerList *sgOldFinalizers = 0;
 
 typedef std::unordered_map<hx::Object *,hx::finalizer> FinalizerMap;
 FILE_SCOPE FinalizerMap &sFinalizerMap = *new FinalizerMap();
+FILE_SCOPE FinalizerMap &sOldFinalizerMap = *new FinalizerMap();
 
 typedef void (*HaxeFinalizer)(Dynamic);
 typedef std::unordered_map<hx::Object *,HaxeFinalizer> HaxeFinalizerMap;
 FILE_SCOPE HaxeFinalizerMap &sHaxeFinalizerMap = *new HaxeFinalizerMap();
+FILE_SCOPE HaxeFinalizerMap &sOldHaxeFinalizerMap = *new HaxeFinalizerMap();
 
 hx::QuickVec<int> &sFreeObjectIds = *new hx::QuickVec<int>();
 typedef std::unordered_map<hx::Object *,int> ObjectIdMap;
@@ -2790,6 +2801,7 @@ struct Finalizable
 };
 typedef hx::QuickVec< Finalizable > FinalizableList;
 FILE_SCOPE FinalizableList &sFinalizableList = *new FinalizableList();
+FILE_SCOPE FinalizableList &sOldFinalizableList = *new FinalizableList();
 
 
 static double tFinalizers;
@@ -2800,18 +2812,17 @@ static int localAllocs;
 static int rootObjects;
 static int rootAllocs;
 
-void RunFinalizers()
+// Runs the finalizers in inList whose object died. With inOld, the survivors
+//  move there; without, they stay
+static void RunInternalFinalizers(FinalizerList &inList, FinalizerList *inOld)
 {
-   finalizerCount = 0;
-
-   FinalizerList &list = *sgFinalizers;
    int idx = 0;
-   while(idx<list.size())
+   while(idx<inList.size())
    {
-      InternalFinalizer *f = list[idx];
+      InternalFinalizer *f = inList[idx];
       if (!f->mValid)
       {
-         list.qerase(idx);
+         inList.qerase(idx);
          delete f;
       }
       else if (((unsigned char *)(f->mObject))[HX_ENDIAN_MARK_ID_BYTE] != gByteMarkID)
@@ -2821,29 +2832,116 @@ void RunFinalizers()
             f->mFinalizer(f->mObject);
             finalizerCount++;
          }
-         list.qerase(idx);
+         inList.qerase(idx);
          delete f;
+      }
+      else if (inOld)
+      {
+         inOld->push(f);
+         inList.qerase(idx);
       }
       else
       {
          idx++;
       }
    }
+}
 
-   idx = 0;
-   while(idx<sFinalizableList.size())
+static void RunFinalizables(FinalizableList &inList, FinalizableList *inOld)
+{
+   int idx = 0;
+   while(idx<inList.size())
    {
-      Finalizable &f = sFinalizableList[idx];
+      Finalizable &f = inList[idx];
       unsigned char mark = ((unsigned char *)f.base)[HX_ENDIAN_MARK_ID_BYTE];
       if ( mark!=gByteMarkID )
       {
          finalizerCount++;
-         f.run();
-         sFinalizableList.qerase(idx);
+         // A copy: run may register another, which can move the list
+         Finalizable run = f;
+         inList.qerase(idx);
+         run.run();
+      }
+      else if (inOld)
+      {
+         inOld->push(f);
+         inList.qerase(idx);
       }
       else
          idx++;
    }
+}
+
+// Takes the entries of inMap whose object died into outRun. With inOld, the
+//  survivors move there
+template<typename MAP, typename RUN>
+static void TakeDeadFinalizers(MAP &inMap, MAP *inOld, RUN &outRun)
+{
+   for(typename MAP::iterator i=inMap.begin(); i!=inMap.end(); )
+   {
+      hx::Object *obj = i->first;
+      unsigned char mark = ((unsigned char *)obj)[HX_ENDIAN_MARK_ID_BYTE];
+      if ( mark!=gByteMarkID )
+      {
+         finalizerCount++;
+         outRun.push_back( std::make_pair(obj, i->second) );
+         i = inMap.erase(i);
+      }
+      else if (inOld)
+      {
+         (*inOld)[obj] = i->second;
+         i = inMap.erase(i);
+      }
+      else
+         ++i;
+   }
+}
+
+// Clears the references in inList whose target died, and drops those whose
+//  reference died. With inOld, the rest move there
+static void UpdateWeakRefs(WeakRefs &inList, WeakRefs *inOld)
+{
+   for(int i=0;i<inList.size();    )
+   {
+      WeakRef *ref = inList[i];
+      unsigned char mark = ((unsigned char *)ref)[HX_ENDIAN_MARK_ID_BYTE];
+      // Object itself is gone ...
+      if ( mark!=gByteMarkID )
+      {
+         inList.qerase(i);
+         // no i++ ...
+      }
+      else
+      {
+         // what about the reference?
+         if (!IsWeakRefValid(ref->mRef.mPtr))
+         {
+            ref->mRef.mPtr = 0;
+            inList.qerase(i);
+         }
+         else if (inOld)
+         {
+            inOld->push(ref);
+            inList.qerase(i);
+         }
+         else
+            i++;
+      }
+   }
+}
+
+// inMinor: a minor collection, which leaves the old entries alone
+void RunFinalizers(bool inMinor)
+{
+   finalizerCount = 0;
+
+   if (!inMinor)
+      RunInternalFinalizers(*sgOldFinalizers, 0);
+   RunInternalFinalizers(*sgFinalizers, sgOldFinalizers);
+
+   if (!inMinor)
+      RunFinalizables(sOldFinalizableList, 0);
+   RunFinalizables(sFinalizableList, &sOldFinalizableList);
 
    // Unregister dead entries before invoking their callbacks: a finalizer
    // that itself calls val_gc/_hx_set_finalizer(obj,0) (eg, a close()
@@ -2852,19 +2950,9 @@ void RunFinalizers()
    // either invalidates the iterators mid-walk
    static std::vector< std::pair<hx::Object *,hx::finalizer> > sRunNativeFinalizers;
    sRunNativeFinalizers.clear();
-   for(FinalizerMap::iterator i=sFinalizerMap.begin(); i!=sFinalizerMap.end(); )
-   {
-      hx::Object *obj = i->first;
-      unsigned char mark = ((unsigned char *)obj)[HX_ENDIAN_MARK_ID_BYTE];
-      if ( mark!=gByteMarkID )
-      {
-         finalizerCount++;
-         sRunNativeFinalizers.push_back( std::make_pair(obj, i->second) );
-         i = sFinalizerMap.erase(i);
-      }
-      else
-         ++i;
-   }
+   if (!inMinor)
+      TakeDeadFinalizers(sOldFinalizerMap, (FinalizerMap *)0, sRunNativeFinalizers);
+   TakeDeadFinalizers(sFinalizerMap, &sOldFinalizerMap, sRunNativeFinalizers);
    for(size_t run=0; run<sRunNativeFinalizers.size(); run++)
       (*sRunNativeFinalizers[run].second)(sRunNativeFinalizers[run].first);
    sRunNativeFinalizers.clear();
@@ -2872,19 +2960,9 @@ void RunFinalizers()
 
    static std::vector< std::pair<hx::Object *,HaxeFinalizer> > sRunHaxeFinalizers;
    sRunHaxeFinalizers.clear();
-   for(HaxeFinalizerMap::iterator i=sHaxeFinalizerMap.begin(); i!=sHaxeFinalizerMap.end(); )
-   {
-      hx::Object *obj = i->first;
-      unsigned char mark = ((unsigned char *)obj)[HX_ENDIAN_MARK_ID_BYTE];
-      if ( mark!=gByteMarkID )
-      {
-         finalizerCount++;
-         sRunHaxeFinalizers.push_back( std::make_pair(obj, i->second) );
-         i = sHaxeFinalizerMap.erase(i);
-      }
-      else
-         ++i;
-   }
+   if (!inMinor)
+      TakeDeadFinalizers(sOldHaxeFinalizerMap, (HaxeFinalizerMap *)0, sRunHaxeFinalizers);
+   TakeDeadFinalizers(sHaxeFinalizerMap, &sOldHaxeFinalizerMap, sRunHaxeFinalizers);
    for(size_t run=0; run<sRunHaxeFinalizers.size(); run++)
       (*sRunHaxeFinalizers[run].second)(sRunHaxeFinalizers[run].first);
    sRunHaxeFinalizers.clear();
@@ -2927,28 +3005,9 @@ void RunFinalizers()
 
 
 
-   for(int i=0;i<sWeakRefs.size();    )
-   {
-      WeakRef *ref = sWeakRefs[i];
-      unsigned char mark = ((unsigned char *)ref)[HX_ENDIAN_MARK_ID_BYTE];
-      // Object itself is gone ...
-      if ( mark!=gByteMarkID )
-      {
-         sWeakRefs.qerase(i);
-         // no i++ ...
-      }
-      else
-      {
-         // what about the reference?
-         if (!IsWeakRefValid(ref->mRef.mPtr))
-         {
-            ref->mRef.mPtr = 0;
-            sWeakRefs.qerase(i);
-         }
-         else
-            i++;
-      }
-   }
+   if (!inMinor)
+      UpdateWeakRefs(sOldWeakRefs, 0);
+   UpdateWeakRefs(sWeakRefs, &sOldWeakRefs);
 }
 
 // Callback finalizer on non-abstract type;
@@ -2960,12 +3019,10 @@ void  GCSetFinalizer( hx::Object *obj, hx::finalizer f )
       throw Dynamic(HX_CSTRING("set_finalizer - invalid const object"));
 
    std::lock_guard<hx::FastMutex> lock(*gSpecialObjectLock);
+   // A replacement is new, so the old one goes from either part
+   sOldFinalizerMap.erase(obj);
    if (f==0)
-   {
-      FinalizerMap::iterator i = sFinalizerMap.find(obj);
-      if (i!=sFinalizerMap.end())
-         sFinalizerMap.erase(i);
-   }
+      sFinalizerMap.erase(obj);
    else
       sFinalizerMap[obj] = f;
 }
@@ -2980,12 +3037,10 @@ void  GCSetHaxeFinalizer( hx::Object *obj, HaxeFinalizer f )
       throw Dynamic(HX_CSTRING("set_finalizer - invalid const object"));
 
    std::lock_guard<hx::FastMutex> lock(*gSpecialObjectLock);
+   // A replacement is new, so the old one goes from either part
+   sOldHaxeFinalizerMap.erase(obj);
    if (f==0)
-   {
-      HaxeFinalizerMap::iterator i = sHaxeFinalizerMap.find(obj);
-      if (i!=sHaxeFinalizerMap.end())
-         sHaxeFinalizerMap.erase(i);
-   }
+      sHaxeFinalizerMap.erase(obj);
    else
       sHaxeFinalizerMap[obj] = f;
 }
@@ -3946,20 +4001,28 @@ public:
       #endif
        // FinalizerList will get visited...
 
-       hx::FinalizerMap::iterator i = hx::sFinalizerMap.find(inFrom);
-       if (i!=hx::sFinalizerMap.end())
+       hx::FinalizerMap *finalizerMaps[] = { &hx::sFinalizerMap, &hx::sOldFinalizerMap };
+       for(hx::FinalizerMap *map : finalizerMaps)
        {
-          hx::finalizer f = i->second;
-          hx::sFinalizerMap.erase(i);
-          hx::sFinalizerMap[inTo] = f;
+          hx::FinalizerMap::iterator i = map->find(inFrom);
+          if (i!=map->end())
+          {
+             hx::finalizer f = i->second;
+             map->erase(i);
+             (*map)[inTo] = f;
+          }
        }
 
-       hx::HaxeFinalizerMap::iterator h = hx::sHaxeFinalizerMap.find(inFrom);
-       if (h!=hx::sHaxeFinalizerMap.end())
+       hx::HaxeFinalizerMap *haxeMaps[] = { &hx::sHaxeFinalizerMap, &hx::sOldHaxeFinalizerMap };
+       for(hx::HaxeFinalizerMap *map : haxeMaps)
        {
-          hx::HaxeFinalizer f = h->second;
-          hx::sHaxeFinalizerMap.erase(h);
-          hx::sHaxeFinalizerMap[inTo] = f;
+          hx::HaxeFinalizerMap::iterator h = map->find(inFrom);
+          if (h!=map->end())
+          {
+             hx::HaxeFinalizer f = h->second;
+             map->erase(h);
+             (*map)[inTo] = f;
+          }
        }
 
        hx::MakeZombieSet::iterator mz = hx::sMakeZombieSet.find(inFrom);
@@ -4428,18 +4491,24 @@ public:
          }
       }
 
-      if (hx::sgFinalizers)
-         for(int i=0;i<hx::sgFinalizers->size();i++)
-            (*hx::sgFinalizers)[i]->Visit(inCtx);
+      hx::FinalizerList *finalizerLists[] = { hx::sgFinalizers, hx::sgOldFinalizers };
+      for(hx::FinalizerList *list : finalizerLists)
+         if (list)
+            for(int i=0;i<list->size();i++)
+               (*list)[i]->Visit(inCtx);
 
-      for(int i=0;i<hx::sFinalizableList.size();i++)
-         inCtx->visitAlloc( &hx::sFinalizableList[i].base );
+      hx::FinalizableList *finalizables[] = { &hx::sFinalizableList, &hx::sOldFinalizableList };
+      for(hx::FinalizableList *list : finalizables)
+         for(int i=0;i<list->size();i++)
+            inCtx->visitAlloc( &(*list)[i].base );
 
       for(int i=0;i<hx::sZombieList.size();i++)
          inCtx->visitObject( &hx::sZombieList[i] );
 
-      for(int i=0;i<hx::sWeakRefs.size(); i++)
-         inCtx->visitObject( (hx::Object **) &hx::sWeakRefs[i] );
+      hx::WeakRefs *weakRefs[] = { &hx::sWeakRefs, &hx::sOldWeakRefs };
+      for(hx::WeakRefs *list : weakRefs)
+         for(int i=0;i<list->size(); i++)
+            inCtx->visitObject( (hx::Object **) &(*list)[i] );
 
       for(int i=0;i<hx::sWeakHashList.size();i++)
          inCtx->visitObject( (hx::Object **) &hx::sWeakHashList[i] );
@@ -4839,13 +4908,15 @@ public:
       }
 
       #ifdef HXCPP_GC_MOVING
-      for(int i=0;i<hx::sFinalizableList.size();i++)
-      {
-         hx::Finalizable &f = hx::sFinalizableList[i];
-         uintptr_t base = reinterpret_cast<uintptr_t>(f.base);
-         if (f.pin && GetMemType(base)==memBlock)
-            (*gBlockInfo)[reinterpret_cast<BlockData*>(base & IMMIX_BLOCK_BASE_MASK)->mId]->pin();
-      }
+      hx::FinalizableList *finalizables[] = { &hx::sFinalizableList, &hx::sOldFinalizableList };
+      for(hx::FinalizableList *list : finalizables)
+         for(int i=0;i<list->size();i++)
+         {
+            hx::Finalizable &f = (*list)[i];
+            uintptr_t base = reinterpret_cast<uintptr_t>(f.base);
+            if (f.pin && GetMemType(base)==memBlock)
+               (*gBlockInfo)[reinterpret_cast<BlockData*>(base & IMMIX_BLOCK_BASE_MASK)->mId]->pin();
+         }
       #endif
 
       MEM_STAMP(tMarkInit);
@@ -4946,7 +5017,7 @@ public:
       hx::FindZombies(mMarker);
       MarkWeakHashValues();
 
-      hx::RunFinalizers();
+      hx::RunFinalizers(inGenerational);
 
       // Finalizers and weak reference checks may still look at dead script objects
       #ifdef HXCPP_SCRIPTABLE
@@ -6966,6 +7037,7 @@ void InitAlloc()
    sgAllocInit = true;
    sGlobalAlloc = new GlobalAllocator();
    sgFinalizers = new FinalizerList();
+   sgOldFinalizers = new FinalizerList();
    sFinalizerLock = new std::mutex();
    sGCRootLock = new std::mutex();
    sgRootSet = new RootSet();

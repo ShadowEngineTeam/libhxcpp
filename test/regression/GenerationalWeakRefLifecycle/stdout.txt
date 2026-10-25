@@ -1,0 +1,2 @@
+old and young weak references follow target liveness: true
+full collection clears released old targets: true
