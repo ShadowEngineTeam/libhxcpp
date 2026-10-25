@@ -1051,6 +1051,33 @@ const String &__hxcpp_field_from_id( int f )
 
 int  __hxcpp_field_to_id( const char *inFieldName )
 {
+   // A name that is not ASCII is UTF-8, and its String is decoded from it, as
+   //  Haxe's own is: wrapping the bytes made a different String, so the field
+   //  was not found. Decoding allocates, which must not happen with the lock
+   //  held, so the String is made first, and only for a name not seen yet.
+   String decoded;
+   bool ascii = true;
+   for(const unsigned char *c = (const unsigned char *)inFieldName; *c; c++)
+      if (*c>127)
+      {
+         ascii = false;
+         break;
+      }
+   if (!ascii)
+   {
+      {
+         std::lock_guard<hx::FastMutex> lock(sgFieldMapMutex);
+         if (sgStringToField)
+         {
+            StringToField::iterator i = sgStringToField->find(inFieldName);
+            if (i!=sgStringToField->end())
+               return i->second;
+         }
+      }
+      decoded = String::create(inFieldName,(int)strlen(inFieldName));
+      decoded.makePermanent();
+   }
+
    std::lock_guard<hx::FastMutex> lock(sgFieldMapMutex);
 
    if (!sgFieldToStringAlloc)
@@ -1067,10 +1094,14 @@ int  __hxcpp_field_to_id( const char *inFieldName )
 
    int result = sgFieldToStringSize;
    (*sgStringToField)[std::string(inFieldName)] = result;
-   String str(inFieldName,strlen(inFieldName));
+   String str = decoded;
+   if (ascii)
+   {
+      str = String(inFieldName,strlen(inFieldName));
 
-   // Make into "const" string that will not get collected...
-   str = String((char *)hx::InternalCreateConstBuffer(str.raw_ptr(),(str.length+1) * sizeof(char),true), str.length );
+      // Make into "const" string that will not get collected...
+      str = String((char *)hx::InternalCreateConstBuffer(str.raw_ptr(),(str.length+1) * sizeof(char),true), str.length );
+   }
 
    if (sgFieldToStringAlloc<=sgFieldToStringSize+1)
    {

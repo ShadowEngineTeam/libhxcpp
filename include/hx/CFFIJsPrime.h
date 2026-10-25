@@ -13,7 +13,8 @@ int val_id(const char *inName)
    {
       int result = sIdMap.size();
       sIdMap[inName] = result;
-      sIdKeys.push_back(value(inName));
+      // The name is UTF-8, which value(const char *) would read as Latin-1
+      sIdKeys.push_back(value::u8string(inName));
       return result;
    }
    return id->second;

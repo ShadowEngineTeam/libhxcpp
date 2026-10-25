@@ -1,0 +1,17 @@
+field ID name roundtrip: true
+CFFI reads Haxe field: true
+CFFI updates same field: true
+field count preserved: true
+field ID name roundtrip: true
+CFFI reads Haxe field: true
+CFFI updates same field: true
+field count preserved: true
+field ID name roundtrip: true
+CFFI reads Haxe field: true
+CFFI updates same field: true
+field count preserved: true
+field ID name roundtrip: true
+CFFI reads Haxe field: true
+CFFI updates same field: true
+field count preserved: true
+CFFI reads fixed Unicode field: true
