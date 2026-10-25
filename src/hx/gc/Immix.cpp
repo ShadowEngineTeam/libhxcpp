@@ -1004,6 +1004,46 @@ struct BlockDataInfo
 
    void countRows(BlockDataStats &outStats)
    {
+      #ifdef HXCPP_GC_GENERATIONAL
+      // Only a minor collection counts rows, and it marks rows in a block only
+      // for an object it marks there, which sets mHasSurvivor. Without one,
+      // the row marks are the ones mUsedRows was worked out from, so it stands,
+      // and reading them again in every block was most of an idle minor
+      // collection (libhxcpp #329). The state below is reset all the same.
+      if (mHasSurvivor)
+      #endif
+         countMarkedRows();
+
+      mZeroLock = 0;
+      mOwned = false;
+      checkRowCounts();
+      outStats.rowsInUse += mUsedRows;
+      outStats.bytesInUse += mUsedBytes;
+      outStats.fraggedRows += mFraggedRows;
+      mFraggedRows = 0;
+      mHoles = 0;
+
+      if (mUsedRows==IMMIX_USEFUL_LINES)
+      {
+         // All rows used - write the block off
+         mMoveScore = 0;
+         mZeroed = ZEROED_AUTO;
+         mReclaimed = true;
+      }
+      else
+      {
+         mZeroed = ZEROED_NOT;
+         mReclaimed = false;
+      }
+
+      uint16_t left{ static_cast<uint16_t>((IMMIX_USEFUL_LINES - mUsedRows) << IMMIX_LINE_BITS) };
+      if (left<mMaxHoleSize)
+         mMaxHoleSize = left;
+   }
+
+   // mUsedRows and mUsedBytes from the row marks
+   void countMarkedRows()
+   {
       unsigned char *rowMarked = mPtr->mRowMarked;
       unsigned int *rowTotals = ((unsigned int *)rowMarked) + 1;
 
@@ -1051,32 +1091,6 @@ struct BlockDataInfo
 
       mUsedRows = (total & 0xff) + ((total>>8) & 0xff) + ((total>>16)&0xff) + ((total>>24)&0xff);
       mUsedBytes = uint16_t{ mUsedRows } << IMMIX_LINE_BITS;
-
-      mZeroLock = 0;
-      mOwned = false;
-      checkRowCounts();
-      outStats.rowsInUse += mUsedRows;
-      outStats.bytesInUse += mUsedBytes;
-      outStats.fraggedRows += mFraggedRows;
-      mFraggedRows = 0;
-      mHoles = 0;
-
-      if (mUsedRows==IMMIX_USEFUL_LINES)
-      {
-         // All rows used - write the block off
-         mMoveScore = 0;
-         mZeroed = ZEROED_AUTO;
-         mReclaimed = true;
-      }
-      else
-      {
-         mZeroed = ZEROED_NOT;
-         mReclaimed = false;
-      }
-
-      uint16_t left{ static_cast<uint16_t>((IMMIX_USEFUL_LINES - mUsedRows) << IMMIX_LINE_BITS) };
-      if (left<mMaxHoleSize)
-         mMaxHoleSize = left;
    }
 
    template<bool FULL>
@@ -5804,7 +5818,21 @@ public:
 
    void countRows(BlockDataStats &outStats)
    {
-      if (MAX_GC_THREADS>1)
+      // A block a minor collection marked nothing new in needs no recount, so
+      // with few that do the work is less than waking the marking threads for
+      // it: that took most of an otherwise idle minor collection (#329)
+      bool threaded = MAX_GC_THREADS>1;
+      #ifdef HXCPP_GC_GENERATIONAL
+      if (threaded)
+      {
+         int changed = 0;
+         for(int i=0;i<mAllBlocks.size() && changed<=256;i++)
+            if (mAllBlocks[i]->mHasSurvivor)
+               changed++;
+         threaded = changed>256;
+      }
+      #endif
+      if (threaded)
       {
          for(int i=0;i<MAX_GC_THREADS;i++)
             sThreadBlockDataStats[i].clear();

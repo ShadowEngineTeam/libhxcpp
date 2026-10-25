@@ -1,0 +1,4 @@
+minor collections exercise changing block occupancy: true
+old and replacement buffers retain their contents: true
+full collection preserves block contents: true
+released block payload leaves live accounting: true
