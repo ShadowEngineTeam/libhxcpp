@@ -485,6 +485,9 @@ void  _hx_std_sys_rename( String path, String newname )
 }
 
 #define STATF(f) o->Add(HX_CSTRING(#f),(int)(s.st_##f))
+// Times as Float seconds: an Int ends in 2038. FileSystem.stat multiplies
+//  them by 1000.0 for Date.fromTime, which takes either
+#define STATT(f) o->Add(HX_CSTRING(#f),(double)(s.st_##f))
 
 // statx reports when a file was created, where <sys/stat.h> declares it
 #if defined(__linux__) && defined(STATX_BTIME) && (!defined(__ANDROID__) || __ANDROID_API__ >= 30)
@@ -515,7 +518,7 @@ Dynamic _hx_std_sys_stat( String path )
    hx::EnterGCFreeZone();
    bool err = false;
    // ctime is the creation time, as on Windows, where the file system records one
-   int ctime = 0;
+   double ctime = 0;
    #if defined(NEKO_WINDOWS)
       struct _stat s;
       #if defined(HX_SMART_STRINGS)
@@ -530,20 +533,20 @@ Dynamic _hx_std_sys_stat( String path )
          hx::strbuf buf;
          err = _stat(path.utf8_str(&buf),&s);
       }
-      ctime = (int)s.st_ctime;
+      ctime = (double)s.st_ctime;
    #else
       struct stat s;
       hx::strbuf buf;
       const char *utf8 = path.utf8_str(&buf);
       err = stat(utf8,&s);
-      ctime = (int)s.st_ctime;
+      ctime = (double)s.st_ctime;
       #if defined(HX_STATX)
       struct statx sx;
       if (!err && statx(AT_FDCWD,utf8,0,STATX_BTIME,&sx)==0 && (sx.stx_mask & STATX_BTIME))
-         ctime = (int)sx.stx_btime.tv_sec;
+         ctime = (double)sx.stx_btime.tv_sec;
       #elif defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__)
       if (s.st_birthtime>0)
-         ctime = (int)s.st_birthtime;
+         ctime = (double)s.st_birthtime;
       #endif
    #endif
 
@@ -554,8 +557,8 @@ Dynamic _hx_std_sys_stat( String path )
 
    STATF(gid);
    STATF(uid);
-   STATF(atime);
-   STATF(mtime);
+   STATT(atime);
+   STATT(mtime);
    o->Add(HX_CSTRING("ctime"),ctime);
    STATF(dev);
    STATF(ino);

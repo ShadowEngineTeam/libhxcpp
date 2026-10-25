@@ -1,0 +1,4 @@
+ordinary file timestamps remain correct: true
+native metadata preserves a 2040 timestamp: true
+FileStat preserves the future modification time: true
+FileStat preserves the future access time: true
