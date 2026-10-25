@@ -372,7 +372,11 @@ int _hx_std_file_read( Dynamic handle, Array<unsigned char> buf, int p, int n )
 
    int buf_len = buf->length;
    int len = n;
-   if( p < 0 || len < 0 || p > buf_len || p + len > buf_len )
+   if( p < 0 || len < 0 || p > buf_len || len > buf_len - p )
+      return 0;
+   // Reading nothing changes nothing: &buf[0] would grow an empty buffer, and
+   //  clearing aheadAtEnd below would report the end of a read-ahead file early
+   if( len == 0 )
       return 0;
 
    AheadLock lock(f);
