@@ -87,6 +87,7 @@ These numbers are from one Windows machine; Linux and macOS results are still to
 - **One benchmark per process.** Each benchmark runs in its own process, so peak memory belongs to that benchmark alone: the peak working set on Windows, the maximum resident set size elsewhere. Each process does 2 untimed warm-up samples and 10 timed samples, and there are 3 processes per benchmark and runtime. The runtimes take turns, so drift on the machine affects both alike.
 - **Same work, checked.** Every benchmark returns a checksum of the work it did, and every process under both runtimes has to produce the same one. A change that skips work or computes the wrong answer fails the run instead of looking faster.
 - **Spread.** "±" is the median absolute deviation of the sample times, as a percentage of the median. A ratio marked "~" is within twice the larger spread of the two runtimes, so it counts as level.
+- **Code layout.** A tight benchmark's speed also moves with where the compiler happens to place code. The same sources built again, or with one function added that nothing calls, measured up to 5% apart on `map_int`, and the same commit measured 7% apart on `alloc_small` depending on which runtime's directory built it. So a speed ratio within 5% of level is marked "~" as well, and a change of that size between two runs of these tables is not a regression on its own.
 
 ## The benchmarks
 

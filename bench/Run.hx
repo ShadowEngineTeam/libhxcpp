@@ -476,7 +476,7 @@ class Run {
 			var row = '| ${r.name} | ${r.unit}/s | ' + cells.join(" | ");
 			if (compare)
 				row += " | " + ratio(r.byRuntime.get(lib.name).rate, r.byRuntime.get(stock.name).rate,
-					Math.max(r.byRuntime.get(lib.name).spread, r.byRuntime.get(stock.name).spread));
+					Math.max(r.byRuntime.get(lib.name).spread, r.byRuntime.get(stock.name).spread), LAYOUT_BAND);
 			b.add(row + " |\n");
 		}
 
@@ -507,7 +507,7 @@ class Run {
 					row += " | " + [for (rt in runtimes) formatRate(r.byRuntime.get(rt.name).rate, null) + " ±" + percent(r.byRuntime.get(rt.name).spread)].join(" | ");
 					if (compare)
 						row += " | " + ratio(r.byRuntime.get(lib.name).rate, r.byRuntime.get(stock.name).rate,
-							Math.max(r.byRuntime.get(lib.name).spread, r.byRuntime.get(stock.name).spread));
+							Math.max(r.byRuntime.get(lib.name).spread, r.byRuntime.get(stock.name).spread), LAYOUT_BAND);
 				}
 				b.add(row + " |\n");
 			}
@@ -536,7 +536,7 @@ class Run {
 		b.add('\n${report.host}; ${env.compiler}, ${env.pointerBits}-bit; Haxe ${report.haxe}; '
 			+ '${label("libhxcpp")} at ${report.libhxcpp}; ${runs} processes x ${samples} samples per benchmark; ${report.date}.\n');
 		b.add("Reproduce with `cd bench && haxe --run Run`. Ratios above 1 favour libhxcpp; "
-			+ "\"~\" marks a difference within the run-to-run spread.\n");
+			+ "\"~\" marks a difference within the run-to-run spread, or for speed within the 5% that code layout alone can move it.\n");
 		return b.toString();
 	}
 
@@ -572,13 +572,13 @@ class Run {
 					if (row.measure == "p999")
 						ratio(s.latency.p999, l.latency.p999, 0);
 					else
-						ratio(l.rate, s.rate, Math.max(l.spread, s.spread));
+						ratio(l.rate, s.rate, Math.max(l.spread, s.spread), LAYOUT_BAND);
 			}
 			var bench = row.bench == "" ? "" : ' (`${row.bench}`)';
 			b.add('| ${row.area} | ${row.what}$bench | $cell |\n');
 		}
 		var env = lib.env;
-		b.add('\nAbove 1 favours libhxcpp; "~" marks a difference within the run-to-run spread. '
+		b.add('\nAbove 1 favours libhxcpp; "~" marks a difference within the run-to-run spread, or for speed within the 5% that code layout alone can move it. '
 			+ '${report.host}; ${env.compiler}, ${env.pointerBits}-bit; Haxe ${report.haxe}; ${lib.label} at ${report.libhxcpp}; ${report.date}.\n');
 		return b.toString();
 	}
@@ -597,9 +597,18 @@ class Run {
 		Sys.println('$file updated');
 	}
 
-	static function ratio(better:Float, worse:Float, spread:Float):String {
+	/**
+		How far code layout alone moves a tight benchmark's speed: the same
+		sources built again, or with one function added that nothing calls,
+		measured 5% apart on map_int, and the same commit 7% apart on
+		alloc_small depending on which runtime's directory built it. A speed
+		difference smaller than this says nothing about the runtime.
+	**/
+	static inline var LAYOUT_BAND = 0.05;
+
+	static function ratio(better:Float, worse:Float, spread:Float, band = 0.0):String {
 		var r = better / worse;
-		return (Math.abs(r - 1) <= spread * 2 ? "~" : "") + ratioText(r);
+		return (Math.abs(r - 1) <= Math.max(spread * 2, band) ? "~" : "") + ratioText(r);
 	}
 
 	static function ratioText(r:Float):String {
