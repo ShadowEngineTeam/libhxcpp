@@ -36,10 +36,20 @@ bool CppiaCompiler::canRun()
    static int sCanRun = -1;
    if (sCanRun<0)
    {
+      #if (defined SLJIT_EXECUTABLE_ALLOCATOR && SLJIT_EXECUTABLE_ALLOCATOR)
+      // A chunk mapped and released as sljit's allocator maps its own, MAP_JIT
+      //  included. Allocating through the allocator left its free list as if a
+      //  function had been made and freed, which moved where every later
+      //  function went, and cost jitted loops and calls about 9% on Windows
+      void *probe = alloc_chunk(CHUNK_SIZE);
+      if (probe)
+         free_chunk(probe, CHUNK_SIZE);
+      #else
       JitWritable writable;
       void *probe = SLJIT_MALLOC_EXEC(16);
       if (probe)
          SLJIT_FREE_EXEC(probe);
+      #endif
       sCanRun = probe ? 1 : 0;
    }
    return sCanRun==1;
