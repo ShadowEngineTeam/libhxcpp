@@ -338,7 +338,9 @@ void CppiaVar::visit(hx::VisitContext *__inCtx)
 // --- CppiaStackVar ----
 
 
-std::map<int,int> sVarIdNameMap;
+// Allocated once and never destroyed: a thread still running when the
+// process exits could otherwise use it after its destructor ran (#371)
+std::map<int,int> &sVarIdNameMap = *new std::map<int,int>();
 
 
 int getStackVarNameId(int inVarId)

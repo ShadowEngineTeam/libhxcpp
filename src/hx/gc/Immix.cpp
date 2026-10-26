@@ -1903,7 +1903,9 @@ GlobalChunks sGlobalChunks;
 // lives one collection longer. Past a thirty-second of the length in one
 // cycle, marking the whole is cheaper, so it is remembered whole, as before.
 static MarkChunk *sYoungValueChunks = 0;
-static hx::FastMutex sYoungValueLock;
+// Never destroyed: hx::FastMutex is a std::mutex off Windows, which a
+//  thread still storing into an array at exit could take after it went (#371)
+static hx::FastMutex &sYoungValueLock = *new hx::FastMutex();
 static unsigned int sCollectCycle = 1;
 
 enum { YOUNG_LOG_MIN_LENGTH = 1024 };

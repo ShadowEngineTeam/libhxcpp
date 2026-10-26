@@ -232,11 +232,12 @@ private:
     int mT0;
     std::map<const char *, ProfileEntry> mProfileStats;
 
-    static std::mutex gThreadMutex;
+    // Never destroyed (#371)
+    static std::mutex &gThreadMutex;
     static int gThreadRefCount;
     static int gProfileClock;
 };
-/* static */ std::mutex Profiler::gThreadMutex;
+/* static */ std::mutex &Profiler::gThreadMutex = *new std::mutex();
 /* static */ int Profiler::gThreadRefCount;
 /* static */ int Profiler::gProfileClock;
 

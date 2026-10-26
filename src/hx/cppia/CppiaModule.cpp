@@ -19,7 +19,9 @@ const char **sgNativeNameSlots = 0;
 int sgNativeNameSlotCount = 0;
 
 // Every module not yet freed, loaded or released
-static std::mutex sModuleLock;
+// Allocated once and never destroyed: a thread still running when the
+// process exits could otherwise use it after its destructor ran (#371)
+static std::mutex &sModuleLock = *new std::mutex();
 static std::vector<CppiaModule *> &allModules()
 {
    static std::vector<CppiaModule *> *modules = new std::vector<CppiaModule *>();

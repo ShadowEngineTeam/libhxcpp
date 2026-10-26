@@ -7,8 +7,12 @@
 #include <stdlib.h>
 #include <mutex>
 
+// The loader's statics are allocated once and never destroyed: a thread still
+// running when the process exits could otherwise use them after their
+// destructors ran (#371)
+
 // The last dlopen/LoadLibrary failure detail for the final error message
-static std::string sgLastLoadError;
+static std::string &sgLastLoadError = *new std::string();
 
 #ifdef ANDROID
 #include <android/log.h>
@@ -122,9 +126,9 @@ void hxFreeLibrary(Module inModule) { dlclose(inModule); }
 
 typedef std::map<std::string,Module> LoadedModule;
 
-static LoadedModule sgLoadedModule;
+static LoadedModule &sgLoadedModule = *new LoadedModule();
 typedef std::vector<Module> ModuleList;
-static ModuleList sgOrderedModules;
+static ModuleList &sgOrderedModules = *new ModuleList();
 
 typedef hx::Object * (*prim_0)();
 typedef hx::Object * (*prim_1)(hx::Object *);
@@ -270,7 +274,7 @@ public:
 namespace
 {
 typedef std::map<String,ExternalPrimitive *> LoadedMap;
-LoadedMap sLoadedMap;
+LoadedMap &sLoadedMap = *new LoadedMap();
 
 // The whole loader (module registry, prim cache, search paths, registered
 // prims) was unsynchronized although any thread can call cpp.Lib.load.
@@ -278,8 +282,8 @@ LoadedMap sLoadedMap;
 // __hxcpp_register_prim on this same thread
 std::recursive_mutex &LoaderMutex()
 {
-   static std::recursive_mutex m;
-   return m;
+   static std::recursive_mutex *m = new std::recursive_mutex();
+   return *m;
 }
 
 // Takes the loader lock from a Haxe thread.  The holder allocates (strings,
@@ -471,7 +475,7 @@ static void *FindRegisteredPrim(const char *inName)
 
 
 
-static std::vector<String> sgLibPath;
+static std::vector<String> &sgLibPath = *new std::vector<String>();
 
 static bool sgLibPathIsInit = false;
 

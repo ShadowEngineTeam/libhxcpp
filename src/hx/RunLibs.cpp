@@ -10,7 +10,8 @@ extern "C"
 void __hxcpp_lib_main();
 
 
-std::string sgResultBuffer;
+// Never destroyed (#371)
+std::string &sgResultBuffer = *new std::string();
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES const HX_CHAR *hxRunLibrary()
 {

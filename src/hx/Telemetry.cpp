@@ -345,20 +345,22 @@ private:
 
     std::vector<int> *allocation_data;
 
-    static std::recursive_mutex gStashMutex;
-    static std::recursive_mutex gThreadMutex;
+    // Never destroyed, so a thread still running at exit cannot use them
+    //  after their destructors ran (#371)
+    static std::recursive_mutex &gStashMutex;
+    static std::recursive_mutex &gThreadMutex;
     static int gThreadRefCount;
     static int gProfileClock;
 
-    static std::recursive_mutex alloc_mutex;
-    static std::map<void*, Telemetry*> alloc_map;
+    static std::recursive_mutex &alloc_mutex;
+    static std::map<void*, Telemetry*> &alloc_map;
 };
-/* static */ std::recursive_mutex Telemetry::gStashMutex;
-/* static */ std::recursive_mutex Telemetry::gThreadMutex;
+/* static */ std::recursive_mutex &Telemetry::gStashMutex = *new std::recursive_mutex();
+/* static */ std::recursive_mutex &Telemetry::gThreadMutex = *new std::recursive_mutex();
 /* static */ int Telemetry::gThreadRefCount;
 /* static */ int Telemetry::gProfileClock;
-/* static */ std::recursive_mutex Telemetry::alloc_mutex;
-/* static */ std::map<void*, Telemetry*> Telemetry::alloc_map;
+/* static */ std::recursive_mutex &Telemetry::alloc_mutex = *new std::recursive_mutex();
+/* static */ std::map<void*, Telemetry*> &Telemetry::alloc_map = *new std::map<void*, Telemetry*>();
 
 
 

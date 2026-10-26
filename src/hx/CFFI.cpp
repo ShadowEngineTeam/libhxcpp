@@ -168,16 +168,27 @@ static int sgKinds = (int)(vtAbstractBase + 5);
 
 typedef std::map<std::string,int> KindMap;
 typedef std::map<int,std::string> ReverseKindMap;
-static KindMap sgKindMap;
-static ReverseKindMap sgReverseKindMap;
+// Made on first use, as an extension can share a kind from a static
+//  initializer, and never destroyed, so a thread still running at exit
+//  cannot use them after their destructors ran (#371)
+static KindMap &sgKindMap()
+{
+   static KindMap *map = new KindMap();
+   return *map;
+}
+static ReverseKindMap &sgReverseKindMap()
+{
+   static ReverseKindMap *map = new ReverseKindMap();
+   return *map;
+}
 
 // Plugins can register kinds from any thread (concurrent cpp.Lib.load) -
 // an unsynchronized counter could mint duplicate kind ids, confusing
 // val_to_kind type checks across plugins
 static std::mutex &KindMutex()
 {
-   static std::mutex m;
-   return m;
+   static std::mutex *m = new std::mutex();
+   return *m;
 }
 
 int hxcpp_alloc_kind()
@@ -190,11 +201,11 @@ int hxcpp_alloc_kind()
 void hxcpp_kind_share(int &ioKind,const char *inName)
 {
    std::lock_guard<std::mutex> lock(KindMutex());
-   int &kind = sgKindMap[inName];
+   int &kind = sgKindMap()[inName];
    if (kind==0)
       kind = ++sgKinds;
    ioKind = kind;
-   sgReverseKindMap[kind] = inName;
+   sgReverseKindMap()[kind] = inName;
 }
 
 String __hxcpp_get_kind(Dynamic inObject)
@@ -210,8 +221,8 @@ String __hxcpp_get_kind(Dynamic inObject)
    std::string name;
    {
       std::lock_guard<std::mutex> lock(KindMutex());
-      ReverseKindMap::const_iterator it = sgReverseKindMap.find(type);
-      if (it==sgReverseKindMap.end())
+      ReverseKindMap::const_iterator it = sgReverseKindMap().find(type);
+      if (it==sgReverseKindMap().end())
          return null();
       name = it->second;
    }

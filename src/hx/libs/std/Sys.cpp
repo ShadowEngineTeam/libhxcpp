@@ -86,8 +86,10 @@
 // copy under the lock.
 static HxMutex &hxEnvMutex()
 {
-   static HxMutex sMutex;
-   return sMutex;
+   // Never destroyed, so a thread reading the environment at exit cannot
+   //  take it after its destructor ran (#371)
+   static HxMutex *sMutex = new HxMutex();
+   return *sMutex;
 }
 
 String _hx_std_get_env( String v )

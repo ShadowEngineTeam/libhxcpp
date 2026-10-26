@@ -157,6 +157,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 
 ### Threads
 
+* Fixed a thread still running at process exit using runtime statics outside the collector after their destructors ran: the cppia module lock, the young-value log's lock off Windows, the CFFI kind maps and their lock, the library loader's maps, path list, error string and lock, cppia's variable names, the environment lock, two result buffers and the profiler and telemetry statics. Like the collector's since #67, they are now allocated once and never destroyed, and the kind maps are made on first use, as an extension can share a kind from a static initializer (libhxcpp #371, HaxeFoundation/hxcpp#1433)
 * An uncaught exception in a sys.thread.Thread now prints the exception instead of silently terminating the whole process with no diagnostic; the thread's closure is released when it finishes instead of being pinned by the thread handle
 * Fixed sys.thread.Lock timed waits breaking after ~24.8 days of process uptime on Windows (was built on the 32-bit clock(); now uses the performance counter, as haxe.Timer.stamp does - the tick count first used instead moves only every ~15.6ms, which made every timed wait come due up to a tick late)
 * Fixed every Thread.create on Windows leaking a kernel thread handle for the process lifetime
