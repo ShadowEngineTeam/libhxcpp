@@ -31,7 +31,7 @@ ScriptCallable::ScriptCallable(CppiaStream &stream)
    returnTypeId = stream.getTypeId();
    returnType = etVoid;
    isBoolReturn = false;
-   argCount = stream.getInt();
+   argCount = stream.checkCount(stream.getInt());
    args.resize(argCount);
    hasDefault.resize(argCount);
    initVals.resize(argCount);
@@ -1106,7 +1106,7 @@ void CppiaFunction::load(CppiaStream &stream,bool inExpectBody)
    name = cppia.strings[ nameId ].utf8_str();
    stream.module->creatingFunction = name.c_str();
    returnType = stream.getTypeId();
-   argCount = stream.getInt();
+   argCount = stream.checkCount(stream.getInt());
    DBGLOG("  Function %s(%d) : %s %s%s\n", name.c_str(), argCount, cppia.typeStr(returnType), isStatic?"static":"instance", isDynamic ? " DYNAMIC": "");
    args.resize(argCount);
    for(int a=0;a<argCount;a++)

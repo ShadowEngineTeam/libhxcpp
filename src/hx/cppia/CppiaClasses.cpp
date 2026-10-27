@@ -944,7 +944,7 @@ bool CppiaClassInfo::load(CppiaStream &inStream)
     mClass.mPtr = createCppiaClass(this);
 
     superId = isEnum ? 0 : inStream.getTypeId();
-    int implementCount = isEnum ? 0 : inStream.getInt();
+    int implementCount = isEnum ? 0 : inStream.checkCount(inStream.getInt());
     implements.resize(implementCount);
     for(int i=0;i<implementCount;i++)
        implements[i] = inStream.getTypeId();
