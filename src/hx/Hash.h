@@ -424,6 +424,10 @@ struct Hash : public HashBase< typename ELEMENT::Key >
    // chains (#231). Other key types always use HashCalcHash.
    bool mixIntKeys;
 
+   // Walks over the buckets in progress, which a collection must not fold
+   //  under: one that allocates, as converting the map does, can let it run
+   unsigned short walks;
+
    // An insert that walks this many entries switches to the mixed hash. With
    // a good hash and load <= 1 a chain this long practically never happens.
    enum { MIX_CHAIN_LIMIT = 16 };
@@ -434,6 +438,7 @@ struct Hash : public HashBase< typename ELEMENT::Key >
       bucket = 0;
       bucketsOversized = false;
       mixIntKeys = false;
+      walks = 0;
       if (ELEMENT::WeakKeys && Element::ManageKeys)
          RegisterWeakHash(this);
    }
@@ -545,8 +550,9 @@ struct Hash : public HashBase< typename ELEMENT::Key >
          // remove() would compact to, so the collections that follow scan the
          // buckets in use rather than the most there ever were. The array keeps
          // its size until the next insert or remove, which may allocate
-         // (libhxcpp #204)
-         else if (bucketCount>8 && size < (bucketCount>>2))
+         // (libhxcpp #204). Not during a walk: entries moved into buckets it
+         // has passed would be skipped. A later collection folds instead
+         else if (bucketCount>8 && size < (bucketCount>>2) && !walks)
          {
             int newCount = bucketCount;
             while(newCount>8 && size < (newCount>>2))
@@ -918,9 +924,17 @@ struct Hash : public HashBase< typename ELEMENT::Key >
    }
 
 
+   struct AutoWalk
+   {
+      Hash *hash;
+      AutoWalk(Hash *inHash) : hash(inHash) { hash->walks++; }
+      ~AutoWalk() { hash->walks--; }
+   };
+
    template<typename F>
    void iterate(F &inFunc)
    {
+      AutoWalk walk(this);
       for(int b=0;b<bucketCount;b++)
       {
          Element *el = bucket[b];
