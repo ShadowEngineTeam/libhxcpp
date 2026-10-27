@@ -13,6 +13,15 @@ static void runJoined(Dynamic callback) {
 	hx::AutoGCFreeZone freeZone;
 	worker.join();
 }
+// Without the moving collector a 32-bit build gives the address of an object as
+// its ID, as __hxcpp_obj_id in Immix.cpp does, with no table to clear
+static bool idsAreAddresses() {
+#if defined(HXCPP_M64) || defined(HXCPP_GC_MOVING)
+	return false;
+#else
+	return true;
+#endif
+}
 ')
 class Main {
 	static inline var COUNT = 2000;
@@ -52,6 +61,10 @@ class Main {
 	}
 
 	static function cleared(ids:Array<Int>):Int {
+		// A dead object's address stays its ID there, and looking it up would
+		// read freed memory, so only the live IDs can be checked
+		if (untyped __cpp__("idsAreAddresses()"))
+			return 0;
 		var n = 0;
 		for (i in ids)
 			if (lookup(i) != null)
