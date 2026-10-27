@@ -35,6 +35,7 @@ Issue1063: needs a file creation time, which Emscripten's stat does not have, so
 Issue971: threads
 LargeAllocThreads: threads
 LargeAllowanceDecays: threads
+LargeBufferRootLookup: threads (std::thread, which needs a pthreads build)
 NativeRefCopyRoot: threads (std::thread, which needs a pthreads build)
 NativeRefInterfaceRetarget: threads (std::thread, which needs a pthreads build)
 PollFailedConnect: sockets

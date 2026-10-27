@@ -2,6 +2,7 @@ package;
 
 import haxe.Timer;
 import haxe.ds.WeakMap;
+import haxe.io.Bytes;
 
 class GcKey {
 	public var id:Int;
@@ -104,6 +105,54 @@ class GcObjectIds extends GcCollections {
 		for (i in 0...64) {
 			var o = objects[i * 3907];
 			sum = (sum * 31 + o.id + (untyped __global__.__hxcpp_obj_id(o) == ids[i * 3907] ? 1 : 0)) | 0;
+		}
+		return sum;
+	}
+}
+
+/**
+	65,536 retained 4 KB buffers, with twelve raw pointers into them on the stack
+	while the collections run, so the stack scan looks them up (libhxcpp #365).
+**/
+@:cppFileCode('
+static int bench_with_stack_pointers(::Array< ::Array< unsigned char > > inPool, ::Dynamic inRun) {
+	volatile void *ptrs[12];
+	int n = inPool->length;
+	for (int i = 0; i < 12; i++)
+		ptrs[i] = inPool[i * (n / 12)]->GetBase();
+	int result = inRun();
+	for (int i = 0; i < 12; i++)
+		if (!ptrs[i])
+			result++;
+	return result;
+}
+')
+class GcLargeStackRoots extends GcCollections {
+	static inline var N = 65536;
+
+	final pool:Array<haxe.io.BytesData> = [];
+
+	public function new() {
+		super("gc_large_stack_roots");
+	}
+
+	override public function setup() {
+		for (i in 0...N) {
+			var b = Bytes.alloc(4096);
+			b.set(0, i & 255);
+			pool.push(b.getData());
+		}
+		spare(N * 4);
+	}
+
+	override public function run():Int {
+		return untyped __cpp__("bench_with_stack_pointers({0}, {1})", pool, collect);
+	}
+
+	override function check():Int {
+		var sum = 0;
+		for (i in 0...64) {
+			sum = (sum * 31 + pool[i * 1021][0]) | 0;
 		}
 		return sum;
 	}

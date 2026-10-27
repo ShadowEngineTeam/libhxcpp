@@ -5651,7 +5651,18 @@ public:
       if (sweepOld)
       {
          mLargeOld = 0;
-         mLargeIndexReady = false;
+         // The kept index loses the dead and takes the new survivors, so a
+         //  full collection does not sort a stable pool again (libhxcpp #365).
+         //  The sweep reorders the list, so the new survivors are taken first
+         if (mLargeIndexReady)
+         {
+            auto dead = [](uintptr_t inBase) { return (((unsigned int *)inBase)[-1] & IMMIX_ALLOC_MARK_ID) != hx::gMarkID; };
+            mLargeIndex.erase(std::remove_if(mLargeIndex.begin(), mLargeIndex.end(), dead), mLargeIndex.end());
+            mLargeIndexNew.clear();
+            for(int i=firstNew;i<mLargeList.size();i++)
+               if (!dead(reinterpret_cast<uintptr_t>(mLargeList[i] + 2)))
+                  mLargeIndexNew.push_back(reinterpret_cast<uintptr_t>(mLargeList[i] + 2));
+         }
       }
       int l0 = mLargeList.size();
       // Bounds of the survivors, so a past burst does not keep them wide
@@ -5687,11 +5698,14 @@ public:
          }
       }
       // Every survivor is old now. A kept index takes the new survivors' bases
-      if (mLargeIndexReady && mLargeList.size()>firstNew)
+      if (mLargeIndexReady)
       {
          size_t had = mLargeIndex.size();
-         for(int i=firstNew;i<mLargeList.size();i++)
-            mLargeIndex.push_back( reinterpret_cast<uintptr_t>(mLargeList[i] + 2) );
+         if (sweepOld)
+            mLargeIndex.insert(mLargeIndex.end(), mLargeIndexNew.begin(), mLargeIndexNew.end());
+         else
+            for(int i=firstNew;i<mLargeList.size();i++)
+               mLargeIndex.push_back( reinterpret_cast<uintptr_t>(mLargeList[i] + 2) );
          std::sort(mLargeIndex.begin()+had, mLargeIndex.end());
          std::inplace_merge(mLargeIndex.begin(), mLargeIndex.begin()+had, mLargeIndex.end());
       }
@@ -6272,6 +6286,8 @@ public:
    std::vector<uintptr_t> mLargeIndex;
    bool mLargeIndexReady = false;
    int mLargeLookups = 0;
+   // The new survivors' bases, taken for the index before a full sweep
+   std::vector<uintptr_t> mLargeIndexNew;
    std::vector<uintptr_t> mYoungLargeIndex;
    bool mYoungLargeIndexReady = false;
    int mYoungLargeLookups = 0;

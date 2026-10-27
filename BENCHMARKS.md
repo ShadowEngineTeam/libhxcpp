@@ -110,6 +110,7 @@ These numbers are from one Windows machine; Linux and macOS results are still to
 | `sort_object` | Objects sorted by an Int field, with repeated keys |
 | `gc_weak_map_int` | Collections with an unchanged `WeakMap` of 262,144 retained keys to Int values; each collection's duration is recorded |
 | `gc_object_ids` | Collections with 250,000 retained objects that each have an ID from `__hxcpp_obj_id` |
+| `gc_large_stack_roots` | Collections with 65,536 retained 4 KB buffers and twelve raw pointers into them on the stack |
 | `noop` | Starting the program and exiting at once (startup time, measured 20 times per runtime) |
 
 ### CPPIA
