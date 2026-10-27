@@ -1,0 +1,121 @@
+name: bench
+# The benchmarks in bench/ for a change and for the commit it is based on,
+# built and run in turns on the same runner by bench/ci.sh (libhxcpp #258).
+# Throughput, tail pauses and peak memory are compared separately, each
+# against its own noise; a regression past it is a warning and a line in the
+# job summary, and does not fail the job. Shared runners vary between runs, so
+# the scheduled run compares main with itself (an A/A run) to record how much,
+# before any of this blocks a merge.
+#
+# Every run keeps its raw results as an artifact. Runs on main, scheduled or
+# not, also append a line to history.jsonl on the bench-history branch, so
+# trends and the A/A spread show over time.
+on:
+  push:
+    branches: [main]
+    paths: ['src/**', 'include/**', 'toolchain/**', 'tools/hxcpp/**', 'project/thirdparty/**', 'bench/**', '.github/workflows/bench.yml']
+  pull_request:
+    paths: ['src/**', 'include/**', 'toolchain/**', 'tools/hxcpp/**', 'project/thirdparty/**', 'bench/**', '.github/workflows/bench.yml']
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+    inputs:
+      base:
+        description: Commit to compare with; empty compares the commit with itself
+        default: ''
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  bench:
+    name: Benchmark against the base commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    steps:
+    - name: checkout
+      uses: actions/checkout@v7
+      with:
+        fetch-depth: 0
+
+    - name: setup
+      uses: ./.github/workflows/setup
+      with:
+        haxe: 4.3.7
+
+    # A pull request is compared with where it branched off, a push with the
+    # commit before it, and the scheduled run with itself. Pull requests skip
+    # the CPPIA benchmarks, which need two more builds of each runtime.
+    - name: Pick the base commit
+      id: base
+      env:
+        BEFORE: ${{ github.event.before }}
+        BASE_REF: ${{ github.base_ref }}
+        INPUT_BASE: ${{ inputs.base }}
+      run: |
+        options=""
+        case "$GITHUB_EVENT_NAME" in
+          pull_request)
+            base=$(git merge-base "origin/$BASE_REF" HEAD)
+            options=--no-cppia ;;
+          push)
+            base=$BEFORE
+            if ! git cat-file -e "$base^{commit}" 2>/dev/null; then base=HEAD~1; fi ;;
+          workflow_dispatch)
+            base=${INPUT_BASE:-HEAD} ;;
+          *)
+            base=HEAD ;;
+        esac
+        base=$(git rev-parse "$base")
+        echo "Comparing $(git rev-parse HEAD) with $base"
+        echo "commit=$base" >> "$GITHUB_OUTPUT"
+        echo "options=$options" >> "$GITHUB_OUTPUT"
+
+    - name: Benchmark
+      run: bash bench/ci.sh ${{ steps.base.outputs.commit }} ${{ steps.base.outputs.options }}
+
+    - name: Summary
+      if: ${{ !cancelled() }}
+      run: cat bench/.work/report.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "No report" >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Keep the raw results
+      if: ${{ !cancelled() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: bench-${{ github.sha }}-${{ github.run_attempt }}
+        path: |
+          bench/.work/results.json
+          bench/.work/report.md
+          bench/.work/history.jsonl
+        retention-days: 90
+        if-no-files-found: ignore
+
+    # The branch holds only history.jsonl, one line per run, appended to with
+    # a retry in case another run pushed first
+    - name: Append to bench-history
+      if: ${{ success() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
+      run: |
+        dir="$RUNNER_TEMP/bench-history"
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        if git fetch origin bench-history; then
+          git worktree add -B bench-history "$dir" FETCH_HEAD
+        else
+          git worktree add --orphan -b bench-history "$dir"
+        fi
+        cd "$dir"
+        for attempt in 1 2 3; do
+          cat "$GITHUB_WORKSPACE/bench/.work/history.jsonl" >> history.jsonl
+          git add history.jsonl
+          git commit -q -m "Benchmarks for ${GITHUB_SHA::8} ($GITHUB_EVENT_NAME)"
+          if git push origin bench-history; then exit 0; fi
+          git fetch origin bench-history
+          git reset -q --hard FETCH_HEAD
+        done
+        exit 1

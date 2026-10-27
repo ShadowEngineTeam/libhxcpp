@@ -1,0 +1,6 @@
+# The fuzz targets, for build.hxml (replay) and libfuzzer.hxml
+-m Fuzz
+-D scriptable
+-D HXCPP_CHECK_POINTER
+-D HXCPP_STACK_TRACE
+--dce no

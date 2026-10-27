@@ -41,7 +41,11 @@
 // use-after-return check moves locals into frames off the stack, where the
 // scan cannot see them; their objects would then be freed while in use.
 // ASan reads its defaults from here, and ASAN_OPTIONS still overrides them.
+#ifdef _MSC_VER
+extern "C" const char *__asan_default_options()
+#else
 extern "C" __attribute__((visibility("default"), used)) const char *__asan_default_options()
+#endif
 {
    return "detect_stack_use_after_return=0";
 }
@@ -3831,28 +3835,43 @@ public:
 
    void FreeLarge(void *inLarge)
    {
+      // Only a large allocation is freed here. A block object can be as big:
+      // InternalNew rounds 3997 to 3999 bytes up to 4000 after choosing a
+      // block, and objects up to IMMIX_MAX_BLOCK_OBJECT_SIZE are allocated in
+      // blocks inline. Recycling one queued part of a block to be freed by the
+      // next collection (libhxcpp #257). The header tells them apart: a block
+      // object's gives its rows, or in the nursery its size, and only a large
+      // allocation has the size before it that largeSlot reads past
+      unsigned int header = ((unsigned int *)inLarge)[-1];
+      #ifdef HXCPP_GC_NURSERY
+      if ( (header & 0xff000000) ? (header & IMMIX_ALLOC_ROW_COUNT)!=0 : (header & 0x00ffffff)!=0 )
+      #else
+      if (header & IMMIX_ALLOC_ROW_COUNT)
+      #endif
+         return;
+
 #ifdef HXCPP_TELEMETRY
        __hxt_gc_free_large(inLarge);
 #endif
 
-      ((unsigned char *)inLarge)[HX_ENDIAN_MARK_ID_BYTE] = 0;
       unsigned int *blob = ((unsigned int *)inLarge) - 2;
       mLargeListLock.lock();
-      // With no room to recycle it, the sweep frees it instead, so the next
-      //  sweep must look at the old allocations too. The cache holds up to
-      //  the large allocation allowance
-      if (mRecycleBytes.load(std::memory_order_relaxed) + *blob > mLargeAllocSpace.load(std::memory_order_relaxed))
-      {
-         mLargeOldReleased = true;
-         mLargeListLock.unlock();
-         return;
-      }
       // The buffer names its place in the list. Searching for it took time
       //  in the number of other large allocations (libhxcpp #298). One not
       //  in the list, such as one released twice, is left alone
       int idx = largeSlot(blob);
       if (idx<0 || idx>=mLargeList.size() || mLargeList[idx]!=blob)
       {
+         mLargeListLock.unlock();
+         return;
+      }
+      ((unsigned char *)inLarge)[HX_ENDIAN_MARK_ID_BYTE] = 0;
+      // With no room to recycle it, the sweep frees it instead, so the next
+      //  sweep must look at the old allocations too. The cache holds up to
+      //  the large allocation allowance
+      if (mRecycleBytes.load(std::memory_order_relaxed) + *blob > mLargeAllocSpace.load(std::memory_order_relaxed))
+      {
+         mLargeOldReleased = true;
          mLargeListLock.unlock();
          return;
       }

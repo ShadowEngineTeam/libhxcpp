@@ -28,8 +28,15 @@ using StringTools;
 	  --stock-dev <path>    use a stock hxcpp checkout instead of a release
 	  --define <list>       defines for both builds, comma-separated, such as
 	                        HXCPP_GC_GENERATIONAL for the collector workloads
-	  --runtimes <list>     libhxcpp,stock (default both)
+	  --base <path>         compare with another libhxcpp checkout, such as the
+	                        commit a change is based on, instead of stock hxcpp.
+	                        Its runtime is called "base". Both build the same
+	                        benchmark sources, these ones; if the base cannot build
+	                        them, it is left out of the results with a note, and
+	                        the run carries on. Compare.hx reports the differences.
+	  --runtimes <list>     libhxcpp,stock (default both), or libhxcpp,base with --base
 	  --only <list>         benchmark names, comma-separated
+	  --no-cppia            leave out the CPPIA benchmarks and their builds
 	  --runs <n>            processes per benchmark and runtime (default 3)
 	  --samples <n>         timed samples per process (default 10)
 	  --warmup <n>          untimed samples per process (default 2)
@@ -81,7 +88,9 @@ class Run {
 	static var stockVersion = "4.3.53";
 	static var stockDev:Null<String> = null;
 	static var defines:Array<String> = [];
-	static var runtimeNames = ["libhxcpp", "stock"];
+	static var baseDev:Null<String> = null;
+	static var runtimeNames:Null<Array<String>> = null;
+	static var cppia = true;
 	static var only:Null<Array<String>> = null;
 	static var runs = 3;
 	static var samples = 10;
@@ -97,6 +106,10 @@ class Run {
 		rootDir = FileSystem.absolutePath("..");
 		workDir = benchDir + "/.work";
 		parseArgs(Sys.args());
+		if (runtimeNames == null)
+			runtimeNames = baseDev != null ? ["libhxcpp", "base"] : ["libhxcpp", "stock"];
+		if (runtimeNames.indexOf("base") >= 0 && baseDev == null)
+			fail("the base runtime needs --base <path>");
 		if (outFile == null)
 			outFile = workDir + "/results.json";
 		if (writeReadme) {
@@ -110,10 +123,17 @@ class Run {
 		}
 
 		var runtimes = [for (name in runtimeNames) new Runtime(name, label(name), workDir + "/" + name)];
-		for (rt in runtimes) {
+		var skipped:Array<{name:String, reason:String}> = [];
+		for (rt in runtimes.copy()) {
 			if (build) {
 				prepareRepo(rt);
-				buildRuntime(rt);
+				if (!buildRuntime(rt, rt.name == "base")) {
+					// The base may predate something these benchmark sources use
+					Sys.println('${rt.label}: build failed, leaving it out');
+					skipped.push({name: rt.name, reason: "build failed"});
+					runtimes.remove(rt);
+					continue;
+				}
 			}
 			if (!FileSystem.exists(rt.exe))
 				fail('${rt.label}: ${rt.exe} is missing; run without --no-build');
@@ -167,7 +187,8 @@ class Run {
 			host: hostInfo(),
 			haxe: commandOutput("haxe", ["-version"]),
 			libhxcpp: gitDescribe(),
-			runtimes: [for (rt in runtimes) {name: rt.name, label: rt.label, env: rt.env, cppiaEnv: rt.cppiaEnv}],
+			runtimes: [for (rt in runtimes) {name: rt.name, label: rt.label, commit: rt.commit, env: rt.env, cppiaEnv: rt.cppiaEnv}],
+			skipped: skipped,
 			settings: {runs: runs, samples: samples, warmup: warmup},
 			startup: [for (rt in runtimes) {name: rt.name, seconds: startup[rt.name]}],
 			benchmarks: [for (r in results) r.toJson()],
@@ -214,13 +235,19 @@ class Run {
 					stockDev = FileSystem.absolutePath(value());
 				case "--define":
 					defines = value().split(",");
+				case "--base":
+					baseDev = FileSystem.absolutePath(value());
+					if (!FileSystem.exists(baseDev + "/haxelib.json"))
+						fail('--base: $baseDev is not a libhxcpp checkout');
 				case "--runtimes":
 					runtimeNames = value().split(",");
 					for (n in runtimeNames)
-						if (n != "libhxcpp" && n != "stock")
+						if (n != "libhxcpp" && n != "stock" && n != "base")
 							fail('unknown runtime $n');
 				case "--only":
 					only = value().split(",");
+				case "--no-cppia":
+					cppia = false;
 				case "--runs":
 					runs = count();
 				case "--samples":
@@ -246,6 +273,8 @@ class Run {
 	static function label(name:String):String {
 		if (name == "libhxcpp")
 			return 'libhxcpp ${libVersion()}';
+		if (name == "base")
+			return 'libhxcpp base ${commitOf(baseDev)}';
 		return stockDev != null ? "hxcpp (dev)" : 'hxcpp $stockVersion';
 	}
 
@@ -264,7 +293,12 @@ class Run {
 				run("haxelib", ["newrepo"]);
 			if (rt.name == "libhxcpp")
 				run("haxelib", ["dev", "hxcpp", rootDir]);
-			else if (stockDev != null)
+			else if (rt.name == "base") {
+				run("haxelib", ["dev", "hxcpp", baseDev]);
+				// A fresh checkout has no build tool yet, and haxelib run would stop to ask
+				if (!FileSystem.exists(baseDev + "/hxcpp.n"))
+					inDir(baseDev + "/tools/hxcpp", () -> run("haxe", ["compile.hxml"]));
+			} else if (stockDev != null)
 				run("haxelib", ["dev", "hxcpp", stockDev]);
 			else {
 				run("haxelib", ["install", downloadStock(), "--always", "--quiet"]);
@@ -274,10 +308,11 @@ class Run {
 			var out = commandOutput("haxelib", ["path", "hxcpp"]);
 			var lines = [for (l in out.split("\n")) if (l.trim() != "" && !l.startsWith("-")) l.trim()];
 			var path = lines.length > 0 ? lines[0] : "";
-			var expected = rt.name == "libhxcpp" ? rootDir : (stockDev != null ? stockDev : rt.dir + "/.haxelib/hxcpp/" + stockVersion.replace(".", ","));
+			var expected = rt.name == "libhxcpp" ? rootDir : rt.name == "base" ? baseDev : (stockDev != null ? stockDev : rt.dir + "/.haxelib/hxcpp/" + stockVersion.replace(".", ","));
 			if (path == "" || normalize(path).indexOf(normalize(expected)) != 0)
 				fail('${rt.label}: haxelib resolves hxcpp to "$path", expected $expected\n$out');
 			rt.hxcppPath = path;
+			rt.commit = rt.name == "libhxcpp" ? commitOf(rootDir) : rt.name == "base" ? commitOf(baseDev) : "";
 		});
 	}
 
@@ -303,7 +338,8 @@ class Run {
 		return zip;
 	}
 
-	static function buildRuntime(rt:Runtime) {
+	/** Builds the benchmarks against the runtime. A failure stops the run, or returns false if `optional`. **/
+	static function buildRuntime(rt:Runtime, optional = false):Bool {
 		Sys.println('Building ${rt.label} (log: ${rt.dir}/build.log)');
 		// Stock hxcpp builds 32-bit by default on Windows and libhxcpp builds 64-bit,
 		// so ask both for 64-bit. Elsewhere both already default to the host word size.
@@ -314,6 +350,8 @@ class Run {
 		if (code != 0) {
 			var log = File.getContent(rt.dir + "/build.log").split("\n");
 			Sys.println(log.slice(log.length > 40 ? log.length - 40 : 0).join("\n"));
+			if (optional)
+				return false;
 			fail('${rt.label}: build failed');
 		}
 		if (needsCppia()) {
@@ -327,13 +365,18 @@ class Run {
 				if (inDir(rt.dir, () -> Sys.command('$command $redirect cppia-build.log 2>&1')) != 0) {
 					var log = File.getContent(rt.dir + "/cppia-build.log").split("\n");
 					Sys.println(log.slice(log.length > 40 ? log.length - 40 : 0).join("\n"));
+					if (optional)
+						return false;
 					fail('${rt.label}: CPPIA build failed');
 				}
 			}
 		}
+		return true;
 	}
 
 	static function needsCppia():Bool {
+		if (!cppia)
+			return false;
 		if (only == null)
 			return true;
 		for (name in only)
@@ -611,21 +654,21 @@ class Run {
 		alloc_small depending on which runtime's directory built it. A speed
 		difference smaller than this says nothing about the runtime.
 	**/
-	static inline var LAYOUT_BAND = 0.05;
+	public static inline var LAYOUT_BAND = 0.05;
 
 	static function ratio(better:Float, worse:Float, spread:Float, band = 0.0):String {
 		var r = better / worse;
 		return (Math.abs(r - 1) <= Math.max(spread * 2, band) ? "~" : "") + ratioText(r);
 	}
 
-	static function ratioText(r:Float):String {
+	public static function ratioText(r:Float):String {
 		var s = Std.string(Math.round(r * 100) / 100);
 		if (s.indexOf(".") < 0)
 			s += ".0";
 		return s + "x";
 	}
 
-	static function formatRate(rate:Float, unit:Null<String>):String {
+	public static function formatRate(rate:Float, unit:Null<String>):String {
 		var s = rate >= 1e9 ? round(rate / 1e9) + "G" : rate >= 1e6 ? round(rate / 1e6) + "M" : rate >= 1e3 ? round(rate / 1e3) + "k" : round(rate);
 		return unit == null ? s : '$s $unit/s';
 	}
@@ -634,19 +677,19 @@ class Run {
 		return Std.string(v >= 100 ? Math.round(v) : Math.round(v * 10) / 10);
 	}
 
-	static function percent(v:Float):String {
+	public static function percent(v:Float):String {
 		return round(v * 100) + "%";
 	}
 
-	static function ms(seconds:Float):String {
+	public static function ms(seconds:Float):String {
 		return seconds < 0.001 ? round(seconds * 1e6) + " us" : round(seconds * 1000) + " ms";
 	}
 
-	static function mb(bytes:Float):String {
+	public static function mb(bytes:Float):String {
 		return bytes < 0 ? "n/a" : round(bytes / (1024 * 1024)) + " MB";
 	}
 
-	static function median(values:Array<Float>):Float {
+	public static function median(values:Array<Float>):Float {
 		var s = values.copy();
 		s.sort(Reflect.compare);
 		var n = s.length;
@@ -654,7 +697,7 @@ class Run {
 	}
 
 	/** Median absolute deviation. **/
-	static function mad(values:Array<Float>):Float {
+	public static function mad(values:Array<Float>):Float {
 		var m = median(values);
 		return median([for (v in values) Math.abs(v - m)]);
 	}
@@ -676,6 +719,11 @@ class Run {
 		} else if (Sys.systemName() == "Mac")
 			cpu = commandOutput("sysctl", ["-n", "machdep.cpu.brand_string"]);
 		return '${Sys.systemName()}, ${cpu == null ? "unknown CPU" : cpu.trim()}';
+	}
+
+	/** The checkout's commit, or "" for a runtime that is not a git checkout. **/
+	static function commitOf(dir:String):String {
+		return inDir(dir, () -> commandOutput("git", ["rev-parse", "--short", "HEAD"]));
 	}
 
 	static function gitDescribe():String {
@@ -749,6 +797,7 @@ class Runtime {
 	public final exe:String;
 	public final cppiaExe:String;
 	public var hxcppPath = "";
+	public var commit = "";
 	public var env:Dynamic = null;
 	public var cppiaEnv:Dynamic = null;
 

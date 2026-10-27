@@ -213,6 +213,12 @@ class BuildTool
 
       setupAppleDirectories(mDefines);
 
+      // HXCPP_SANITIZE=address,fuzzer also defines HXCPP_SANITIZE_address and
+      // HXCPP_SANITIZE_fuzzer, for compilers that take one sanitizer per flag
+      if (mDefines.exists("HXCPP_SANITIZE"))
+         for(name in mDefines.get("HXCPP_SANITIZE").split(","))
+            mDefines.set("HXCPP_SANITIZE_" + StringTools.trim(name), "1");
+
       if (isMsvc())
       {
          mDefines.set("isMsvc","1");
@@ -529,6 +535,8 @@ class BuildTool
             inList.push(outOfDate);
          }
          var someCompiled = to_be_compiled.length > 0;
+         if (someCompiled && isMsvc() && !isMsvcLlvm())
+            warnLongPaths(to_be_compiled);
 
          var pchStamp:Null<Float> = null;
          if (group.mPrecompiledHeader!="")
@@ -1574,6 +1582,42 @@ class BuildTool
       {
          return "0.0.0";
       }
+   }
+
+   /**
+      cl.exe is not long path aware, so it cannot open a source, header or
+      object file whose full path reaches MAX_PATH, even with Windows long
+      paths enabled, and only says the file does not exist (libhxcpp #356).
+   **/
+   function warnLongPaths(files:Array<File>)
+   {
+      var cwd = Sys.getCwd();
+      var longest = "";
+      var count = 0;
+      for(file in files)
+      {
+         var source = file.mDir + file.mName;
+         var paths = [ PathManager.isAbsolute(source) ? source : PathManager.combine(cwd, source) ];
+         // Generated code includes each class's header from include/ beside src/
+         if (StringTools.startsWith(file.mName, "src/") && StringTools.endsWith(file.mName, ".cpp") &&
+               FileSystem.exists(PathManager.combine(cwd, file.mDir + "include")))
+            paths.push( PathManager.combine(cwd, file.mDir + "include/" + file.mName.substr(4, file.mName.length - 8) + ".h") );
+         paths.push( mCompiler.getCachedObjName(file) );
+         for(path in paths)
+         {
+            path = Path.normalize(path);
+            if (path.length >= 260)
+            {
+               count++;
+               if (path.length > longest.length)
+                  longest = path;
+            }
+         }
+      }
+      if (count > 0)
+         Log.warn('$count path${count==1 ? "" : "s"} in this build reach the 260 character limit, which cl.exe cannot open '
+            + 'even with Windows long paths enabled. The longest has ${longest.length} characters: $longest\n'
+            + 'Build from a shorter folder, or from a short junction or subst drive that points to this one (libhxcpp #356).');
    }
 
    public static function isMsvc()

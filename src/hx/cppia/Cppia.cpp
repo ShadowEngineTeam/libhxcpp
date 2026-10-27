@@ -224,7 +224,9 @@ CppiaExpr *createStaticAccess(CppiaExpr *inSrc, FieldStorage inType, void *inPtr
 
 static void ReadExpressions(Expressions &outExpressions, CppiaStream &stream,int inN=-1)
 {
-   int count = inN>=0 ? inN : stream.getInt();
+   // Every expression takes at least a byte, so a count past the data left is
+   // malformed, and would otherwise size the list before failing to fill it
+   int count = stream.checkCount(inN>=0 ? inN : stream.getInt());
    outExpressions.resize(count);
 
    for(int i=0;i<count;i++)
@@ -5246,7 +5248,7 @@ struct ObjectDef : public CppiaDynamicExpr
 
    ObjectDef(CppiaStream &stream)
    {
-      fieldCount = stream.getInt();
+      fieldCount = stream.checkCount(stream.getInt());
       data = 0;
       stringIds.resize(fieldCount);
       for(int i=0;i<fieldCount;i++)
@@ -6367,7 +6369,7 @@ struct TVars : public CppiaVoidExpr
 
    TVars(CppiaStream &stream)
    {
-      int count = stream.getInt();
+      int count = stream.checkCount(stream.getInt());
       vars.resize(count);
       for(int i=0;i<count;i++)
       {
@@ -6563,7 +6565,7 @@ struct SwitchExpr : public CppiaExpr
    SwitchExpr(CppiaStream &stream)
    {
       useConstIntCases = false;
-      caseCount = stream.getInt();
+      caseCount = stream.checkCount(stream.getInt());
       bool hasDefault = stream.getInt();
       condition = createCppiaExpr(stream);
       cases.resize(caseCount);
@@ -6816,7 +6818,7 @@ struct TryExpr : public CppiaVoidExpr
 
    TryExpr(CppiaStream &stream)
    {
-      catchCount = stream.getInt();
+      catchCount = stream.checkCount(stream.getInt());
       body = createCppiaExpr(stream);
       catches.resize(catchCount);
       for(int i=0;i<catchCount;i++)

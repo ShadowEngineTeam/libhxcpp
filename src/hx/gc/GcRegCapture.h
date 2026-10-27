@@ -4,7 +4,9 @@
 #include <stddef.h>
 
 // For code that reads whole stack ranges, including AddressSanitizer's redzones
-#if defined(__SANITIZE_ADDRESS__)
+#if defined(__SANITIZE_ADDRESS__) && defined(_MSC_VER) && !defined(__clang__)
+   #define HX_NO_SANITIZE_ADDRESS __declspec(no_sanitize_address)
+#elif defined(__SANITIZE_ADDRESS__)
    #define HX_NO_SANITIZE_ADDRESS __attribute__((no_sanitize_address))
 #elif defined(__has_feature)
    #if __has_feature(address_sanitizer)

@@ -188,6 +188,9 @@ jobs:
           for expected in Texpr.cpp TExpr.cpp "differ only in case"; do
             grep -qF "$expected" <<< "$output"
           done
+      - name: build tool long file names and the Windows path limit
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: bash test/long_paths/check.sh
       - name: build tool profile on a 64-bit Raspberry Pi
         if: ${{ !cancelled() && steps.setup.outcome == 'success' && runner.os == 'Linux' }}
         run: bash test/rpi_host/check.sh

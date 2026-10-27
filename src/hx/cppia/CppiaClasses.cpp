@@ -944,7 +944,7 @@ bool CppiaClassInfo::load(CppiaStream &inStream)
     mClass.mPtr = createCppiaClass(this);
 
     superId = isEnum ? 0 : inStream.getTypeId();
-    int implementCount = isEnum ? 0 : inStream.getInt();
+    int implementCount = isEnum ? 0 : inStream.checkCount(inStream.getInt());
     implements.resize(implementCount);
     for(int i=0;i<implementCount;i++)
        implements[i] = inStream.getTypeId();
@@ -1078,6 +1078,13 @@ void CppiaClassInfo::linkTypes()
       return;
    isLinked = true;
 
+   // A malformed file can make a class its own ancestor, and the walks up the
+   // chain below would then never end (libhxcpp #257)
+   int ancestors = 0;
+   for(int id = superId; id && cppia.types[id]->cppiaClass; id = cppia.types[id]->cppiaClass->superId)
+      if (++ancestors > (int)cppia.classes.size())
+         throw "Class extends itself";
+
    type = cppia.types[typeId];
    mClass->mName = type->name;
    superType = superId ? cppia.types[ superId ] : 0;
@@ -1093,7 +1100,8 @@ void CppiaClassInfo::linkTypes()
 
 
    // Add super interfaces ...
-   TypeData *extraInterfaces = cppia.types[ superId ];
+   // A super id of 0 means no super class, not the first type
+   TypeData *extraInterfaces = superId ? cppia.types[ superId ] : 0;
    while(extraInterfaces)
    {
       if (extraInterfaces->cppiaClass)
@@ -1108,7 +1116,7 @@ void CppiaClassInfo::linkTypes()
             if (!found)
                implements.push_back(impl[i]);
          }
-         extraInterfaces = cppia.types[ parent.superId ];
+         extraInterfaces = parent.superId ? cppia.types[ parent.superId ] : 0;
       }
       else
       {

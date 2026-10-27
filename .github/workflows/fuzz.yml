@@ -1,0 +1,82 @@
+name: fuzz
+# The fuzz targets in test/fuzz, for the cppia loader, UTF-8 and UTF-16
+# strings, Bytes, Serializer, Json, EReg, number parsing, URL decoding and
+# zlib, under libFuzzer, ASan and UBSan (libhxcpp #257): 30 seconds a target
+# for each change, and 10 minutes a target daily. Each run first replays the
+# seed corpus, the inputs earlier runs found, and test/fuzz/regressions. A
+# crash, a sanitizer report or a broken invariant fails the job, and the input
+# that found it is kept as an artifact; once fixed, it goes in
+# test/fuzz/regressions/<target> with a regression test.
+on:
+  push:
+    branches: [main, 'release/**']
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE.txt'
+      - '.github/ISSUE_TEMPLATE/**'
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE.txt'
+      - '.github/ISSUE_TEMPLATE/**'
+  schedule:
+    - cron: '0 5 * * *'
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: Seconds to fuzz each target
+        default: '600'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  fuzz:
+    name: Fuzz the parsers
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    defaults:
+      run:
+        shell: bash
+    steps:
+    - name: checkout
+      uses: actions/checkout@v7
+
+    - name: setup
+      uses: ./.github/workflows/setup
+      with:
+        haxe: 4.3.7
+
+    # run.sh links libFuzzer without its main, from compiler-rt
+    - name: Install libFuzzer
+      run: |
+        dir=$(clang++ --print-runtime-dir)
+        if ! ls "$dir"/libclang_rt.fuzzer_no_main*.a 2>/dev/null; then
+          major=$(clang++ -dumpversion | cut -d. -f1)
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libclang-rt-$major-dev
+          ls "$dir"/libclang_rt.fuzzer_no_main*.a
+        fi
+
+    # The inputs that reached new code in earlier runs, so each run starts
+    # where the last one stopped
+    - name: Restore the corpus
+      uses: actions/cache@v4
+      with:
+        path: test/fuzz/out/corpus
+        key: fuzz-corpus-${{ github.run_id }}
+        restore-keys: fuzz-corpus-
+
+    - name: Fuzz
+      run: bash test/fuzz/run.sh ${{ github.event_name == 'schedule' && '600' || inputs.seconds || '30' }}
+
+    - name: Keep the failing inputs
+      if: ${{ failure() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: fuzz-crashes-${{ github.run_id }}-${{ github.run_attempt }}
+        path: test/fuzz/out/crash-*
+        if-no-files-found: ignore
