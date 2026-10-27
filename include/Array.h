@@ -368,6 +368,7 @@ public:
 #endif
 
    void Realloc(int inLen) const;
+   void ReallocGrow(int inLen) const;
 
    inline void EnsureSize(int inLen) const
    {
@@ -375,6 +376,19 @@ public:
       {
          if (inLen<0 || inLen>mAlloc)
             Realloc(inLen);
+         length = inLen;
+      }
+   }
+
+   // EnsureSize for appending a chunk of unknown total length, such as a
+   // stream read in pieces: the capacity grows as push grows it, not to
+   // the exact length, so the array is not copied again for every chunk
+   inline void EnsureAppendSize(int inLen) const
+   {
+      if ((unsigned int)inLen>(unsigned int)length)
+      {
+         if (inLen<0 || inLen>mAlloc)
+            ReallocGrow(inLen);
          length = inLen;
       }
    }

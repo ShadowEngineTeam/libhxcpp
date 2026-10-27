@@ -1031,6 +1031,46 @@ class Test extends utest.Test
       socket.shutdown(true,true);
    }
 
+   // A whole stream read from a socket, sent by another thread that closes
+   // its end when done
+   static function readWholeStream(payload:Bytes):Bytes
+   {
+      final server = new Socket();
+      server.bind(new Host("127.0.0.1"), 0);
+      server.listen(1);
+      final port = server.host().port;
+      final sent = new sys.thread.Lock();
+      Thread.create(() -> {
+         final client = new Socket();
+         client.connect(new Host("127.0.0.1"), port);
+         client.output.writeFullBytes(payload, 0, payload.length);
+         client.close();
+         sent.release();
+      });
+      final conn = server.accept();
+      final received:BytesData = cpp.NativeSocket.socket_read(@:privateAccess conn.__s);
+      sent.wait();
+      conn.close();
+      server.close();
+      return Bytes.ofData(received);
+   }
+
+   // Reading a whole stream appends each received chunk with the growth push
+   // gets; every byte must arrive, for an empty stream and for many chunks
+   function testSocketReadWhole()
+   {
+      log("Test reading a whole stream from a socket");
+      for (size in [0, 1, 16383, 16385, 1 << 20, (3 << 20) + 7])
+      {
+         final payload = Bytes.alloc(size);
+         for (i in 0...size)
+            payload.set(i, (i * 131 + (i >> 9)) & 0xff);
+         final received = readWholeStream(payload);
+         Assert.equals(size, received.length);
+         Assert.equals(0, received.compare(payload));
+      }
+   }
+
    function testSsl()
    {
       log("Test ssl");

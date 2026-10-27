@@ -31,6 +31,7 @@ class TestMain #if nme extends nme.display.Sprite #end {
       runner.addCase(new TestDynamicArray());
       runner.addCase(new TestSearch());
       runner.addCase(new TestAnonFields());
+      runner.addCase(new native.TestCffiBuffer());
       #if !nme
       runner.addCase(new file.TestFile());
       #end
@@ -89,6 +90,7 @@ class TestMain #if nme extends nme.display.Sprite #end {
          new TestDynamicArray(),
          new TestSearch(),
          new TestAnonFields(),
+         new native.TestCffiBuffer(),
          new file.TestFile(),
          new native.TestFinalizer()
       ]);

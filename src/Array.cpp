@@ -191,58 +191,63 @@ void ArrayBase::Realloc(int inSize) const
       hx::Throw( HX_CSTRING("Array allocation too large") );
    bool pushCase = (inSize<=mAlloc + 16);
    if (!pushCase)
-   {
       reserve(inSize);
-   }
-   else if (pushCase)
+   else
+      ReallocGrow(inSize);
+}
+
+// Grows to the next size up the doubling steps, three quarters or all of a
+// power of two bytes, that holds inSize: what push and EnsureAppendSize get
+void ArrayBase::ReallocGrow(int inSize) const
+{
+   if (inSize<0)
+      hx::Throw( HX_CSTRING("Array allocation too large") );
+   int newAlloc = inSize;
+   unsigned int elemSize = GetElementSize();
+   // Keep minBytes <= 2^31-1 so the roundup doubling below terminates
+   // (with larger values roundup wraps to 0 and loops forever) and the
+   // byte count stays representable as a positive int.
+   if ((unsigned int)inSize > (0x7fffffffU-8)/elemSize)
+      hx::Throw( HX_CSTRING("Array allocation too large") );
+   unsigned int minBytes = inSize*elemSize + 8;
+   unsigned int roundup = 64;
+   while(roundup<minBytes)
+      roundup<<=1;
+
+   if (roundup>64)
    {
-      int newAlloc = inSize;
-      unsigned int elemSize = GetElementSize();
-      // Keep minBytes <= 2^31-1 so the roundup doubling below terminates
-      // (with larger values roundup wraps to 0 and loops forever) and the
-      // byte count stays representable as a positive int.
-      if ((unsigned int)inSize > (0x7fffffffU-8)/elemSize)
-         hx::Throw( HX_CSTRING("Array allocation too large") );
-      unsigned int minBytes = inSize*elemSize + 8;
-      unsigned int roundup = 64;
-      while(roundup<minBytes)
-         roundup<<=1;
+      int half = 3*(roundup>>2);
+      if (minBytes<half)
+         roundup = half;
+   }
+   unsigned int bytes = roundup-8;
 
-      if (roundup>64)
+   if (mBase)
+   {
+      bool wasUnamanaged = mAlloc<0;
+      if (wasUnamanaged)
       {
-         int half = 3*(roundup>>2);
-         if (minBytes<half)
-            roundup = half;
-      }
-      unsigned int bytes = roundup-8;
-
-      if (mBase)
-      {
-         bool wasUnamanaged = mAlloc<0;
-         if (wasUnamanaged)
-         {
-            char *base=(char *)hx::InternalNew(bytes,false);
-            memcpy(base,mBase,(size_t)length*elemSize);
-            mBase = base;
-         }
-         else
-         {
-            mBase = (char *)hx::InternalRealloc((size_t)length*elemSize,mBase, bytes, true);
-            int o = bytes;
-            bytes = hx::ObjectSizeSafe(mBase);
-         }
+         char *base=(char *)hx::InternalNew(bytes,false);
+         memcpy(base,mBase,(size_t)length*elemSize);
+         mBase = base;
       }
       else
       {
-         mBase = (char *)hx::InternalNew(bytes,false);
-         #ifdef HXCPP_TELEMETRY
-         __hxt_new_array(mBase, bytes);
-         #endif
+         mBase = (char *)hx::InternalRealloc((size_t)length*elemSize,mBase, bytes, true);
+         int o = bytes;
+         bytes = hx::ObjectSizeSafe(mBase);
       }
-
-      mAlloc = bytes/elemSize;
-      HX_OBJ_WB_GET(const_cast<ArrayBase *>(this),mBase);
    }
+   else
+   {
+      mBase = (char *)hx::InternalNew(bytes,false);
+      #ifdef HXCPP_TELEMETRY
+      __hxt_new_array(mBase, bytes);
+      #endif
+   }
+
+   mAlloc = bytes/elemSize;
+   HX_OBJ_WB_GET(const_cast<ArrayBase *>(this),mBase);
 }
 
 // Set numeric values to 0, pointers to null, bools to false

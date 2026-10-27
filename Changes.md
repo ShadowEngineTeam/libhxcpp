@@ -46,6 +46,7 @@ libhxcpp 6.0.0 (unreleased)
 * Std.parseInt and Std.parseFloat no longer convert a whole UTF-16 string to UTF-8 to read the number at its start: only the ASCII before its first other character is copied, so a line of non-ASCII text after a number no longer costs its length. Parsing numbers at the start of such lines is 4.5x faster (libhxcpp #284)
 * Fixed Reflect.field, hasField, setField and deleteField with a string literal for the name scanning every field of an anonymous object before searching it by hash: the scan by address is now kept to objects of up to 40 fields, where it is faster. On a 256-field object those calls are 4.3x faster (libhxcpp #285)
 * SQLite rows keep Int, Float, Bool, Int64 and text values in their own fields instead of a box per cell: 100,000 retained rows of eight Int columns hold 35.8 MB of live heap instead of 51.8 MB, and a query that keeps its rows peaks at 86 MB instead of 127 MB (libhxcpp #308)
+* Fixed reading a whole stream from a socket or TLS connection, and building a CFFI buffer with buffer_append and buffer_append_sub, growing the result to the exact length at every chunk, which copied everything read so far each time: they now grow it as push does. Reading 2 MB from a loopback socket is 8.5x faster and peaks at 21 MB instead of 105 MB, and building 2 MB from 1 KB CFFI chunks takes 2.7 ms instead of 775 ms (libhxcpp #287)
 
 libhxcpp 6.0.0-rc.1
 ------------------------------------------------------------
