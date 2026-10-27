@@ -1,6 +1,7 @@
 #if !defined(HX_WINRT) && !defined(EPPC)
 #include <hxcpp.h>
 #include <chrono>
+#include <atomic>
 #include <hx/OS.h>
 
 #include <string.h>
@@ -26,6 +27,31 @@
 #define DYNAMIC_INET_FUNCS 1
 typedef INT (WSAAPI *inet_pton_func)( INT Family, PCSTR pszAddrString, PVOID pAddrBuf);
 typedef PCSTR (WSAAPI *inet_ntop_func)(INT  Family, PVOID pAddr, PSTR pStringBuf, size_t StringBufSize);
+
+// A WS2_32 function looked up on first use, from any thread. The answer is
+// published only once complete, and a thread that finds none yet looks it
+// up too: a flag set before the lookup let another thread take a lookup
+// still in progress for a missing function, and format ::1 as null.
+struct DynamicInetFunc
+{
+   const char *name;
+   std::atomic<void *> func;
+   std::atomic<bool> tried;
+
+   void *get()
+   {
+      if (!tried.load(std::memory_order_acquire))
+      {
+         void *found = 0;
+         HMODULE module = LoadLibraryA("WS2_32.dll");
+         if (module)
+            found = (void *)GetProcAddress(module,name);
+         func.store(found, std::memory_order_relaxed);
+         tried.store(true, std::memory_order_release);
+      }
+      return func.load(std::memory_order_relaxed);
+   }
+};
 
 // fd_array does not begin at sizeof(u_int). On 64-bit Windows SOCKET is
 // eight bytes, so fd_set carries four bytes of padding after fd_count and
@@ -490,8 +516,7 @@ int _hx_std_host_resolve( String host )
 }
 
 #ifdef DYNAMIC_INET_FUNCS
-bool dynamic_inet_pton_tried = false;
-inet_pton_func dynamic_inet_pton = 0;
+static DynamicInetFunc dynamic_inet_pton = { "inet_pton" };
 #endif
 
 Array<unsigned char> _hx_std_host_resolve_ipv6( String host, bool )
@@ -501,14 +526,8 @@ Array<unsigned char> _hx_std_host_resolve_ipv6( String host, bool )
    hx::strbuf hostBuf;
    const char *hostStr = host.utf8_str(&hostBuf);
    #ifdef DYNAMIC_INET_FUNCS
-   if (!dynamic_inet_pton_tried)
-   {
-      dynamic_inet_pton_tried = true;
-      HMODULE module = LoadLibraryA("WS2_32.dll");
-      if (module)
-         dynamic_inet_pton = (inet_pton_func)GetProcAddress(module,"inet_pton");
-   }
-   int ok = dynamic_inet_pton ? dynamic_inet_pton(AF_INET6, hostStr, (void *)&ipv6) : 0;
+   inet_pton_func pton = (inet_pton_func)dynamic_inet_pton.get();
+   int ok = pton ? pton(AF_INET6, hostStr, (void *)&ipv6) : 0;
    #else
    int ok = inet_pton(AF_INET6, hostStr, (void *)&ipv6);
    #endif
@@ -588,8 +607,7 @@ String _hx_std_host_to_string( int ip )
 
 
 #ifdef DYNAMIC_INET_FUNCS
-bool dynamic_inet_ntop_tried = false;
-inet_ntop_func dynamic_inet_ntop = 0;
+static DynamicInetFunc dynamic_inet_ntop = { "inet_ntop" };
 #endif
 
 
@@ -597,16 +615,10 @@ String _hx_std_host_to_string_ipv6( Array<unsigned char> ip )
 {
    char buf[100];
    #ifdef DYNAMIC_INET_FUNCS
-   if (!dynamic_inet_ntop_tried)
-   {
-      dynamic_inet_ntop_tried = true;
-      HMODULE module = LoadLibraryA("WS2_32.dll");
-      if (module)
-         dynamic_inet_ntop = (inet_ntop_func)GetProcAddress(module,"inet_ntop");
-   }
-   if (!dynamic_inet_ntop)
+   inet_ntop_func ntop = (inet_ntop_func)dynamic_inet_ntop.get();
+   if (!ntop)
       return String();
-   return String( dynamic_inet_ntop(AF_INET6, &ip[0], buf, 100) );
+   return String( ntop(AF_INET6, &ip[0], buf, 100) );
    #else
    return String( inet_ntop(AF_INET6, &ip[0], buf, 100) );
    #endif
@@ -1072,7 +1084,9 @@ void _hx_std_socket_bind_ipv6( Dynamic o, Array<unsigned char> host, int port )
 Dynamic _hx_std_socket_accept( Dynamic o )
 {
    SOCKET sock = val_sock(o);
-   struct sockaddr_in addr;
+   // Room for any family's peer address: an IPv6 one does not fit a
+   // sockaddr_in, and Windows fails the accept with WSAEFAULT
+   struct sockaddr_storage addr;
    SockLen addrlen = sizeof(addr);
    SOCKET s;
    hx::EnterGCFreeZone();
@@ -1512,6 +1526,23 @@ void _hx_std_socket_poll_events(Dynamic pdata, double timeout)
    p->widx[0] = -1;
 
 #ifdef NEKO_WINDOWS
+   // Winsock's select fails at once with no sockets, which looked like an
+   // empty poll done: an event loop with nothing registered spun at full CPU.
+   // With nothing to wait for, wait out the timeout, as poll does elsewhere.
+   if (p->fdr->fd_count == 0 && p->fdw->fd_count == 0)
+   {
+      DWORD ms = INFINITE;
+      if (timeout >= 0)
+         ms = timeout * 1000 >= (double)(INFINITE - 1) ? INFINITE - 1 : (DWORD)ceil(timeout * 1000);
+      if (ms)
+      {
+         hx::EnterGCFreeZone();
+         Sleep(ms);
+         hx::ExitGCFreeZone();
+      }
+      return;
+   }
+
    memcpy(p->outr, p->fdr, FDSIZE(p->fdr->fd_count));
    memcpy(p->outw, p->fdw, FDSIZE(p->fdw->fd_count));
 

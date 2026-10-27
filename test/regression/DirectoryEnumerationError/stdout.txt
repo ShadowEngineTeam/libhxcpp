@@ -1,0 +1,4 @@
+directory I/O errors are reported: true
+injected error reached enumeration: true
+directory handle released after error: true
+subsequent enumeration returns all entries: true
