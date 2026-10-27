@@ -198,8 +198,9 @@ namespace hx
       ~Ref() { setPtr(0); }
       void setPtr(T inPtr)
       {
+         // The offset the root has now, from the view it was registered for
          hx::Object *old = ptr ? ptr->__GetRealObject() : 0;
-         int oldOffset = old ? (int)(size_t)((char *)inPtr - (char *)old) : 0;
+         int oldOffset = old ? (int)(size_t)((char *)ptr - (char *)old) : 0;
          hx::Object *next = inPtr ? inPtr->__GetRealObject() : 0;
          int nextOffset = next ? (int)(size_t)((char *)inPtr - (char *)next) : 0;
 

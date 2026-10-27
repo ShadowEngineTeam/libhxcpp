@@ -29,6 +29,7 @@ Issue971: threads
 LargeAllocThreads: threads
 LargeAllowanceDecays: threads
 NativeRefCopyRoot: threads (std::thread, which needs a pthreads build)
+NativeRefInterfaceRetarget: threads (std::thread, which needs a pthreads build)
 PollFailedConnect: sockets
 PollSocketLifetime: sockets
 PollingSafePoint: threads (std::thread, which needs a pthreads build)
