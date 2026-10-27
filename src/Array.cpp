@@ -280,7 +280,8 @@ int ArrayBase::Memcmp(ArrayBase *inOther)
    int bytesA = length * GetElementSize();
    int bytesB = inOther->length * inOther->GetElementSize();
    int common = bytesA<bytesB ? bytesA : bytesB;
-   int result = memcmp(mBase, inOther->mBase, common);
+   // An empty array can have no storage, and memcmp takes no null pointer
+   int result = common ? memcmp(mBase, inOther->mBase, common) : 0;
    if (result)
       return result;
    return bytesA - bytesB;
