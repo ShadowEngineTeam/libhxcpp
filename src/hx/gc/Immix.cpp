@@ -500,6 +500,10 @@ static void WaitForSafe(LocalAllocator *inAlloc);
 static void ReleaseFromSafe(LocalAllocator *inAlloc);
 static void ClearPooledAlloc(LocalAllocator *inAlloc);
 static void CollectFromThisThread(bool inMajor,bool inForceCompact);
+// What a collection that a thread starts is, in one argument (see
+//  LocalAllocator::SetupStackAndCollectFlags)
+enum { collectMajor = 1, collectCompact = 2, collectLocked = 4, collectFreeIsFragged = 8 };
+static void CollectFromAlloc(hx::ImmixAllocator *inAlloc, int inFlags);
 
 // Non-zero while Gc.compact() is collecting. Only then are all empty groups given
 // back to the system. Gc.run(true) asks for the same major+compact collection, but
@@ -4157,7 +4161,7 @@ public:
 
          if (!result)
          {
-            inAlloc->SetupStackAndCollect(false,forceCompact,true,true);
+            CollectFromAlloc(inAlloc, (forceCompact ? collectCompact : 0) | collectLocked | collectFreeIsFragged);
             result = GetNextFree(inRequiredBytes);
          }
 
@@ -4165,7 +4169,7 @@ public:
          {
             // Try with compact this time...
             forceCompact = true;
-            inAlloc->SetupStackAndCollect(false,forceCompact,true,true);
+            CollectFromAlloc(inAlloc, (forceCompact ? collectCompact : 0) | collectLocked | collectFreeIsFragged);
             result = GetNextFree(inRequiredBytes);
          }
 
@@ -6963,6 +6967,24 @@ public:
 
    void SetupStackAndCollect(bool inMajor, bool inForceCompact, bool inLocked=false,bool inFreeIsFragged=false) HXCPP_OVERRIDE
    {
+      SetupStackAndCollectFlags( (inMajor ? collectMajor : 0) | (inForceCompact ? collectCompact : 0) |
+                                 (inLocked ? collectLocked : 0) | (inFreeIsFragged ? collectFreeIsFragged : 0) );
+   }
+
+   // The flags come in one register. SetupStackAndCollect's fifth argument went
+   //  on the stack, in the range this thread's own scan covers, and MSVC stores
+   //  a bool there as one byte over what the slot held: a stale heap address
+   //  with its low byte cleared can point at an object, which then stayed
+   //  alive through every collection this thread made from that depth
+   //  (libhxcpp #367). The runtime calls this, so no argument it passes is on
+   //  the stack above the scan's bottom
+   void SetupStackAndCollectFlags(int inFlags)
+   {
+      bool inMajor = inFlags & collectMajor;
+      bool inForceCompact = inFlags & collectCompact;
+      bool inLocked = inFlags & collectLocked;
+      bool inFreeIsFragged = inFlags & collectFreeIsFragged;
+
       #ifndef HXCPP_SINGLE_THREADED_APP
         #if HXCPP_DEBUG
         if (mGCFreeZone)
@@ -7320,7 +7342,12 @@ void VisitLocalAlloc(LocalAllocator *inAlloc,hx::VisitContext *__inCtx)
 void CollectFromThisThread(bool inMajor,bool inForceCompact)
 {
    LocalAllocator *la = GetLocalAlloc();
-   la->SetupStackAndCollect(inMajor,inForceCompact);
+   la->SetupStackAndCollectFlags( (inMajor ? collectMajor : 0) | (inForceCompact ? collectCompact : 0) );
+}
+
+void CollectFromAlloc(hx::ImmixAllocator *inAlloc, int inFlags)
+{
+   ((LocalAllocator *)inAlloc)->SetupStackAndCollectFlags(inFlags);
 }
 
 namespace hx
@@ -7501,7 +7528,7 @@ size_t InternalCollectBytes(bool inMajor,bool inCompact)
    if (!sgAllocInit)
        return 0;
 
-   GetLocalAlloc()->SetupStackAndCollect(inMajor, inCompact);
+   GetLocalAlloc()->SetupStackAndCollectFlags( (inMajor ? collectMajor : 0) | (inCompact ? collectCompact : 0) );
 
    return sGlobalAlloc->MemUsage();
 }

@@ -52,13 +52,6 @@ class Main {
   untyped __cpp__("runJoined({0})",releaseTargets);
   for(i in 0...3) cpp.vm.Gc.run(true);
   untyped __cpp__("runJoined({0})",verifyDead);
-  // Held on Windows, where the CI runners keep one released target alive
-  //  (libhxcpp #367); what was kept goes to stderr there
-  if(!correct && Sys.systemName()=="Windows") {
-   Sys.stderr().writeString("Windows keeps "+kept.join(",")+" (libhxcpp #367)
-");
-   correct=true;
-  }
   Sys.println("full collection clears released old targets: "+correct+(correct ? "" : " (kept "+kept.join(",")+")"));
  }
 }
