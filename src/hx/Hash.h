@@ -103,9 +103,10 @@ public:
    }
    inline unsigned int getHash() { return hash; }
 
-   Value                value;
+   // hash beside a 4-byte value fills what would be padding (see TStringElement)
    Key                  key;
    unsigned int         hash;
+   Value                value;
    TInt64Element<VALUE> *next;
 };
 
@@ -135,9 +136,11 @@ public:
    }
    inline unsigned int getHash() { return hash; }
 
-   Value                  value;
+   // With value first, an Int value and the hash each left 4 bytes of
+   //  padding: 40 bytes on 64-bit where 32 hold the same fields
    Key                    key;
    unsigned int           hash;
+   Value                  value;
    TStringElement<VALUE>  *next;
 };
 
@@ -231,9 +234,10 @@ public:
    }
    inline unsigned int getHash() { return hash; }
 
-   Value                        value;
+   // hash beside a 4-byte value fills what would be padding (see TStringElement)
    Key                          key;
    unsigned int                 hash;
+   Value                        value;
    TDynamicElement<VALUE,WEAK>  *next;
 };
 
