@@ -40,9 +40,13 @@ struct Deque : public Array_obj<Dynamic>
 		head++;
 		if (head == length)
 		{
-			// Drained - recycle the buffer from the start
+			// Drained - recycle the buffer from the start, or give back what a
+			// burst grew it to, which an idle mailbox would otherwise hold for
+			// as long as it lives
 			length = 0;
 			head = 0;
+			if (mAlloc > keepSlots)
+				__SetSizeExact(0);
 		}
 		else if (head > 64 && head >= length - head)
 		{
@@ -55,6 +59,10 @@ struct Deque : public Array_obj<Dynamic>
 		}
 		return result;
 	}
+
+	// Storage kept when the queue drains: enough for a busy mailbox's usual
+	// backlog without growing again, little enough to hold while idle
+	static const int keepSlots = 16384;
 
 	void pushHead(Dynamic inValue)
 	{
