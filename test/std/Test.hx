@@ -332,6 +332,79 @@ class Test extends utest.Test
       cnx.close();
    }
 
+   // The kind of value a row's fixed field holds: a number or text is held
+   // in the field itself, not in a box
+   static function fixedFieldKind(row:Dynamic, name:String):String
+   {
+      final count = Reflect.fields(row).length;
+      for (k in 0...count)
+      {
+         final key:String = untyped __cpp__("static_cast<hx::Anon_obj*>({0}.mPtr)->getFixed()[{1}].key", row, k);
+         if (key != name)
+            continue;
+         final type:Int = untyped __cpp__("(int)static_cast<hx::Anon_obj*>({0}.mPtr)->getFixed()[{1}].value.type", row, k);
+         if (type == untyped __cpp__("(int)cpp::Variant::typeObject")) return "object";
+         if (type == untyped __cpp__("(int)cpp::Variant::typeString")) return "string";
+         if (type == untyped __cpp__("(int)cpp::Variant::typeDouble")) return "double";
+         if (type == untyped __cpp__("(int)cpp::Variant::typeInt")) return "int";
+         if (type == untyped __cpp__("(int)cpp::Variant::typeInt64")) return "int64";
+         if (type == untyped __cpp__("(int)cpp::Variant::typeBool")) return "bool";
+         return "other";
+      }
+      return "missing";
+   }
+
+   function testSqliteInlineValues()
+   {
+      log("Test sqlite values held in the row");
+      final cnx = Sqlite.open(":memory:");
+      cnx.request("CREATE TABLE t (i INTEGER, f REAL, b BOOL, s TEXT, big INTEGER, n INTEGER, blob BLOB)");
+      cnx.request("INSERT INTO t VALUES (123456, 2.5, 1, 'héllo wörld', 1727600000000, NULL, x'00ff10')");
+      cnx.request("INSERT INTO t VALUES (-7, -0.125, 0, '', -9007199254740993, NULL, x'')");
+      final rows = [for (row in cnx.request("SELECT * FROM t ORDER BY i DESC")) row];
+      cnx.close();
+      cpp.vm.Gc.run(true);
+
+      final a:Dynamic = rows[0];
+      final b:Dynamic = rows[1];
+      Assert.equals(123456, a.i);
+      Assert.equals(2.5, a.f);
+      Assert.equals(true, a.b);
+      Assert.equals("héllo wörld", a.s);
+      Assert.equals(11, (a.s : String).length);
+      final big:haxe.Int64 = a.big;
+      Assert.isTrue(big == haxe.Int64.make(402, 1023147008));
+      Assert.isNull(a.n);
+      Assert.isTrue(Reflect.hasField(a, "n"));
+      Assert.equals("00ff10", Bytes.ofData(a.blob).toHex());
+      Assert.equals(-7, b.i);
+      Assert.equals(-0.125, b.f);
+      Assert.equals(false, b.b);
+      Assert.equals("", b.s);
+      final negative:haxe.Int64 = b.big;
+      Assert.isTrue(negative == haxe.Int64.make(-2097153, -1));
+      Assert.equals(0, Bytes.ofData(b.blob).length);
+      Assert.isTrue(Std.isOfType(a.i, Int) && Std.isOfType(a.f, Float) && Std.isOfType(a.b, Bool) && Std.isOfType(a.s, String));
+      Assert.equals(123456, Reflect.field(a, "i"));
+      Assert.equals(7, Reflect.fields(a).length);
+
+      Assert.equals("int", fixedFieldKind(b, "i"));
+      Assert.equals("double", fixedFieldKind(b, "f"));
+      Assert.equals("bool", fixedFieldKind(b, "b"));
+      Assert.equals("string", fixedFieldKind(b, "s"));
+      Assert.equals("int64", fixedFieldKind(b, "big"));
+      Assert.equals("object", fixedFieldKind(b, "n"));
+      Assert.equals("object", fixedFieldKind(b, "blob"));
+
+      a.i = 99;
+      Reflect.setField(a, "s", "changed");
+      a.extra = true;
+      cpp.vm.Gc.run(true);
+      Assert.equals(99, a.i);
+      Assert.equals("changed", a.s);
+      Assert.equals(true, a.extra);
+   }
+
    function testSqliteFailedStatement()
    {
       log("Test sqlite failed statement");
