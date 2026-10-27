@@ -15,11 +15,12 @@ CppiaArrayAccess: its host is the first --next section, which -D emscripten does
 CppiaBreakpoints: threads
 CppiaHostArgs: processes
 CppiaHostMismatch: checks jitted code, and Emscripten has no cppia JIT
+CppiaJitThrowNull: its host is the first --next section, which -D emscripten does not reach
 CppiaLazyJit: threads, and Emscripten has no cppia JIT
 CppiaModuleFree: threads
 CppiaModuleRetained: threads
-CppiaJitThrowNull: its host is the first --next section, which -D emscripten does not reach
 CppiaStackSize: threads (std::thread, which needs a pthreads build)
+DateTimezoneCache: Emscripten takes the local zone from JavaScript and ignores TZ
 ExitWithBusyWorker: processes and threads
 FileFinalizerFlush: threads (std::thread, which needs a pthreads build)
 FinalizerExceptionState: threads (std::thread, which needs a pthreads build)
@@ -38,6 +39,7 @@ GcScopeOwnership: counts thread attachments, which single-threaded Emscripten bu
 GcSmallNursery: threads (std::thread, which needs a pthreads build)
 GcStackLargeContainer: threads (std::thread, which needs a pthreads build)
 GcTraceDeepGraph: processes (runs itself) and threads (std::thread, which needs a pthreads build)
+GcTraceLargeObjects: processes (runs itself)
 GcWeakMapChain: threads
 GenerationalArrayYoungLog: threads
 GenerationalBlockAccounting: threads (std::thread, which needs a pthreads build)

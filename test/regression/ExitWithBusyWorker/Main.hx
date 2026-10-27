@@ -27,13 +27,18 @@ class Main {
 	static function child(kind:String):Void {
 		items = [for (i in 0...4096) new Item(i)];
 		cpp.vm.Gc.run(true);
+		// Several workers loading, so one is likely to be inside the C
+		//  library's file calls when main returns
+		var workers = kind == "load" ? 8 : 1;
 		var started = new sys.thread.Lock();
-		Thread.create(() -> {
-			started.release();
-			while (true)
-				work(kind);
-		});
-		started.wait();
+		for (_ in 0...workers)
+			Thread.create(() -> {
+				started.release();
+				while (true)
+					work(kind);
+			});
+		for (_ in 0...workers)
+			started.wait();
 		// Let the worker get going before main returns
 		for (i in 0...200) work("env");
 		Sys.println("main done");
@@ -46,16 +51,24 @@ class Main {
 			return;
 		}
 		for (kind in ["env", "load", "young"]) {
+			// A failing load crashed at exit about once in a hundred runs,
+			//  more often with other runs alongside, so it runs 8 at a time
+			var batches = kind == "load" ? 100 : 40;
+			var together = kind == "load" ? 8 : 1;
 			var failed = 0;
-			for (run in 0...40) {
-				var proc = new sys.io.Process(Sys.programPath(), [kind]);
-				var out = proc.stdout.readAll().toString();
-				var code = proc.exitCode();
-				proc.close();
-				if (code != 0 || out.indexOf("main done") < 0)
-					failed++;
+			for (batch in 0...batches) {
+				var procs = [for (_ in 0...together) new sys.io.Process(Sys.programPath(), [kind])];
+				for (proc in procs) {
+					var out = proc.stdout.readAll().toString();
+					var code = proc.exitCode();
+					proc.close();
+					if (code != 0 || out.indexOf("main done") < 0) {
+						Sys.stderr().writeString('$kind: exit code $code\n');
+						failed++;
+					}
+				}
 			}
-			Sys.println(kind + " worker at exit, 40 runs exit cleanly: " + (failed == 0));
+			Sys.println(kind + " worker at exit, " + (batches * together) + " runs exit cleanly: " + (failed == 0));
 		}
 	}
 }

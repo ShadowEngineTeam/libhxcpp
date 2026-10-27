@@ -118,9 +118,15 @@ class TestGC extends Test {
 
    #if !cppia
 	public function testConstStrings():Void {
+		// A build without -r TestMain.hx has no resource, and reading through
+		//  the null crashed the whole suite
+		var resource = haxe.Resource.getString("TestMain.hx");
+		Assert.notNull(resource, "TestMain.hx resource missing: build with compile.hxml or compile-default.hxml");
+		if (resource == null)
+			return;
 		// Const strings void Gc overhead
 		var strings = new Array<String>();
-		strings.push( haxe.Resource.getString("TestMain.hx") );
+		strings.push( resource );
 		strings.push( "some string" );
 		var chars = "abc123";
 		// Optimization for single chars...
@@ -133,7 +139,7 @@ class TestGC extends Test {
 		Assert.isTrue( untyped __global__.__hxcpp_is_const_string(string) );
 
 		var strings = new Array<String>();
-		strings.push( haxe.Resource.getString("TestMain.hx").substr(10) );
+		strings.push( resource.substr(10) );
 		strings.push( "some string" + chars );
 		for(c in 0...chars.length-1)
 			strings.push( chars.substr(c,2) );

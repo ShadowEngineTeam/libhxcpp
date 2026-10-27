@@ -239,3 +239,33 @@ class ParseNumbers extends Benchmark {
 		return (sum + Std.int(fsum)) | 0;
 	}
 }
+
+/** Std.string on Floats, the default shortest form that reads back (libhxcpp #390). **/
+class FloatFormat extends Benchmark {
+	static inline var N = 300000;
+
+	final values:Array<Float> = [];
+
+	public function new() {
+		super("float_format", "conversions", N);
+	}
+
+	override public function setup() {
+		// The corpus of #390, and values of other sizes and lengths
+		for (i in 0...65536)
+			values.push(0.125 + ((i * 7919) % 65521) / 65521.0);
+		var rng = new Rng(390);
+		for (i in 0...65536)
+			values.push((rng.next() - 0x3fffffff) * Math.pow(10, rng.below(40) - 20));
+	}
+
+	override public function run():Int {
+		var hash = 0;
+		for (i in 0...N) {
+			var text = Std.string(values[i & 131071]);
+			for (c in 0...text.length)
+				hash = (hash * 31 + StringTools.fastCodeAt(text, c)) | 0;
+		}
+		return hash;
+	}
+}

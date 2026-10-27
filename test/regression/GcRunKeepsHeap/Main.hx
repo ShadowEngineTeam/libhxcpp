@@ -12,7 +12,12 @@ class P {
 // It used to release every empty group like Gc.compact(), so the next work had
 // to commit and fault the whole heap in again, which made map and allocation
 // benchmarks up to 2x slower than stock hxcpp (openfl/libhxcpp#231, #233).
-// Gc.compact() still releases; GcReleaseEmptyBlocks checks that.
+// Gc.compact() still releases; GcReleaseEmptyBlocks checks that. The moving
+// collector released it all too.
+//
+// The heap must have grown to the working target first, which it does not
+// with HXCPP_GC_GENERATIONAL (see GcHeapGrows), so there it only has to keep
+// what it had.
 function main() {
 	var ring = [for (i in 0...1024) new P(0)];
 	var sum = 0;
@@ -24,5 +29,10 @@ function main() {
 	var before = Gc.memInfo64(Gc.MEM_INFO_RESERVED);
 	Gc.run(true);
 	var after = Gc.memInfo64(Gc.MEM_INFO_RESERVED);
-	Sys.println(after >= 16 * 1048576 && after >= before / 2 ? "kept" : 'released to ${Std.int(after / 1048576)} of ${Std.int(before / 1048576)} MB (sum $sum)');
+	#if HXCPP_GC_GENERATIONAL
+	var grown = true;
+	#else
+	var grown = after >= 16 * 1048576;
+	#end
+	Sys.println(grown && after >= before / 2 ? "kept" : 'released to ${Std.int(after / 1048576)} of ${Std.int(before / 1048576)} MB (sum $sum)');
 }

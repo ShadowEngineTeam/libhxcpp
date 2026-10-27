@@ -1,0 +1,6 @@
+# The suite with the default collector. compile.hxml adds HXCPP_GC_GENERATIONAL.
+# TestGC reads TestMain.hx as a resource, so it has to be built with -r.
+-m TestMain
+-r TestMain.hx
+-L utest
+--cpp bin

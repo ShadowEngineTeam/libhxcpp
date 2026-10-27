@@ -1,0 +1,4 @@
+exclusive creation refuses an existing file: true
+failed exclusive creation preserves existing contents: true
+exclusive creation makes a new file: true
+exclusive mode without w is refused: true

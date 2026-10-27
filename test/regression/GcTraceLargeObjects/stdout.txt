@@ -1,0 +1,4 @@
+trace counts instances that are large allocations: true
+trace counts instances with no object fields: true
+trace counts small instances: true
+a path printed through a large object starts at the static that holds it: true

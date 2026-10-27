@@ -1,0 +1,1 @@
+converting a weak map keeps every live key: true

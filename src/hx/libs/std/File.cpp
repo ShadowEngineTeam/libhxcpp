@@ -39,6 +39,8 @@ namespace
 static FILE *hxFopen(const char *inPath, const char *inMode)
 {
    bool update = strchr(inMode,'+')!=0;
+   // C11's exclusive create, which only goes with w (libhxcpp #391)
+   bool exclusive = strchr(inMode,'x')!=0;
    int flags = 0;
    switch(inMode[0])
    {
@@ -46,6 +48,15 @@ static FILE *hxFopen(const char *inPath, const char *inMode)
       case 'w': flags = (update ? O_RDWR : O_WRONLY) | O_CREAT | O_TRUNC; break;
       case 'a': flags = (update ? O_RDWR : O_WRONLY) | O_CREAT | O_APPEND; break;
       default: errno = EINVAL; return 0;
+   }
+   if (exclusive)
+   {
+      if (inMode[0]!='w')
+      {
+         errno = EINVAL;
+         return 0;
+      }
+      flags |= O_EXCL;
    }
    #ifdef O_CLOEXEC
    flags |= O_CLOEXEC;
@@ -59,7 +70,14 @@ static FILE *hxFopen(const char *inPath, const char *inMode)
    #ifndef O_CLOEXEC
    fcntl(fd, F_SETFD, FD_CLOEXEC);
    #endif
-   FILE *file = fdopen(fd, inMode);
+   // open did the exclusive part, and fdopen need not know x
+   char streamMode[8];
+   int modeLen = 0;
+   for(const char *m = inMode; *m && modeLen<7; m++)
+      if (*m!='x')
+         streamMode[modeLen++] = *m;
+   streamMode[modeLen] = 0;
+   FILE *file = fdopen(fd, streamMode);
    if (!file)
    {
       int err = errno;

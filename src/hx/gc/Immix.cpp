@@ -2077,6 +2077,10 @@ class MarkContext
     #ifdef HXCPP_DEBUG
     MarkInfo  *mInfo;
     int       mPos;
+    // Gc.trace's recursion, and where the path it prints starts for an
+    //  object taken from the mark stack, or -1
+    int       mTraceDepth;
+    int       mTraceCut;
     #endif
 
     int       mThreadId;
@@ -2099,6 +2103,8 @@ public:
        #ifdef HXCPP_DEBUG
        mInfo = new MarkInfo[StackSize];
        mPos = 0;
+       mTraceDepth = 0;
+       mTraceCut = -1;
        #endif
        mThreadId = inThreadId;
        marking = sGlobalChunks.alloc();
@@ -2137,6 +2143,23 @@ public:
     }
     void PopClass() { mPos--; }
 
+    // Gc.trace prints a path from the classes and members of the __Mark
+    //  calls on the native stack, so it marks by recursing, down to this
+    //  depth. Deeper objects go on the mark stack, so a deep graph cannot
+    //  overflow the native one, and the paths below them start there
+    enum { TraceDepthMax = 256 };
+
+    // True when it marked inObj's members
+    bool TraceRecurse(hx::Object *inObj)
+    {
+       if (!gCollectTraceDoPrint || mTraceDepth>=TraceDepthMax)
+          return false;
+       mTraceDepth++;
+       inObj->__Mark(this);
+       mTraceDepth--;
+       return true;
+    }
+
     void Trace()
     {
        int n = mPos < StackSize ? mPos : StackSize;
@@ -2146,7 +2169,18 @@ public:
        printf("Class referenced from:\n");
        #endif
 
-       for(int i=0;i<n;i++)
+       int first = 0;
+       if (mTraceCut>=0)
+       {
+          first = mTraceCut < n ? mTraceCut : n;
+          #ifdef ANDROID
+          __android_log_print(ANDROID_LOG_INFO, "trace", "... + higher");
+          #else
+          printf("... + higher\n");
+          #endif
+       }
+
+       for(int i=first;i<n;i++)
           #ifdef ANDROID
           __android_log_print(ANDROID_LOG_INFO, "trace", "%s.%s",  mInfo[i].mClass, mInfo[i].mMember );
           #else
@@ -2230,12 +2264,21 @@ public:
              hx::Object *obj = marking->pop();
              if (obj)
              {
+                #ifdef HXCPP_DEBUG
+                // Gc.trace printed this object's path when it was pushed;
+                //  the paths of what it holds start here
+                if (gCollectTrace)
+                   mTraceCut = mPos;
+                #endif
                 #ifdef HX_GC_VERIFY_GENERATIONAL
                 mVerifyParent = obj;
                 obj->__Mark(this);
                 mVerifyParent = 0;
                 #else
                 obj->__Mark(this);
+                #endif
+                #ifdef HXCPP_DEBUG
+                mTraceCut = -1;
                 #endif
                 #ifdef HX_MULTI_THREAD_MARKING
                 // Load balance
@@ -2494,6 +2537,17 @@ void MarkObjectAllocUnchecked(hx::Object *inPtr,hx::MarkContext *__inCtx)
    if (sgCensus)
       CensusCount(inPtr, flags);
 
+   #ifdef HXCPP_DEBUG
+   // Here, not with the containers, so it counts large objects and objects
+   //  without members too
+   if (gCollectTrace && gCollectTrace==inPtr->__GetClass().GetPtr())
+   {
+      gCollectTraceCount++;
+      if (gCollectTraceDoPrint)
+         __inCtx->Trace();
+   }
+   #endif
+
    if (sgEphemeronPending && !sgEphemeronPending->empty())
    {
       auto range = sgEphemeronPending->equal_range(inPtr);
@@ -2540,22 +2594,12 @@ void MarkObjectAllocUnchecked(hx::Object *inPtr,hx::MarkContext *__inCtx)
          #endif
 
          #ifdef HXCPP_DEBUG
-            if (gCollectTrace && gCollectTrace==inPtr->__GetClass().GetPtr())
-            {
-               gCollectTraceCount++;
-               if (gCollectTraceDoPrint)
-                   __inCtx->Trace();
-            }
-
             // Recursive mark so stack stays intact..
             #if (HXCPP_GC_DEBUG_LEVEL>0)
             inPtr->__Mark(__inCtx);
             #else
-            // Printing a path needs it on the native stack. Counting does
-            //  not, and recursing would overflow that stack on a deep graph
-            if (gCollectTrace && gCollectTraceDoPrint)
-               inPtr->__Mark(__inCtx);
-            else
+            // Printing a path needs it on the native stack, as far as it goes
+            if (!gCollectTrace || !__inCtx->TraceRecurse(inPtr))
                __inCtx->pushObj(inPtr);
             #endif
          #else // Not debug
@@ -2583,6 +2627,10 @@ void MarkObjectAllocUnchecked(hx::Object *inPtr,hx::MarkContext *__inCtx)
    else if (flags & IMMIX_ALLOC_IS_CONTAINER)
    {
       // Large objects have no rows, but their members still need marking
+      #ifdef HXCPP_DEBUG
+      if (gCollectTrace && __inCtx->TraceRecurse(inPtr))
+         return;
+      #endif
       __inCtx->pushObj(inPtr);
    }
 }
@@ -5500,6 +5548,12 @@ public:
          sgCensusDeferred = &census->deferred;
          sgCensusCounts->clear();
       }
+      #ifdef HXCPP_DEBUG
+      // Gc.trace counts as a census does, so it defers the same marks
+      static std::vector< std::pair<void *,bool> > *sTraceDeferred = new std::vector< std::pair<void *,bool> >();
+      if (gCollectTrace && !sgCensus)
+         sgCensusDeferred = sTraceDeferred;
+      #endif
 
       hx::MarkClassStatics(&mMarker);
       #if defined(HXCPP_SCRIPTABLE) && defined(HXCPP_GC_GENERATIONAL)
@@ -5592,8 +5646,12 @@ public:
       #endif
          mMarker.processMarkStack();
 
-      if (sgCensus)
+      if (sgCensusDeferred)
          MarkCensusDeferred();
+      #ifdef HXCPP_DEBUG
+      if (!sgCensus)
+         sgCensusDeferred = 0;
+      #endif
 
 
 
@@ -6091,8 +6149,13 @@ public:
       if (full)
       {
          bool doRelease = false;
+         // Only Gc.compact() gives everything back, as without the moving
+         //  collector below: Gc.run(true) and the allocator's collection when
+         //  its free list is full also compact, and releasing the whole heap
+         //  then shrank it to what was live, so it never grew (#230, #231)
+         bool releaseAll = inForceCompact && inMajor && sReleaseAllRequests.load() > 0;
 
-         if (inForceCompact)
+         if (releaseAll)
             doRelease = true;
          else
          {
@@ -6118,7 +6181,7 @@ public:
 
 
          bool isFragged = stats.fragScore > mAllBlocks.size()*FRAG_THRESH;
-         if (doRelease || isFragged || hx::gAlwaysMove)
+         if (doRelease || isFragged || hx::gAlwaysMove || inForceCompact)
          {
             if (isFragged && sgTimeToNextTableUpdate>3)
                sgTimeToNextTableUpdate = 3;
@@ -6152,7 +6215,7 @@ public:
                   size_t targetMem = std::max( mem + targetFree, hx::sgMinimumWorkingMemory) +
                                         (2<<(IMMIX_BLOCK_GROUP_BITS+IMMIX_BLOCK_BITS));
 
-                  if (inForceCompact)
+                  if (releaseAll)
                      targetMem = 0;
                   size_t have = GetWorkingMemory();
                   if (targetMem<have)
@@ -6857,7 +6920,7 @@ void MarkConservative(int *inBottom, int *inTop,hx::MarkContext *__inCtx)
                   hx::MarkObjectAlloc(reinterpret_cast<hx::Object*>(potentialObject), __inCtx);
                else if (mark != gByteMarkID)
                {
-                  if (sgCensus)
+                  if (sgCensusDeferred)
                      sgCensusDeferred->push_back(std::make_pair(reinterpret_cast<void*>(potentialObject), true));
                   else
                      mark = static_cast<unsigned char>(gByteMarkID);
@@ -6902,8 +6965,9 @@ void MarkConservative(int *inBottom, int *inTop,hx::MarkContext *__inCtx)
                      GCLOG(" Mark string %p (%p)\n", reinterpret_cast<void*>(potentialObject), ptr);
                   #endif
                   // An object with no pointer fields looks like this too, so a
-                  //  census marks it last, after a reference may have counted it
-                  if (sgCensus)
+                  //  census or Gc.trace marks it last, after a reference may
+                  //  have counted it
+                  if (sgCensusDeferred)
                      sgCensusDeferred->push_back(std::make_pair(reinterpret_cast<void*>(potentialObject), false));
                   else
                      HX_MARK_STRING(reinterpret_cast<void*>(potentialObject));

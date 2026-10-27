@@ -1,8 +1,13 @@
 import sys.io.Process;
 
+class Leaf {
+	public function new() {}
+}
+
 class Node {
 	public var next:Node;
 	public var value:Int;
+	public var leaf:Leaf;
 
 	public function new(next:Node, value:Int) {
 		this.next = next;
@@ -35,6 +40,12 @@ class Main {
 		for (i in 0...count)
 			node = new Node(node, i);
 		head = node;
+		// One Leaf, at the far end, for a printed trace to find
+		var last = head;
+		while (last != null && last.next != null)
+			last = last.next;
+		if (last != null)
+			last.leaf = new Leaf();
 	}
 
 	// Each case runs in its own process, so a stack overflow fails only that case
@@ -43,9 +54,11 @@ class Main {
 		var output = process.stdout.readAll().toString();
 		var code = process.exitCode();
 		process.close();
-		if (code != 0 || output != "ok")
-			Sys.stderr().writeString('mode=$mode nodes=$n exit=$code output=$output\n');
-		return code == 0 && output == "ok";
+		// A printed trace comes before the result
+		var ok = code == 0 && (mode == "print" ? StringTools.endsWith(output, "ok") && output.indexOf("Class referenced from") >= 0 : output == "ok");
+		if (!ok)
+			Sys.stderr().writeString('mode=$mode nodes=$n exit=$code output=${output.substr(output.length - 200)}\n');
+		return ok;
 	}
 
 	static function main() {
@@ -58,6 +71,13 @@ class Main {
 			if (args[1] == "trace") {
 				var traced = cpp.vm.Gc.trace(Node, false);
 				if (traced != count) {
+					Sys.print('wrong count $traced');
+					return;
+				}
+			}
+			if (args[1] == "print") {
+				var traced = cpp.vm.Gc.trace(Leaf, true);
+				if (traced != 1) {
 					Sys.print('wrong count $traced');
 					return;
 				}
@@ -78,5 +98,6 @@ class Main {
 		Sys.println("normal collection preserves a deep linked graph: " + child("normal", 100000));
 		Sys.println("trace counts a shallow graph without printing paths: " + child("trace", 128));
 		Sys.println("trace counts a deep graph without terminating: " + child("trace", 100000));
+		Sys.println("trace prints a path into a deep graph without terminating: " + child("print", 100000));
 	}
 }
