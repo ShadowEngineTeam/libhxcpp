@@ -3807,9 +3807,13 @@ public:
             CollectFromThisThread(false,false);
          }
 
-         int rounded = (inDelta +3) & ~3;
-   
-         growLargeAllocSpace((size_t)rounded<<1);
+         // In size_t, which holds any positive int rounded up: in int, a delta
+         //  near the top of its range overflowed to an allowance near the size_t
+         //  maximum, which the halving at each collection took far too long to
+         //  undo. Twice that is clamped for a 32-bit size_t.
+         size_t rounded = ((size_t)inDelta + 3) & ~(size_t)3;
+         const size_t maxSpace = std::numeric_limits<size_t>::max()/2;
+         growLargeAllocSpace(rounded > maxSpace ? maxSpace : rounded<<1);
       }
 
       #ifndef HXCPP_SINGLE_THREADED_APP

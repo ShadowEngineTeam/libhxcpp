@@ -14,6 +14,7 @@ CppiaModuleFree: threads
 FinalizerExceptionState: threads (std::thread, which needs a pthreads build)
 FinalizersAcrossFreeZones: threads
 GcHeapGrows: expects the desktop 20 MB working target; other platforms, Emscripten included, use 8 MB
+GcNativePressureBoundary: threads (std::thread, which needs a pthreads build)
 GcReleaseEmptyBlocks: threads
 GcRunKeepsHeap: expects the desktop 20 MB working target; other platforms, Emscripten included, use 8 MB
 GcScopeOwnership: counts thread attachments, which single-threaded Emscripten builds do not make
