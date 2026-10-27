@@ -173,6 +173,7 @@
 
     <file name="ZLibUncompress.cpp"/>
     <file name="ZLibCompress.cpp"/>
+    <file name="ZLibChecksum.cpp"/>
   </files>
 
   <target id="haxe">

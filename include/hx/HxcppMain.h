@@ -91,7 +91,8 @@
       }
       catch (Dynamic e)
       {
-          auto customStack = e->__Field(HX_CSTRING("_hx_customStack"), HX_PROP_DYNAMIC).asString();
+          // A thrown null has no fields to read
+          String customStack = e == null() ? String() : e->__Field(HX_CSTRING("_hx_customStack"), HX_PROP_DYNAMIC).asString();
           if (::hx::IsNotNull(customStack))
           {
               printf("%s\n", customStack.utf8_str());

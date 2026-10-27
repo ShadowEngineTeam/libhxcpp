@@ -26,7 +26,7 @@
 
 
 #define TRY_NATIVE try {
-#define CATCH_NATIVE } catch(Dynamic e) {  CppiaCtx::getCurrent()->exception = e.mPtr ? e.mPtr : Dynamic(String("",0)).mPtr; }
+#define CATCH_NATIVE } catch(Dynamic e) {  CppiaCtx::getCurrent()->exception = hx::toPendingException(e.mPtr); }
 
 
 extern "C" struct sljit_jump;

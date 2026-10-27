@@ -586,14 +586,31 @@ struct StackContext : public hx::ImmixAllocator
    unsigned char *stack;
    unsigned char *pointer;
    unsigned char *frame;
-   // Overflow limit for the script stack - the true end minus a margin
-   // that covers one frame's argument pushes, which happen before the
-   // callee's stack-size check runs
+   // Overflow limit for the script stack - the end of its committed memory
+   // minus a margin that covers one frame's argument pushes, which happen
+   // before the callee's stack-size check runs
    unsigned char *stackEnd;
    class Object  *exception;
 
    unsigned int breakContReturn;
    int  byteMarkId;
+
+   // The script stack's size, and how much of it has memory behind it. Frames,
+   //  AutoStack and jitted code hold pointers into the stack, so it never moves:
+   //  where the platform allows, it reserves its whole size and grows by
+   //  committing more of it (stackReserved), and otherwise it is allocated whole
+   size_t stackSize;
+   size_t stackCommitted;
+   bool   stackReserved;
+
+   // Commits more of the script stack so that inBytes past pointer fit below
+   //  stackEnd. False when they would pass its size
+   bool growScriptStack(int inBytes);
+   // Replaces the script stack with one of the size new stacks get, if that
+   //  differs and no script frame is on it
+   void resizeScriptStack();
+   void allocScriptStack();
+   void freeScriptStack();
 
    // Script frame slots are packed at 4-byte offsets, which code that Haxe
    //  generates for scriptable host classes relies on, so an 8-byte value

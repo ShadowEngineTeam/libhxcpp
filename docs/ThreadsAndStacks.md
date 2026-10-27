@@ -172,6 +172,31 @@ Each run also boots the program again. `main` calls `hx::Boot()` and `__boot_all
 The generated `main` returns 0, or -1 after printing an uncaught exception. `Sys.exit(code)` calls the C `exit` instead of returning from `main`.
 
 
+### Cppia script stacks
+
+A thread that runs cppia scripts keeps their frames, the arguments and locals of each script call, on a script stack of its own, apart from its native stack. A call that would pass its end throws "Stack Overflow" in the script. It is 128 KB by default, which a script uses up after a few hundred to a few thousand nested calls, depending on how many locals its functions have.
+
+`HXCPP_CPPIA_STACK_SIZE` sets the size in bytes for every thread, the main thread included:
+
+```
+-D HXCPP_CPPIA_STACK_SIZE=16777216
+```
+
+A host can also change it while it runs. The new size applies to each thread that attaches from then on, and to the calling thread when no script frame is on its stack, as in the host's `main` before it runs a script. A thread that is already running keeps its size, since its stack cannot be replaced under a running script, so set the size before starting the threads that run scripts:
+
+```haxe
+untyped __global__.__scriptable_cppia_set_stack_size(16 << 20);
+// The calling thread's size
+var bytes:Int = untyped __global__.__scriptable_cppia_stack_size();
+```
+
+Sizes are rounded up to a multiple of 64 KB, and 64 KB is the smallest.
+
+On Windows, Linux, Android and Apple platforms a stack reserves address space for its whole size and commits memory as frames reach it, as a native thread stack does, so a large size costs only address space until a script recurses that deep. Elsewhere, Emscripten included, the stack is allocated at its full size. Either way the collector scans only the part in use. The stack never moves, since script frames, calls from the host into scripts and jitted code all hold pointers into it.
+
+Each script call also takes native stack, several hundred bytes for an interpreted call and less for a jitted one. A thread that runs out of native stack before its script stack crashes instead of throwing, so raise both when scripts recurse deep. On Windows the linker's `-STACK` flag sets the main thread's native stack and the default for the threads a program starts; a Haxe class can add it with `@:buildXml('<target id="haxe"><flag value="-STACK:268435456" if="windows"/></target>')`. On Linux and macOS the main thread's native stack comes from `ulimit -s`, usually 8 MB; the threads a program starts get the same on Linux and 512 KB on macOS.
+
+
 ### Debugging.
   - in debug mode, hxcpp will check for calls from unattached threads
   - hxcpp can log conservative ranges.  With a native debugger you can check the address of

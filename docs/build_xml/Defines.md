@@ -50,6 +50,7 @@ Defines affecting how the code is compiled.  These can be on the command line wh
 | *HXCPP_OPTIMIZE_FOR_SIZE* | Optimise for code size rather than speed |
 | *HXCPP_STACK_TRACE*     | Have valid function-level stack traces, even in release mode. |
 | *HXCPP_STACK_LINE*      | Include line information in stack traces, even in release mode. |
+| *HXCPP_CPPIA_STACK_SIZE* | The size in bytes of the stack each thread keeps cppia script frames on, default 131072 (128 KB). A script that recurses past it gets a "Stack Overflow" exception (docs/ThreadsAndStacks.md) |
 | *HXCPP_CHECK_POINTER*   | Add null-pointer checks,even in release mode. |
 | *HXCPP_PROFILER*        | Add profiler support |
 | *HXCPP_TELEMETRY*       | Add telemetry support |

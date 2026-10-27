@@ -833,14 +833,18 @@ void *__hxcpp_get_proc_address(String inLib, String full_name,bool inNdllProc,bo
    if (!proc_query)
        proc_query = (FundFunc)hxFindSymbol(module, (inLib + HX_CSTRING("_") + full_name).__CStr());
 
-   if (!proc_query && !inQuietFail)
+   // Quiet only drops the message: a missing symbol has no query function to call
+   if (!proc_query)
    {
-      #ifdef ANDROID
-       __android_log_print(ANDROID_LOG_ERROR, "loader", "Could not find primitive %s in %p",
-        full_name.__CStr(), module);
-      #else
-      fprintf(stderr,"Could not find primitive %s.\n", full_name.__CStr());
-      #endif
+      if (!inQuietFail)
+      {
+         #ifdef ANDROID
+         __android_log_print(ANDROID_LOG_ERROR, "loader", "Could not find primitive %s in %p",
+           full_name.__CStr(), module);
+         #else
+         fprintf(stderr,"Could not find primitive %s.\n", full_name.__CStr());
+         #endif
+      }
       return 0;
    }
 

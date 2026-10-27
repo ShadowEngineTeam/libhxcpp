@@ -1,0 +1,8 @@
+--main Script
+-cppia bin/script.cppia
+--next
+--main Main
+-cpp bin
+-D scriptable
+-D HXCPP_CPPIA_STACK_SIZE=262144
+--dce no

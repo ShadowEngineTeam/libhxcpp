@@ -156,6 +156,16 @@ void hx::zip::zlib::ZLibCompress::setFlushMode(Flush mode)
 	}
 }
 
+int hx::zip::zlib::ZLibCompress::getAdler32()
+{
+	if (handle == nullptr)
+	{
+		ZLIB_OBJ_CLOSED;
+	}
+
+	return static_cast<int>(handle->adler);
+}
+
 int hx::zip::zlib::ZLibCompress::getBounds(const int length)
 {
 	if (handle == nullptr)

@@ -124,20 +124,24 @@ hx::zip::Result hx::zip::zlib::ZLibUncompress::execute(cpp::marshal::View<uint8_
 	// Inflate allocates its window on first use
 	static_cast<ZLibMemory *>(handle->opaque)->report();
 
-	// Z_NEED_DICT repeats forever without consuming input - surfacing it
-	// as an error stops the haxe.zip streaming loop from spinning
-	if (error < 0 || error == Z_NEED_DICT)
+	// Per-call counts - total_in/total_out are cumulative across the whole
+	// stream, which breaks the haxe.zip streaming loops on the second call
+	auto read  = static_cast<int>(src.length - handle->avail_in);
+	auto write = static_cast<int>(dst.length - handle->avail_out);
+
+	// Z_NEED_DICT: the stream asks for a preset dictionary, which nothing
+	// here can give it. The call that reaches the request has read the
+	// header and the dictionary's id, which getAdler32 then gives, and
+	// reports that as any unfinished call does, as neko and hxcpp 4.3 do.
+	// Every later call returns Z_NEED_DICT again having done nothing, so it
+	// throws, as a call that can make no progress (Z_BUF_ERROR) does, and a
+	// loop over execute such as Uncompress.run ends instead of spinning
+	if (error < 0 || (error == Z_NEED_DICT && read == 0 && write == 0))
 	{
 		zlibThrow(handle, error);
 	}
 
-	// Per-call counts - total_in/total_out are cumulative across the whole
-	// stream, which breaks the haxe.zip streaming loops on the second call
-	return
-		Result(
-			error == Z_STREAM_END,
-			static_cast<int>(src.length - handle->avail_in),
-			static_cast<int>(dst.length - handle->avail_out));
+	return Result(error == Z_STREAM_END, read, write);
 }
 
 void hx::zip::zlib::ZLibUncompress::setFlushMode(Flush mode)
@@ -169,6 +173,16 @@ void hx::zip::zlib::ZLibUncompress::setFlushMode(Flush mode)
 		flush = Z_BLOCK;
 		break;
 	}
+}
+
+int hx::zip::zlib::ZLibUncompress::getAdler32()
+{
+	if (handle == nullptr)
+	{
+		ZLIB_OBJ_CLOSED;
+	}
+
+	return static_cast<int>(handle->adler);
 }
 
 void hx::zip::zlib::ZLibUncompress::close()
