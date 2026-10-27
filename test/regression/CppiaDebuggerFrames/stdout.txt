@@ -1,4 +1,0 @@
-method: a=21 b=two c=42 seen=null this=true
-static: seen=null x=1.5 y=2.5
-method: a=21 b=two c=42 seen=null this=true
-static: seen=null x=1.5 y=2.5

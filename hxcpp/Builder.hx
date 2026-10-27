@@ -61,7 +61,7 @@ class Builder
 
             switch(target)
             {
-               case "ios", "android", "blackberry", "tizen", "emscripten", "webos", "windows", "msvc", "linux", "mac", "mingw", "tvos":
+               case "ios", "android", "emscripten", "windows", "msvc", "linux", "mac", "mingw":
                   defaultTarget = false;
                   if (linkStatic)
                   {
@@ -74,7 +74,7 @@ class Builder
                         targets.set(stat, parts);
                      }
                   }
-                  if (linkNdll && target!="ios" && target!="emscripten" && target!="tvos" /*&& (target!="mingw" || explicitNdll)*/ )
+                  if (linkNdll && target!="ios" && target!="emscripten" /*&& (target!="mingw" || explicitNdll)*/ )
                      targets.set(target, parts);
 
                default:
@@ -115,12 +115,6 @@ class Builder
                target = target.substr(7);
             }
             var staticFlags = isStatic ? ["-Dstatic_link"] : [];
-#if (hxcpp_api_level>=500)
-            staticFlags.push("-DHXCPP_CPP11");
-#else
-            if (target=="ios" || target=="tvos")
-               staticFlags = ["-DHXCPP_CPP11"];
-#end
 
             switch(target)
             {
@@ -182,25 +176,8 @@ class Builder
                   validArchs.set("x86", ["-Dandroid", "-DHXCPP_X86"].concat(staticFlags) );
                   validArchs.set("x86_64", ["-Dandroid", "-DHXCPP_X86_64"].concat(staticFlags) );
                
-               case "blackberry":
-                  validArchs.set("armv7", ["-Dblackberry"].concat(staticFlags) );
-                  validArchs.set("x86", ["-Dblackberry", "-Dsimulator"].concat(staticFlags) );
-               
-               case "tizen":
-                  validArchs.set("armv7", ["-Dtizen"].concat(staticFlags) );
-                  validArchs.set("x86", ["-Dtizen", "-Dsimulator"].concat(staticFlags) );
-               
                case "emscripten":
                   validArchs.set("x86", ["-Demscripten"].concat(staticFlags) );
-               
-               case "webos":
-                  validArchs.set("armv7", ["-Dwebos"].concat(staticFlags) );
-               
-               case "tvos":
-                  validArchs.set("arm64", ["-Dappletvos", "-DHXCPP_ARM64", "-DHXCPP_M64", "-DENABLE_BITCODE"].concat(staticFlags) );
-                  // NOTE: removed as there's no 32bit support for the AppleTV simulator
-                  //validArchs.set("x86", ["-Dappletvsim", "-DENABLE_BITCODE"].concat(staticFlags) );
-                  validArchs.set("x86_64", ["-Dappletvsim", "-DHXCPP_M64", "-DENABLE_BITCODE"].concat(staticFlags) );
 
             }
 

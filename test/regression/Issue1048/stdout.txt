@@ -1,3 +1,0 @@
-getContent: caught
-getBytes: caught
-read: caught

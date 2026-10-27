@@ -36,7 +36,7 @@
    #include <limits.h>
    #ifndef ANDROID
       #include <locale.h>
-      #if !defined(BLACKBERRY) && !defined(EPPC) && !defined(GCW0) && !defined(__GLIBC__) && !defined(__linux__) && !defined(NEKO_BSD)
+      #if !defined(EPPC) && !defined(__GLIBC__) && !defined(__linux__) && !defined(NEKO_BSD)
          #include <xlocale.h>
       #endif
    #endif
@@ -143,7 +143,7 @@ void _hx_std_put_env( String e, String v )
 #ifdef HX_WINRT
    // Do nothing
 #elif defined(NEKO_WINDOWS)
-   String set = e + HX_CSTRING("=") + (v != null()?v:HX_CSTRING(""));
+   String set = e + HX_CSTRING("=") + (v != null() ? v : String(HX_CSTRING("")));
 
    // Convert before taking the lock - conversion can allocate, and an
    // allocation must not happen under it (see _hx_std_get_env)
@@ -217,7 +217,7 @@ void _hx_std_sys_sleep( double f )
 **/
 bool _hx_std_set_time_locale( String l )
 {
-#if defined(ANDROID) || defined(GCW0)
+#if defined(ANDROID)
     return false;
 #else
 
@@ -335,8 +335,6 @@ String _hx_std_sys_string()
    return HX_CSTRING("Mac");
 #elif defined(ANDROID)
    return HX_CSTRING("Android");
-#elif defined(BLACKBERRY)
-   return HX_CSTRING("BlackBerry");
 #elif defined(__EMSCRIPTEN__)
    return HX_CSTRING("Emscripten");
 #elif defined(EPPC)

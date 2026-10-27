@@ -1,6 +1,0 @@
-close before exit: reaped
-close did not wait: true
-close after exit: reaped
-process handle collected: true
-collected before exit: reaped
-40 closed children: all reaped

@@ -1,3 +1,0 @@
-the thread mark ID matches the collector before a collection: true
-a new object is flagged remembered: false
-calls that lost their closure: 0

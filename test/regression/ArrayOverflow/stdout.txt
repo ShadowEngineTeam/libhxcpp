@@ -1,5 +1,0 @@
-vector threw
-bytes blit threw
-native blit threw
-index threw
-join threw

@@ -19,14 +19,6 @@
       <set name="HXCPP_AR" value="${HXCPP_XLINUX32_AR}" />
       <set name="HXCPP_RANLIB" value="${HXCPP_XLINUX32_RANLIB}" />
    </section>
-   <section if="rpi">
-      <path name="c:/SysGCC/Raspberry/bin/" unless="HXCPP_XCOMPILE_RPI_PATH" />
-      <path name="${HXCPP_XCOMPILE_RPI_PATH}" if="HXCPP_XCOMPILE_RPI_PATH" />
-      <set name="CXX" value="arm-linux-gnueabihf-g++" />
-      <set name="HXCPP_STRIP" value="arm-linux-gnueabihf-strip" />
-      <set name="HXCPP_AR" value="arm-linux-gnueabihf-ar" />
-      <set name="HXCPP_RANLIB" value="arm-linux-gnueabihf-ranlib" />
-   </section>
 </section>
 
 <include name="toolchain/gcc-toolchain.xml"/>
@@ -35,11 +27,13 @@
 <set name="noM32" value="1" if="rpi" />
 <set name="noM32" value="1" if="HXCPP_ARM64 || HXCPP_ARMV7" />
 <set name="noM64" value="1" if="HXCPP_ARM64 || HXCPP_ARMV7" />
+<unset name="HXCPP_M64" if="noM64" />
 
 <compiler id="linux" exe="g++" if="linux">
   <exe name="${CXX}" if="CXX" />
   <flag value="-c"/>
-  <flag value="-flto" if="HXCPP_OPTIMIZE_LINK" unless="debug"/>
+  <flag value="-flto" if="HXCPP_OPTIMIZE_LINK" unless="debug || HXCPP_LTO_THIN"/>
+  <flag value="-flto=thin" if="HXCPP_LTO_THIN" unless="debug"/>
   <flag value="-fvisibility=hidden"/>
   <cppflag value="-frtti"/>
   <flag value="-g" if="HXCPP_DEBUG_LINK"/>
@@ -51,11 +45,15 @@
   <flag value="-fsanitize=${HXCPP_SANITIZE}" if="HXCPP_SANITIZE"/>
   <flag value="-fno-omit-frame-pointer" if="HXCPP_SANITIZE"/>
   <flag value="-DHX_LINUX"/>
-  <flag value="-DRASPBERRYPI=RASPBERRYPI" if="rpi"/>
   <flag value="-DHXCPP_BIG_ENDIAN" if="HXCPP_BIG_ENDIAN"/>
   <include name="toolchain/common-defines.xml" />
   <flag value="-m32" unless="noM32"/>
   <flag value="-m64" if="HXCPP_M64" unless="noM64" />
+  <flag value="-march=x86-64-v3" if="HXCPP_M64" unless="HXCPP_ARM64 || HXCPP_ARMV7 || HXCPP_NO_ARCH_LEVEL" />
+  <flag value="-march=haswell" unless="HXCPP_M64 || HXCPP_ARM64 || HXCPP_ARMV7 || HXCPP_NO_ARCH_LEVEL" />
+  <flag value="-march=armv7-a" if="HXCPP_ARMV7" unless="HXCPP_NO_ARCH_LEVEL" />
+  <flag value="-mfpu=neon-vfpv4" if="HXCPP_ARMV7" unless="HXCPP_NO_ARCH_LEVEL" />
+  <flag value="-march=armv8-a" if="HXCPP_ARM64" unless="HXCPP_NO_ARCH_LEVEL" />
   <flag value="-I${HXCPP}/include"/>
   <objdir value="obj/linux${OBJEXT}/"/>
   <outflag value="-o"/>
@@ -63,6 +61,9 @@
 </compiler>
 
 <linker id="dll" exe="g++" if="linux">
+  <flag value="-flto" if="HXCPP_OPTIMIZE_LINK" unless="debug || HXCPP_LTO_THIN"/>
+  <flag value="-flto=thin" if="HXCPP_LTO_THIN" unless="debug"/>
+  <flag value="-fuse-ld=${HXCPP_USE_LD}" if="HXCPP_USE_LD"/>
   <exe name="${CXX}" if="CXX" />
   <fromfile value="" if="GCC_OLD" />
   <flag value="-shared"/>
@@ -80,6 +81,9 @@
 </linker>
 
 <linker id="exe" exe="g++" if="linux">
+  <flag value="-flto" if="HXCPP_OPTIMIZE_LINK" unless="debug || HXCPP_LTO_THIN"/>
+  <flag value="-flto=thin" if="HXCPP_LTO_THIN" unless="debug"/>
+  <flag value="-fuse-ld=${HXCPP_USE_LD}" if="HXCPP_USE_LD"/>
   <exe name="${CXX}" if="CXX" />
   <fromfile value="" if="GCC_OLD" />
   <flag value="-debug" if="HXCPP_DEBUG_LINK" />
@@ -87,6 +91,7 @@
   <flag value="-fsanitize=${HXCPP_SANITIZE}" if="HXCPP_SANITIZE"/>
   <flag value="-m32" unless="noM32"/>
   <flag value="-m64" if="HXCPP_M64" unless="noM64" />
+  <flag value="-Wl,-rpath=$ORIGIN" />
   <lib name="-ldl" unless="bsd"/>
   <ext value=""/>
   <outflag value="-o "/>

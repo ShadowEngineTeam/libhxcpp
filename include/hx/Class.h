@@ -282,7 +282,7 @@ inline bool TIsInterface(hx::Object *inPtr)
 }
 
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES void RegisterVTableOffset(uintptr_t inOffset);
+HXCPP_EXTERN_CLASS_ATTRIBUTES void RegisterVTableOffset(int inOffset);
 
 // Generated for each @:nativeGen interface a class implements. Haxe makes those
 // interfaces virtual bases, whose offset can only be read from a constructed

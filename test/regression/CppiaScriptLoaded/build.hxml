@@ -1,9 +1,0 @@
---main Script
--cppia bin/script.cppia
--debug
---next
---main Main
--cpp bin
--D scriptable
--D HXCPP_DEBUGGER
---dce no

@@ -50,7 +50,7 @@ class BuildTool
    // Haxe keeps one hxcpp_api_level through a whole release cycle while the code
    // it generates and its cpp std change under it, so the level alone cannot say
    // which runtime a build needs. Every Haxe release at level 500 or above that
-   // libhxcpp supports is listed here, by the version its source_header names,
+   // hxcpp supports is listed here, by the version its source_header names,
    // with the level of the runtime its code needs, which can be lower than the
    // level it passes. A release missing from the list gets a warning; a nightly
    // adds +<commit> to its version, so it is never listed and builds at its level.
@@ -149,40 +149,41 @@ class BuildTool
 
       instance = this;
 
-      m64 = mDefines.exists("HXCPP_M64");
-      m32 = mDefines.exists("HXCPP_M32") || mDefines.exists("HXCPP_X86");
-      arm64 = mDefines.exists("HXCPP_ARM64");
-      armv7 = mDefines.exists("HXCPP_ARMV7");
-      var otherArmArchitecture = mDefines.exists("HXCPP_ARMV6") || mDefines.exists("HXCPP_ARMV7S");
-      if (m64==m32 && !arm64 && !armv7 && !otherArmArchitecture)
+      if (!(mDefines.exists("emcc") || mDefines.exists("emscripten")))
       {
-         var arch = mDefines.get("HXCPP_ARCH");
-         if (arch!=null)
+         m64 = mDefines.exists("HXCPP_M64") || mDefines.exists("HXCPP_X86_64");
+         m32 = mDefines.exists("HXCPP_M32") || mDefines.exists("HXCPP_X86");
+         arm64 = mDefines.exists("HXCPP_ARM64");
+         armv7 = mDefines.exists("HXCPP_ARMV7");
+         var otherArmArchitecture = mDefines.exists("HXCPP_ARMV6") || mDefines.exists("HXCPP_ARMV7S");
+         if (m64==m32 && !arm64 && !armv7 && !otherArmArchitecture)
          {
-            m64 = arch=="x86_64";
-            m32 = arch=="x86";
-            arm64 = arch=="arm64";
-            armv7 = arch=="armv7";
-         }
-         else if (mDefines.exists("android"))
-         {
-            // HXCPP_X86_64 is not counted as 64-bit above
-            m64 = mDefines.exists("HXCPP_X86_64");
-            arm64 = !m64;
-         }
-         else
-         {
-            var hostArch = getArch();
+            var arch = mDefines.get("HXCPP_ARCH");
+            if (arch!=null)
+            {
+               m64 = arch=="x86_64";
+               m32 = arch=="x86";
+               arm64 = arch=="arm64";
+               armv7 = arch=="armv7";
+            }
+            else if (mDefines.exists("android"))
+            {
+               arm64 = true;
+            }
+            else
+            {
+               var hostArch = getArch();
 
-            // Default to the current OS version.  windowsArm runs m32 code too
-            m64 = hostArch=="m64";
-            m32 = hostArch=="m32";
-            arm64 = hostArch=="arm64";
-            armv7 = hostArch=="armv7";
-         }
+               // Default to the current OS version.  windowsArm runs m32 code too
+               m64 = hostArch=="m64";
+               m32 = hostArch=="m32";
+               arm64 = hostArch=="arm64";
+               armv7 = hostArch=="armv7";
+            }
 
-         mDefines.remove(m32 ? "HXCPP_M64" : "HXCPP_M32");
-         set64(mDefines,m64,arm64);
+            mDefines.remove(m32 ? "HXCPP_M64" : "HXCPP_M32");
+            set64(mDefines,m64,arm64);
+         }
       }
 
       Profile.setEntry("parse xml");
@@ -651,11 +652,15 @@ class BuildTool
          } : null;
 
          Profile.push("compile");
-         var progress = new Progress(to_be_compiled.length);
+
+         var compile_progress = null;
+         if (!Log.verbose)
+            compile_progress = new Progress(0,to_be_compiled.length);
+
          if (threadPool==null)
          {
             for(file in to_be_compiled)
-               mCompiler.compile(file,-1,groupHeader,pchStamp,progress);
+               mCompiler.compile(file,-1,groupHeader,pchStamp,compile_progress);
          }
          else
          {
@@ -671,7 +676,7 @@ class BuildTool
                         break;
                      var file = to_be_compiled[index];
 
-                     compiler.compile(file,threadId,groupHeader,pchStamp,progress);
+                     compiler.compile(file,threadId,groupHeader,pchStamp,compile_progress);
                   }
             });
          }
@@ -1031,6 +1036,8 @@ class BuildTool
             Log.warn('Increasing default C++ standard to C++11 instead of C++${defaultCxxStandard}');
             defaultCxxStandard = 11;
          }
+      } else if(mDefines.exists("HXCPP_CPP20")) {
+         defaultCxxStandard = 20;
       } else if(mDefines.exists("HXCPP_CPP17")) {
          defaultCxxStandard = 17;
       } else if (mDefines.exists("HXCPP_CPP14")) {
@@ -1566,7 +1573,7 @@ class BuildTool
       try
       {
          // This tool's own library, whatever name haxelib resolved to reach it
-         var dir = HXCPP != "" ? HXCPP : PathManager.getHaxelib ("libhxcpp");
+         var dir = HXCPP != "" ? HXCPP : PathManager.getHaxelib ("hxcpp");
          var json = Json.parse (sys.io.File.getContent (dir + "/haxelib.json"));
          return json.version;
       }
@@ -1679,7 +1686,11 @@ class BuildTool
       }
 
 
-      Log.setColor(defines);
+      if (Sys.getEnv("HXCPP_COLOUR") != null || Sys.getEnv("HXCPP_COLOR") != null)
+         Log.colorSupported = !(defines.exists("HXCPP_NO_COLOUR") || defines.exists("HXCPP_NO_COLOR"));
+      else if (defines.exists("HXCPP_NO_COLOUR") || defines.exists("HXCPP_NO_COLOR"))
+         Log.colorSupported = false;
+
       Log.verbose = defines.exists("HXCPP_VERBOSE");
       Log.showSetup = defines.exists("HXCPP_LOG_SETUP");
       exitOnThreadError = defines.exists("HXCPP_EXIT_ON_ERROR");
@@ -1715,6 +1726,7 @@ class BuildTool
             Log.error("Cppia is not supported on this host.");
          var archSuffix = switch getArch() {
             case 'arm64': 'Arm64';
+            case 'armv7' | 'armv7l' | 'armv8l': 'Arm';
             case 'm64': '64';
             case 'm32': '';
             case _: return Log.error("Unsupported host architecture");
@@ -1785,9 +1797,6 @@ class BuildTool
          }
          return;
       }
-
-
-      isRPi = isLinux && Setup.isRaspberryPi();
 
       is64 = getArch()!="m32";
       var dirtyList = new Array<String>();
@@ -1913,12 +1922,12 @@ class BuildTool
 
       var version = getVersion();
       if (Log.verbose)
-         Log.info("", 'Using libhxcpp $version${getCommit()} from $HXCPP');
+         Log.info("", 'Using hxcpp $version${getCommit()} from $HXCPP');
       // Haxe records the hxcpp define, which can be a line of haxelib's
       // output around the version rather than the version alone
       var recorded = ~/[0-9]+\.[0-9]+\.[0-9]+[-+.a-zA-Z0-9]*/;
       if (generatedFor!=null && recorded.match(generatedFor) && recorded.matched(0)!=version)
-         Log.warn('Haxe generated this code for hxcpp ${recorded.matched(0)}, but libhxcpp $version from $HXCPP is building it. If that is not intended, make haxelib and HXCPP point at the same copy');
+         Log.warn('Haxe generated this code for hxcpp ${recorded.matched(0)}, but hxcpp $version from $HXCPP is building it. If that is not intended, make haxelib and HXCPP point at the same copy');
 
       // Haxe passes its version (4.307 for 4.3.7) and API level with every
       // build it starts; a build run by hand, such as an ndll's, has neither
@@ -1932,14 +1941,14 @@ class BuildTool
             var parts = haxeVer.split(".");
             var shown = parts.length==2 && parts[1].length==3 ?
                parts[0] + "." + parts[1].charAt(0) + "." + Std.parseInt(parts[1].substr(1)) : haxeVer;
-            Log.error('libhxcpp $version supports the code Haxe 4.2 and later generates, but this build is from Haxe $shown. Use Haxe 4.2 or later, or switch back to hxcpp with "haxelib run libhxcpp off"');
+            Log.error('hxcpp $version supports the code Haxe 4.2 and later generates, but this build is from Haxe $shown. Use Haxe 4.2 or later');
          }
       }
       if (defines.exists("hxcpp_api_level"))
       {
          var apiLevel = Std.parseInt(defines.get("hxcpp_api_level").split('"').join(""));
          if (apiLevel!=null && apiLevel>SupportedVersion)
-            Log.warn('This build uses hxcpp API level $apiLevel, newer than the $SupportedVersion libhxcpp $version knows; it may not build or run correctly');
+            Log.warn('This build uses hxcpp API level $apiLevel, newer than the $SupportedVersion hxcpp $version knows; it may not build or run correctly');
 
          // "Generated by Haxe 5.0.0-preview.1", or "... 5.0.0-preview.1+5b4f394" from a nightly
          var header = defines.exists("source_header") ? defines.get("source_header").split('"').join("") : "";
@@ -1970,7 +1979,7 @@ class BuildTool
             }
          }
          else if (haxeBuild!="" && haxeBuild.indexOf("+")<0 && apiLevel!=null && apiLevel>=500)
-            Log.warn('Haxe $haxeBuild is newer than the Haxe releases libhxcpp $version knows, so it builds at API level $apiLevel as it says. If the build fails, update libhxcpp');
+            Log.warn('Haxe $haxeBuild is newer than the Haxe releases hxcpp $version knows, so it builds at API level $apiLevel as it says. If the build fails, update hxcpp');
       }
 
       include_path.push(".");
@@ -1995,17 +2004,6 @@ class BuildTool
             defines.set("iphoneos", "iphoneos");
          defines.set("iphone", "iphone");
       }
-
-      if (defines.exists("tvos"))
-      {
-         if (defines.exists("simulator"))
-            defines.set("appletvsim", "appletvsim");
-         else if (!defines.exists ("appletvsim"))
-            defines.set("appletvos", "appletvos");
-         defines.set("appletv", "appletv");
-      }
-
-
 
       if (makefile=="" || Log.verbose)
       {
@@ -2070,7 +2068,7 @@ class BuildTool
       Log.println("                            \\ \\_\\   \\ \\_\\ ");
       Log.println("                             \\/_/    \\/_/ \x1b[0m");
       Log.println("");
-      Log.println("\x1b[1mlibhxcpp \x1b[0m\x1b[3;37m(Haxe C++ Runtime Support)\x1b[0m \x1b[1m(" + getVersion() + ")\x1b[0m");
+      Log.println("\x1b[1mhxcpp \x1b[0m\x1b[3;37m(Haxe C++ Runtime Support)\x1b[0m \x1b[1m(" + getVersion() + ")\x1b[0m");
       Log.println("");
    }
 
@@ -2093,35 +2091,6 @@ class BuildTool
          defines.set("apple","apple");
          defines.set("BINDIR","iPhone");
       }
-      else if (defines.exists("appletvos"))
-      {
-         defines.set("toolchain","appletvos");
-         defines.set("appletv","appletv");
-         defines.set("apple","apple");
-         defines.set("BINDIR","AppleTV");
-      }
-      else if (defines.exists("appletvsim"))
-      {
-         defines.set("toolchain","appletvsim");
-         defines.set("appletv","appletv");
-         defines.set("apple","apple");
-         defines.set("BINDIR","AppleTV");
-      }
-      else if (defines.exists("watchos"))
-      {
-         defines.set("toolchain","watchos");
-         defines.set("apple","apple");
-         defines.set("applewatch","applewatch");
-         defines.set("BINDIR","watchos");
-      }
-      else if (defines.exists("watchsimulator"))
-      {
-         defines.set("toolchain","watchsimulator");
-         defines.set("applewatch","applewatch");
-         defines.set("apple","apple");
-         defines.set("BINDIR","watchsimulator");
-      }
-
       else if (defines.exists("android"))
       {
          defines.set("toolchain","android");
@@ -2146,24 +2115,6 @@ class BuildTool
             }
          }
       }
-      else if (defines.exists("webos"))
-      {
-         defines.set("toolchain","webos");
-         defines.set("webos","webos");
-         defines.set("BINDIR","webOS");
-      }
-      else if (defines.exists("tizen"))
-      {
-         defines.set("toolchain","tizen");
-         defines.set("tizen","tizen");
-         defines.set("BINDIR","Tizen");
-      }
-      else if (defines.exists("blackberry"))
-      {
-         defines.set("toolchain", "blackberry");
-         defines.set("blackberry","blackberry");
-         defines.set("BINDIR","BlackBerry");
-      }
       else if (defines.exists("emcc") || defines.exists("emscripten"))
       {
          defines.set("toolchain","emscripten");
@@ -2171,77 +2122,45 @@ class BuildTool
          defines.set("emscripten","emscripten");
          defines.set("BINDIR","Emscripten");
       }
-      else if (defines.exists("gph"))
-      {
-         defines.set("toolchain","gph");
-         defines.set("gph","gph");
-         defines.set("BINDIR","GPH");
-      }
-      else if (defines.exists ("gcw0"))
-      {
-         defines.set ("toolchain", "gcw0");
-         defines.set ("gcw0", "gcw0");
-         defines.set ("BINDIR", "GCW0");
-      }
-      else if (defines.exists("cygwin") || defines.exists("HXCPP_CYGWIN"))
-      {
-         set64(defines,m64);
-         defines.set("toolchain","cygwin");
-         defines.set("cygwin","cygwin");
-         defines.set("linux","linux");
-         defines.set("BINDIR",m64 ? "Cygwin64":"Cygwin");
-      }
       else if ( (new EReg("window","i")).match(os) )
       {
          defines.set("windows_host","1");
-         // Cross-compile?
-         if (defines.exists("rpi"))
+
+         set64(defines,m64,arm64);
+         defines.set("windows","windows");
+         defines.set("BINDIR",arm64 ? "WindowsArm64" : m64 ? "Windows64":"Windows");
+
+         // Choose between MSVC and MINGW
+         var useMsvc = true;
+
+         if (defines.exists("mingw") || defines.exists("HXCPP_MINGW"))
+            useMsvc = false;
+         else if ( defines.exists("winrt") || defines.exists("HXCPP_MSVC_VER"))
+            useMsvc = true;
+         else
          {
-            defines.set("toolchain","linux");
-            defines.set("xcompile","1");
-            defines.set("linux","linux");
-            defines.set("rpi","1");
-            defines.set("hardfp","1");
-            defines.set("BINDIR", "RPi");
+             for(i in 8...24)
+             {
+                if (Sys.getEnv("VS" + i + "0COMNTOOLS")!=null)
+                {
+                   useMsvc = true;
+                   break;
+                }
+             }
+
+             Log.v("Using Windows compiler: " + (useMsvc ? "MSVC" : "MinGW") );
+         }
+
+         if (useMsvc)
+         {
+            defines.set("toolchain","msvc");
+            if ( defines.exists("winrt") )
+               defines.set("BINDIR",arm64 ? "WinRTArm64" : m64 ? "WinRT64":"WinRT");
          }
          else
          {
-            set64(defines,m64,arm64);
-            defines.set("windows","windows");
-            defines.set("BINDIR",arm64 ? "WindowsArm64" : m64 ? "Windows64":"Windows");
-
-            // Choose between MSVC and MINGW
-            var useMsvc = true;
-
-            if (defines.exists("mingw") || defines.exists("HXCPP_MINGW"))
-               useMsvc = false;
-            else if ( defines.exists("winrt") || defines.exists("HXCPP_MSVC_VER"))
-               useMsvc = true;
-            else
-            {
-                for(i in 8...24)
-                {
-                   if (Sys.getEnv("VS" + i + "0COMNTOOLS")!=null)
-                   {
-                      useMsvc = true;
-                      break;
-                   }
-                }
-
-                Log.v("Using Windows compiler: " + (useMsvc ? "MSVC" : "MinGW") );
-            }
-
-            if (useMsvc)
-            {
-               defines.set("toolchain","msvc");
-               if ( defines.exists("winrt") )
-                  defines.set("BINDIR",arm64 ? "WinRTArm64" : m64 ? "WinRT64":"WinRT");
-            }
-            else
-            {
-               defines.set("toolchain","mingw");
-               defines.set("mingw","mingw");
-            }
+            defines.set("toolchain","mingw");
+            defines.set("mingw","mingw");
          }
       }
       // A Pi running a 64-bit system builds as Linux ARM64
@@ -2284,7 +2203,7 @@ class BuildTool
                defines.set("HXCPP_ARMV7","1");
                m64 = false;
             }
-            else if (arm64 || defines.exists("HXCPP_LINUX_ARM64"))
+            else if (arm64)
             {
                defines.set("noM32","1");
                defines.set("noM64","1");
@@ -2313,7 +2232,7 @@ class BuildTool
             defines.set("linux","linux");
             defines.set("toolchain","linux");
             defines.set("xcompile","1");
-            defines.set("BINDIR", arm64 ? "LinuxArm64" : m64 ? "Linux64":"Linux");
+            defines.set("BINDIR", arm64 ? "LinuxArm64" : armv7 ? "LinuxArm" : m64 ? "Linux64" : "Linux");
          }
          else
          {
@@ -2534,6 +2453,9 @@ class BuildTool
                case "pragma" :
                   if (el.has.once)
                      mPragmaOnce.set(mCurrentIncludeFile, parseBool(substitute(el.att.once)));
+
+               case "cocoapod" :
+                  Cocoapods.setCocoapodVersion(el.att.name, el.att.version);
             }
          }
       }
@@ -2649,6 +2571,10 @@ class BuildTool
          {
             sub = PathManager.getHaxelib(sub.substr(8));
             sub = PathManager.standardize(sub);
+         }
+         else if (sub.startsWith("cocoapod:"))
+         {
+            sub = Cocoapods.resolveCocoapodPathRequest(sub.substr(9), mDefines);
          }
          else if (sub.startsWith("removeQuotes:"))
          {

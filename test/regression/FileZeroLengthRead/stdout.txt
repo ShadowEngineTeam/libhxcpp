@@ -1,4 +1,0 @@
-zero bytes returned: true
-empty backing buffer preserved: true
-EOF state preserved: true
-position preserved: true

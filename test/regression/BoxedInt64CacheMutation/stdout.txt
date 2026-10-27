@@ -1,2 +1,0 @@
-independent boxed value unchanged: true
-later boxing keeps original value: true

@@ -1,27 +1,5 @@
 name: main
-on:
-  push:
-    branches: [main, 'release/**']
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - 'LICENSE.txt'
-      - '.github/ISSUE_TEMPLATE/**'
-  pull_request:
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - 'LICENSE.txt'
-      - '.github/ISSUE_TEMPLATE/**'
-  workflow_dispatch:
-
-# A newer push to the same branch or pull request supersedes the run in progress,
-# except on main and release branches
-concurrency:
-  # Each push to main or a release branch is its own group, so every commit
-  # there gets a complete result; elsewhere the newest push wins
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || ((github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/')) && github.sha) || github.ref }}
-  cancel-in-progress: true
+on: [push, pull_request]
 
 jobs:
   check-headers:
@@ -29,7 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: checkout
-      uses: actions/checkout@v7
+      uses: actions/checkout@v4
 
     - name: Install pcre2grep
       run: sudo apt-get update && sudo apt-get install -y pcre2-utils
@@ -41,267 +19,86 @@ jobs:
           include
       name: Check public headers
 
-  check-gc-defines:
-    name: Check GC defines
-    runs-on: ubuntu-latest
-    steps:
-    - name: checkout
-      uses: actions/checkout@v7
-
-    - run: bash test/gc-defines/check.sh
-      name: Compile the GC under each define
-    - run: bash test/gc-defines/check.sh clang++
-      name: Compile the GC under each define with clang
-
-  check-msvc-llvm:
-    name: Check MSVC builds with clang-cl
-    runs-on: windows-latest
-    steps:
-    - name: checkout
-      uses: actions/checkout@v7
-
-    - name: setup
-      uses: ./.github/workflows/setup
-      with:
-        haxe: 4.3.7
-
-    - name: Build the runtime tests
-      working-directory: test/haxe
-      run: haxe compile.hxml -D HXCPP_MSVC_LLVM -D HXCPP_M64
-
-    - name: Run the runtime tests
-      working-directory: test/haxe
-      run: bin\TestMain
-
-  check-android:
-    name: Build for Android (${{ matrix.abi }})
+  Windows32:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - abi: arm64-v8a
-            flag: HXCPP_ARM64
-          - abi: armeabi-v7a
-            flag: HXCPP_ARMV7
-          - abi: x86_64
-            flag: HXCPP_X86_64
-    runs-on: ubuntu-latest
-    steps:
-    - name: checkout
-      uses: actions/checkout@v7
-
-    - name: setup
-      uses: ./.github/workflows/setup
-      with:
-        haxe: 4.3.7
-
-    - name: Use the runner's NDK
-      run: echo "ANDROID_NDK_ROOT=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
-
-    # Built and not run, which would need a device or an emulator
-    - name: Build the runtime tests
-      working-directory: test/haxe
-      run: haxe compile.hxml -D android -D ${{ matrix.flag }}
-
-    - name: Build the native tests
-      working-directory: test/native
-      run: haxe compile.hxml -D android -D ${{ matrix.flag }}
-
-    - name: Build the std tests
-      working-directory: test/std
-      run: haxe -m Test -L hx4compat -L utest --cpp android -D android -D exe_link -D ${{ matrix.flag }}
-
-  check-musl:
-    name: Check Linux with musl
-    runs-on: ubuntu-latest
-    steps:
-    - name: checkout
-      uses: actions/checkout@v7
-
-    - name: setup
-      uses: ./.github/workflows/setup
-      with:
-        haxe: 4.3.7
-
-    - name: Generate the regression tests
-      working-directory: test/regression
-      run: for test in */; do haxe -C $test build.hxml -D no-compilation -D HXCPP_M64; done
-
-    # Alpine packages Neko only in edge so far
-    - name: Build and run the regression tests on Alpine
-      run: docker run --rm -v "$PWD:/w" -w /w alpine:edge sh -c "apk add --no-cache neko g++ linux-headers && sh test/regression/run-generated.sh"
-
-  # Haxe 5.0.0-preview.1 passes API level 500 but generates code for the level
-  # 430 runtime, and the build tool builds it against that runtime
-  # (BuildTool.haxeRuntimeLevels). Every suite runs with it on Linux, and the
-  # core suites on Windows and macOS arm64.
-  haxe5-preview-linux:
-    name: Haxe 5.0.0-preview.1 / Linux 64
-    needs: [check-headers, check-gc-defines]
+        haxe: [ 4.3.7, latest ]
     uses: ./.github/workflows/test.yml
+    name: Test Windows (32bit)
     with:
-      haxe: 5.0.0-preview.1
-      arch: 64
-      sep: /
-      ext: .dso
-      os: ubuntu-latest
-      stress: '["default generational-verify"]'
-      bindir: Linux64
+      haxe: ${{ matrix.haxe  }}
+      arch: 32
+      sep: \
+      ext: .dll
+      os: windows-latest
 
-  haxe5-preview-windows:
-    name: Haxe 5.0.0-preview.1 / Windows 64
-    needs: [check-headers, check-gc-defines]
+  Windows64:
+    strategy:
+      fail-fast: false
+      matrix:
+        haxe: [ 4.3.7, latest ]
     uses: ./.github/workflows/test.yml
+    name: Test Windows (64bit)
     with:
-      haxe: 5.0.0-preview.1
+      haxe: ${{ matrix.haxe  }}
       arch: 64
       sep: \
       ext: .dll
       os: windows-latest
-      scope: smoke
 
-  haxe5-preview-macos:
-    name: Haxe 5.0.0-preview.1 / macOS arm64
-    needs: [check-headers, check-gc-defines]
+  MacOS64:
+    strategy:
+      fail-fast: false
+      matrix:
+        haxe: [ 4.3.7, latest ]
     uses: ./.github/workflows/test.yml
+    name: Test MacOS (x86_64)
     with:
-      haxe: 5.0.0-preview.1
+      haxe: ${{ matrix.haxe  }}
+      arch: 64
+      sep: /
+      ext: .dylib
+      os: macos-15-intel
+
+  MacOSArm:
+    strategy:
+      fail-fast: false
+      matrix:
+        haxe: [ 4.3.7, latest ]
+    uses: ./.github/workflows/test.yml
+    name: Test MacOS (Arm64)
+    with:
+      haxe: ${{ matrix.haxe  }}
       arch: Arm64
       sep: /
       ext: .dylib
       os: macos-latest
-      scope: smoke
-      bindir: MacArm64
 
-  # The regression, std and GC stress suites under UBSan, ASan and TSan. A
-  # sanitizer report fails its suite; the reports go to files because the
-  # runner only shows stdout. Each suite runs even when one before it failed.
-  check-sanitizers:
-    name: Check with ${{ matrix.name }}
+  Linux32:
     strategy:
       fail-fast: false
       matrix:
-        include:
-        - name: UBSan
-          sanitize: undefined
-        - name: ASan
-          sanitize: address
-        - name: TSan
-          sanitize: thread
-    runs-on: ubuntu-latest
-    env:
-      # Each test would otherwise recompile the whole runtime
-      HXCPP_COMPILE_CACHE: ${{ github.workspace }}/.hxcpp-cache
-      UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1:suppressions=${{ github.workspace }}/test/sanitizers/ubsan.supp:log_path=/tmp/sanitizer/report
-      # The runtime turns off ASan's fake stack itself, which the conservative
-      # GC cannot see into, so these runs check that it does
-      ASAN_OPTIONS: detect_leaks=0:log_path=/tmp/sanitizer/report
-      # Every race is reported, not only the first; the exit status still fails
-      TSAN_OPTIONS: halt_on_error=0:second_deadlock_stack=1:suppressions=${{ github.workspace }}/test/sanitizers/tsan.supp:log_path=/tmp/sanitizer/report
-    steps:
-    - name: checkout
-      uses: actions/checkout@v7
-
-    - name: setup
-      id: setup
-      uses: ./.github/workflows/setup
-      with:
-        haxe: 4.3.7
-
-    - name: Run the regression tests
-      if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
-      working-directory: test/regression
-      run: haxe --run Run -D HXCPP_M64 -D HXCPP_SANITIZE=${{ matrix.sanitize }}
-
-    - name: Run the std tests
-      if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
-      working-directory: test/std
-      run: haxe compile64.hxml -D HXCPP_SANITIZE=${{ matrix.sanitize }} && cpp64/Test
-
-    # Shorter than the 30 s of the stress jobs: sanitized code runs several times slower
-    - name: Run the GC stress test
-      if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
-      working-directory: test/gc_stress
-      run: haxe compile.hxml -D HXCPP_M64 -D HXCPP_SANITIZE=${{ matrix.sanitize }} && bin/Stress 10
-
-    - name: Show the sanitizer reports
-      if: ${{ !cancelled() }}
-      run: cat /tmp/sanitizer/report.* 2>/dev/null || echo "No sanitizer reports"
-
-  # The regression tests built for Emscripten and run under node, with the
-  # tests in test/regression/emscripten-skip.txt left out, and the memory and
-  # stack test in test/emscripten. No other job builds for Emscripten, so a
-  # platform guard that leaves it out would otherwise pass (libhxcpp #335).
-  check-emscripten:
-    name: Check Emscripten
-    runs-on: ubuntu-latest
-    timeout-minutes: 120
-    env:
-      EMSDK_VERSION: 3.1.74
-      # Each test would otherwise recompile the whole runtime
-      HXCPP_COMPILE_CACHE: ${{ github.workspace }}/.hxcpp-cache
-    steps:
-    - name: checkout
-      uses: actions/checkout@v7
-
-    - name: setup
-      id: setup
-      uses: ./.github/workflows/setup
-      with:
-        haxe: 4.3.7
-
-    - name: cache emsdk
-      uses: actions/cache@v4
-      with:
-        path: emsdk
-        key: emsdk-${{ env.EMSDK_VERSION }}-${{ runner.os }}
-
-    - name: install emsdk
-      run: |
-        [ -d emsdk ] || git clone --depth 1 https://github.com/emscripten-core/emsdk.git
-        emsdk/emsdk install $EMSDK_VERSION
-        emsdk/emsdk activate $EMSDK_VERSION
-        echo "EMSDK=$PWD/emsdk" >> $GITHUB_ENV
-        echo "EM_CONFIG=$PWD/emsdk/.emscripten" >> $GITHUB_ENV
-        echo "$PWD/emsdk/upstream/emscripten" >> $GITHUB_PATH
-
-    - name: Run the regression tests
-      if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
-      working-directory: test/regression
-      run: haxe --run Run -D emscripten
-
-    - name: Run the memory and stack test
-      if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
-      run: timeout 600 sh test/emscripten/run.sh
-
-  check-haxelib:
-    name: Check installing with haxelib
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-    - name: checkout
-      uses: actions/checkout@v7
-
-    - uses: krdlab/setup-haxe@v2
-      with:
-        haxe-version: 4.3.7
-
-    - run: bash test/haxelib/check.sh
-      name: Install, setup, update and off
-      # Git Bash on Windows
-      shell: bash
-
-
-  # The test suites on every platform with the stable Haxe; nightly.yml runs
-  # them with the Haxe nightly build once a day
-  # They wait for the quick checks, so a header or GC define that does not
-  # compile fails in a minute instead of after every platform has queued
-  platforms:
-    name: Haxe 4.3.7
-    needs: [check-headers, check-gc-defines]
-    uses: ./.github/workflows/platforms.yml
+        haxe: [ 4.3.7, latest ]
+    uses: ./.github/workflows/test.yml
+    name: Test Linux (32bit)
     with:
-      haxe: 4.3.7
+      haxe: ${{ matrix.haxe  }}
+      arch: 32
+      sep: /
+      ext: .dso
+      os: ubuntu-latest
+
+  Linux64:
+    strategy:
+      fail-fast: false
+      matrix:
+        haxe: [ 4.3.7, latest ]
+    uses: ./.github/workflows/test.yml
+    name: Test Linux (64bit)
+    with:
+      haxe: ${{ matrix.haxe  }}
+      arch: 64
+      sep: /
+      ext: .dso
+      os: ubuntu-latest

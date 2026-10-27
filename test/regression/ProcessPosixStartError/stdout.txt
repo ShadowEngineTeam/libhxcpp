@@ -1,3 +1,0 @@
-missing: failed to start
-not executable: failed to start
-exits 127: started, exit 127

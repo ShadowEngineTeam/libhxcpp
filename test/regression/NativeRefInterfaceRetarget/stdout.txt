@@ -1,4 +1,0 @@
-interface views have different offsets: true
-retargeted references keep their targets: true
-a replaced target is released: true
-released references finalize each target once: true

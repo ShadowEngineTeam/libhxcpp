@@ -1,3 +1,0 @@
-old and young large buffer contents survive collection: true
-full collection preserves retained large buffers: true
-released large storage is reclaimed: true

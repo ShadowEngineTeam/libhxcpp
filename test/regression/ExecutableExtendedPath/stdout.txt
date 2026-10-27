@@ -1,4 +1,0 @@
-short executable path matches native query: true
-long-path executable starts and exits normally: true
-runtime reports the complete long executable path: true
-executable fixture cleanup: true

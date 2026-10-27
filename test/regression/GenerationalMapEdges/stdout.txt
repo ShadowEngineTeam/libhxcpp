@@ -1,2 +1,0 @@
-young map values and string keys survive collection: true
-full collection preserves map edges after growth: true

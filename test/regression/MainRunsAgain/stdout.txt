@@ -1,3 +1,0 @@
-main: counter=10 list=3
-main: counter=10 list=3
-after second main: counter=11 list=4

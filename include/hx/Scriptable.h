@@ -188,6 +188,7 @@ public:
    // Unregisters the module's classes and resources and clears its statics.
    // Its code is freed once nothing from it is in use (docs/CppiaModuleRelease.md).
    virtual void release() { }
+   void unload() { release(); }
 };
 typedef ::hx::ObjectPtr<CppiaLoadedModule_obj> CppiaLoadedModule;
 

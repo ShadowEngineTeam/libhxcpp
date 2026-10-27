@@ -18,9 +18,6 @@ typedef struct _buffer  *buffer;
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#if defined(BLACKBERRY)
-using namespace std;
-#endif
 // --- Register functions (primitives) ----
 
 #ifdef STATIC_LINK

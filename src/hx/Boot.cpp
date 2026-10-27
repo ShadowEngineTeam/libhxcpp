@@ -14,11 +14,6 @@ void Boot()
    HRESULT hr = ::RoInitialize(  RO_INIT_MULTITHREADED );
    #endif
 
-	#ifdef GPH
-	 setvbuf( stdout , 0 , _IONBF , 0 );
-	 setvbuf( stderr , 0 , _IONBF , 0 );
-	#endif
-
    __hxcpp_stdlibs_boot();
    Object::__boot();
 	Dynamic::__boot();

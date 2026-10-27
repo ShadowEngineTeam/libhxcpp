@@ -1,3 +1,0 @@
-only retained key survives: true
-surviving value remains after refill: true
-clear and reuse preserve semantics: true

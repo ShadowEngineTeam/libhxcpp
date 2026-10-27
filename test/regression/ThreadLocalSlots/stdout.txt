@@ -1,2 +1,0 @@
-legacy id leaks: false
-stale values: 0

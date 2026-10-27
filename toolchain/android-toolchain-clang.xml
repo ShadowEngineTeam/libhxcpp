@@ -47,7 +47,7 @@
   <include name="toolchain/common-defines.xml" />
   <flag value="-I${HXCPP}/include"/>
   <flag value="-Iinclude"/>
-  <objdir value="obj/android${OBJEXT}${ARCH}" />
+  <objdir value="obj/android${OBJEXT}" />
   <ext value=".obj"/>
 
   <pchflag value="-x" />
@@ -61,7 +61,8 @@
   <flag value="-DHXCPP_ANDROID_PLATFORM=${HXCPP_ANDROID_PLATFORM}" />
 
   <!-- Options -->
-  <flag value="-flto" if="HXCPP_OPTIMIZE_LINK" unless="debug"/>
+  <flag value="-flto" if="HXCPP_OPTIMIZE_LINK" unless="debug || HXCPP_LTO_THIN"/>
+  <flag value="-flto=thin" if="HXCPP_LTO_THIN" unless="debug"/>
   <flag value="-fvisibility=hidden"/>
   <flag value="-ffunction-sections"/>
   <flag value="-fstack-protector"/>
@@ -70,16 +71,24 @@
   <flag value="-c"/>
   <flag value="-fpic"/>
   <flag value="-O2" unless="debug"/>
-  
+  <flag value="-march=armv7-a" if="HXCPP_ARMV7" unless="HXCPP_NO_ARCH_LEVEL" />
+  <flag value="-mfpu=neon-vfpv4" if="HXCPP_ARMV7" unless="HXCPP_NO_ARCH_LEVEL" />
+  <flag value="-march=armv8-a" if="HXCPP_ARM64" unless="HXCPP_NO_ARCH_LEVEL" />
+  <flag value="-march=haswell" if="HXCPP_X86" unless="HXCPP_NO_ARCH_LEVEL" />
+  <flag value="-march=x86-64-v3" if="HXCPP_X86_64" unless="HXCPP_NO_ARCH_LEVEL" />
   <!-- Warning Supression -->
   <flag value="-Wno-invalid-offsetof" />
   <flag value="-Wno-return-type-c-linkage" />
   <flag value="-Wno-parentheses" />
+  <flag value="-Wno-inconsistent-missing-override" unless="HXCPP_WARN_INCONSISTENT_OVERRIDE" />
   
 </compiler>
 
 
 <linker id="dll" exe="clang++" >
+  <flag value="-fuse-ld=${HXCPP_USE_LD}" if="HXCPP_USE_LD"/>
+  <flag value="-flto" if="HXCPP_OPTIMIZE_LINK" unless="debug || HXCPP_LTO_THIN"/>
+  <flag value="-flto=thin" if="HXCPP_LTO_THIN" unless="debug"/>
 
   <exe name="clang++" />
   <flag value ="-shared" />
@@ -98,18 +107,24 @@
   </section>
 
   <flag value="-stdlib=libc++" unless="NDKV20+" />
-  <flag value ="-static-libstdc++" />
+  <flag value ="-lc++_static" />
+  <flag value ="-lc++abi" />
+  <flag value ="-Wl,--allow-multiple-definition"/>
   <!-- This shows the android link line, which may be so long that it breaks the tool
      https://github.com/HaxeFoundation/hxcpp/pull/1091
      <flag value ="-v" />
   -->
   <prefix value="lib"/>
+  <lib name="-landroid"/>
   <lib name="-llog"/>
   <ext value=".so"/>
-
+    
 </linker>
 
 <linker id="exe" exe="clang++" >
+  <flag value="-fuse-ld=${HXCPP_USE_LD}" if="HXCPP_USE_LD"/>
+  <flag value="-flto" if="HXCPP_OPTIMIZE_LINK" unless="debug || HXCPP_LTO_THIN"/>
+  <flag value="-flto=thin" if="HXCPP_LTO_THIN" unless="debug"/>
 
   <exe name="clang++" />
 
@@ -126,5 +141,5 @@
   <lib name="-llog" />
 
 </linker>
-
+    
 </xml>

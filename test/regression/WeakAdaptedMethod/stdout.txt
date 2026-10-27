@@ -1,5 +1,0 @@
-direct methods kept: true
-adapted methods kept: true
-adapters still call: true
-string methods checked: true
-released with receivers: true

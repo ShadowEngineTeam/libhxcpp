@@ -1,4 +1,0 @@
-count stays small after over-releasing: true
-and after a large object is freed: true
-and after GCReleaseManagedMemory: true
-negative tuning values still collect: true

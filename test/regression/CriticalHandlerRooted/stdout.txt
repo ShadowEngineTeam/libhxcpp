@@ -1,2 +1,0 @@
-handler alive
-handled 1 boom

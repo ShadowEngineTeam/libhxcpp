@@ -1,8 +1,0 @@
---main Script
--cppia bin/script.cppia
---next
---main Main
--cpp bin
--D scriptable
--D HXCPP_GC_GENERATIONAL
---dce no

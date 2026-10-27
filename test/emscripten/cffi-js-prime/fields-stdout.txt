@@ -1,4 +1,0 @@
-case 0 read=1 write=1 fields=1
-case 1 read=1 write=1 fields=1
-case 2 read=1 write=1 fields=1
-case 3 read=1 write=1 fields=1

@@ -1,2 +1,0 @@
-young array references survive collection: true
-full collection preserves array edges: true

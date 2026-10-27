@@ -12,7 +12,7 @@ setlocal
 )
 @set "vswhere=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 @set InstallDir=
-@if exist "%vswhere%" for /f "usebackq tokens=*" %%i in (`"%vswhere%" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do @set "InstallDir=%%i"
+@if exist "%vswhere%" for /f "usebackq tokens=*" %%i in (`"%vswhere%" -latest -prerelease -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do @set "InstallDir=%%i"
 @if exist "%vswhere%" (
 	@if exist "%InstallDir%\Common7\Tools\VsDevCmd.bat" (
 		@call "%InstallDir%\Common7\Tools\VsDevCmd.bat" -arch=x86 -app_platform=Desktop -no_logo
@@ -23,7 +23,11 @@ setlocal
 		echo Warning: Could not find Visual Studio VsDevCmd
 	)
 )
-@if exist "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\Common7\Tools\VsDevCmd.bat" (
+@if exist "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" (
+	@call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x86 -app_platform=Desktop -no_logo
+	@echo HXCPP_VARS
+	@set
+) else if exist "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\Common7\Tools\VsDevCmd.bat" (
 	@call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\Common7\Tools\VsDevCmd.bat" -arch=x86 -app_platform=Desktop -no_logo
 	@echo HXCPP_VARS
 	@set

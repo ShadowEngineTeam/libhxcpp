@@ -18,7 +18,7 @@ The top-level nodes live inside an "xml" node, and can be:
 
 - *setup* - Used internally to call custom setup code to find SDKs etc.
   ```xml
-  <setup name="androidNdk|blackberry|msvc|pdbserver|mingw|emscripten|nvcc" />
+  <setup name="androidNdk|msvc|pdbserver|mingw|emscripten|nvcc" />
   ```
 
 - *echo* - Print value to console.  Good for debugging.

@@ -1,6 +1,14 @@
 import haxe.crypto.Md5;
 import haxe.io.Path;
 import sys.FileSystem;
+#if haxe4
+import sys.thread.Mutex;
+#elseif cpp
+import cpp.vm.Mutex;
+#else
+import neko.vm.Mutex;
+#end
+
 using StringTools;
 
 private class FlagInfo
@@ -358,7 +366,9 @@ class Compiler
       catch(e:Dynamic) { }
    }
 
-   public function compile(inFile:File,inTid:Int,headerFunc:Void->Void,pchTimeStamp:Null<Float>,inProgress:Progress)
+   static public var printMutex = new Mutex();
+
+   public function compile(inFile:File,inTid:Int,headerFunc:Void->Void,pchTimeStamp:Null<Float>,inProgress:Null<Progress>)
    {
       var obj_name = getObjName(inFile);
       var args = getArgs(inFile);
@@ -439,29 +449,23 @@ class Compiler
          if (delayedFilename!=null)
            args.push(delayedFilename);
 
-         var tagInfo = inFile.mTags==null ? "" : " " + inFile.mTags.split(",");
-
-         var fileName = inFile.mName;
-         var split = fileName.split ("/");
-         if (split.length > 1)
+         var tagInfo = inFile.mTags == null ? "" : "\x1b[3m" + inFile.mTags.split(",") + "\x1b[0m";
+         var progressFileName = inFile.mName;
+         var progressSplit = progressFileName.split("/");
+         if (progressSplit.length > 1)
          {
-            fileName = " \x1b[2m-\x1b[0m \x1b[33m" + split.slice(0, split.length - 1).join("/") + "/\x1b[33;1m" + split[split.length - 1] + "\x1b[0m";
+            progressFileName = progressSplit.slice(0, progressSplit.length - 1).join("/") + "/";
+            progressFileName = "\x1b[33m" + progressFileName + "\x1b[33;1m" + progressSplit[progressSplit.length - 1] + "\x1b[0m";
          }
          else
          {
-            fileName = " \x1b[2m-\x1b[0m \x1b[33;1m" + fileName + "\x1b[0m";
+            progressFileName = "\x1b[33;1m" + progressFileName + "\x1b[0m";
          }
-         fileName += " \x1b[3m" + tagInfo + "\x1b[0m";
-
 
          if (inTid >= 0)
          {
             if (BuildTool.threadExitCode == 0)
             {
-               if (!Log.verbose)
-               {
-                  Log.info(" " + inProgress.label() + fileName);
-               }
                var err = ProcessManager.runProcessThreaded(exe, args, null);
                cleanTmp(tmpFile);
                if (err!=0)
@@ -470,16 +474,10 @@ class Compiler
                      FileSystem.deleteFile(obj_name);
                   BuildTool.setThreadError(err);
                }
-               else
-                  inProgress.fileDone();
             }
          }
          else
          {
-            if (!Log.verbose)
-            {
-               Log.info(" " + inProgress.label() + fileName);
-            }
             var result = ProcessManager.runProcessThreaded(exe, args, null);
             cleanTmp(tmpFile);
             if (result!=0)
@@ -489,7 +487,24 @@ class Compiler
                Tools.exit (result);
                //throw "Error : " + result + " - build cancelled";
             }
-            inProgress.fileDone();
+         }
+
+         if (!Log.verbose && (inTid >= 0 && BuildTool.threadExitCode == 0))
+         {
+            printMutex.acquire();
+
+            var output = "";
+            if (inProgress != null)
+            {
+               inProgress.current++;
+               output = [inProgress.getFormattedProgress(), '-', progressFileName, tagInfo].join(" ");
+            }
+            else
+               output = ['-', progressFileName, tagInfo].join(" ");
+
+            Log.info(output);
+
+            printMutex.release();
          }
 
          if (cacheName!=null && !useCacheInPlace)
@@ -626,6 +641,11 @@ class Compiler
 
       // Like objs/hxcpp.pch or objs/wx.gch
       var pch_name = dir + "/" + file + mPCHExt;
+
+      // gcc falls back to the plain header next to the .gch when it can't use it
+      if (mPCH == "gcc")
+         writePchForwarder(inGroup, dir, file);
+
       if (inGroup.isCached() || inReuseIfPossible)
       {
           // No obj needed for gcc
@@ -692,6 +712,18 @@ class Compiler
       if (mPCH == "msvc")
          return  PathManager.combine(dir, file + mExt);
       return null;
+   }
+
+   function writePchForwarder(inGroup:FileGroup, inDir:String, inFile:String)
+   {
+      var header = FileSystem.fullPath(inGroup.mPrecompiledHeaderDir + "/" + inGroup.mPrecompiledHeader + ".h");
+      var forwarder = inDir + "/" + inFile + ".h";
+      var content = '#include "' + header.split("\\").join("/") + '"\n';
+      if (!FileSystem.exists(forwarder) || sys.io.File.getContent(forwarder) != content)
+      {
+         PathManager.mkdir(inDir);
+         sys.io.File.saveContent(forwarder, content);
+      }
    }
 
    public function setPCH(inPCH:String)

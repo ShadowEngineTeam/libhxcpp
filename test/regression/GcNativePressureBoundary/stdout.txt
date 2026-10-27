@@ -1,4 +1,0 @@
-native accounting accepts a positive Int delta: true
-native accounting release balances the delta: true
-allocation pressure resumes after budget decay: true
-full collection releases discarded buffers: true

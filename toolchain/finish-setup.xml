@@ -3,12 +3,15 @@
 <set name="DBG" value="-debug" if="debug" unless="DEBUGSUFFIX" />
 <set name="DBG" value="${DEBUGSUFFIX}" if="debug" unless="DBG" />
 
-<set name="M64" value="64" if="HXCPP_M64"/>
-<set name="M64" value="arm64" if="HXCPP_ARM64"/>
+<set name="MARCH" value="-x86" if="HXCPP_M32 || HXCPP_X86" unless="HXCPP_ARMV7 || HXCPP_ARMV7S" />
+<set name="MARCH" value="-x86_64" if="HXCPP_M64 || HXCPP_X86_64" unless="HXCPP_ARM64" />
+<set name="MARCH" value="-armv5" if="HXCPP_ARMV5"/>
+<set name="MARCH" value="-armv6" if="HXCPP_ARMV6"/>
+<set name="MARCH" value="-armv7" if="HXCPP_ARMV7 || HXCPP_ARMV7S"/>
+<set name="MARCH" value="-arm64" if="HXCPP_ARM64"/>
 <set name="F32" value="-f32" if="HXCPP_FLOAT32"/>
 <set name="NEEDS_NC" value="-nc" if="windows"/>
 <set name="NOCONSOLE" value="${NEEDS_NC}" if="no_console"/>
-<set name="RPI" value="-rpi" if="rpi"/>
 <set name="APIFP" value="-hfp" if="hardfp"/>
 <set name="CPPIA_NO_JIT" value="1" if="emscripten"/>
 
@@ -16,8 +19,6 @@
 
 <set name="static_link" value="1" if="iphoneos" unless="dll_import||exe_link" />
 <set name="static_link" value="1" if="iphonesim" unless="dll_import||exe_link" />
-<set name="static_link" value="1" if="appletvos" unless="dll_import||exe_link" />
-<set name="static_link" value="1" if="appletvsim" unless="dll_import||exe_link" />
 
 <set name="LIBPREFIX" value="lib" if="static_link" unless="STATICLIBPREFIX" />
 <set name="LIBPREFIX" value="${STATICLIBPREFIX}" if="static_link" unless="LIBPREFIX" />
@@ -30,41 +31,32 @@
 
 <set name="OBJDBG" value="-debug" if="debug" />
 <set name="OBJOPT" value="-fast" if="HXCPP_FAST_LINK" />
+<set name="OBJOPT" value="-lto" if="HXCPP_OPTIMIZE_LINK || HXCPP_LTO_THIN" unless="debug" />
 <set name="HXCPP_OPTIMIZE_LINK_INCREMENTAL" value="1" if="HXCPP_FAST_LINK HXCPP_OPTIMIZE_LINK" unless="debug" />
 <set name="OBJOPT" value="-opt" if="HXCPP_OPTIMIZE_LINK" unless="debug" />
 <set name="OBJOPT" value="-optinc" if="HXCPP_OPTIMIZE_LINK_INCREMENTAL" unless="debug" />
-<set name="OBJEXT" value="${M64}${F32}${STAT}${OBJDBG}${OBJOPT}${NOCONSOLE}${RPI}${APIFP}${PRIME}" />
+<set name="OBJEXT" value="${MARCH}${F32}${STAT}${OBJDBG}${OBJOPT}${NOCONSOLE}${APIFP}${PRIME}" />
 
 <set name="STD_MODULE_LINK" value="static_link" if="static_link"/>
 <set name="STD_MODULE_LINK" value="exe" if="HXCPP_JS_PRIME"/>
 
 
-
-<set name="LIBEXTRA" value=".iphonesim-64" if="iphonesim" unless="HXCPP_ARM64"/>
-<set name="LIBEXTRA" value=".iphonesim-arm64" if="iphonesim HXCPP_ARM64"/>
-<set name="LIBEXTRA" value=".iphonesim" if="iphonesim" unless="HXCPP_M64 || HXCPP_ARM64"/>
-<section if="iphoneos">
-	<set name="LIBEXTRA" value=".iphoneos-v7" if="HXCPP_ARMV7"/>
-	<set name="LIBEXTRA" value=".iphoneos-v7s" if="HXCPP_ARMV7S"/>
-	<set name="LIBEXTRA" value=".iphoneos-64" if="HXCPP_ARM64"/>
-	<set name="HXCPP_ARMV6" value="1" unless="LIBEXTRA"/>
-	<set name="LIBEXTRA" value=".iphoneos" if = "HXCPP_ARMV6"/>
+<section if="iphonesim||iphoneos">
+   <set name="DEVICEEXTRA" value=".iphonesim" if="iphonesim" />
+   <set name="DEVICEEXTRA" value=".iphoneos" if="iphoneos" />
+   <set name="LIBEXTRA" value="${DEVICEEXTRA}-x86" if="HXCPP_M32 || HXCPP_X86" unless="HXCPP_ARMV7 || HXCPP_ARMV7S" />
+   <set name="LIBEXTRA" value="${DEVICEEXTRA}-x86_64" if="HXCPP_M64 || HXCPP_X86_64" unless="HXCPP_ARM64" />
+   <set name="LIBEXTRA" value="${DEVICEEXTRA}-armv6" if="HXCPP_ARMV6" />
+   <set name="LIBEXTRA" value="${DEVICEEXTRA}-armv7" if="HXCPP_ARMV7 || HXCPP_ARMV7S" />
+   <set name="LIBEXTRA" value="${DEVICEEXTRA}-arm64" if="HXCPP_ARM64" />
+   <unset name="DEVICEEXTRA" />
 </section>
-<set name="LIBEXTRA" value=".appletvsim-64" if="appletvsim"/>
-<set name="LIBEXTRA" value=".appletvsim" if="appletvsim" unless="HXCPP_M64"/>
-<set name="LIBEXTRA" value=".watchos" if="watchos" />
-<set name="LIBEXTRA" value=".watchsimulator" if="watchsimulator" />
-<section if="appletvos">
-   <set name="LIBEXTRA" value=".appletvos-64" if="HXCPP_ARM64"/>
+<section unless="LIBEXTRA||windows||linux||mac">
+   <set name="LIBEXTRA" value="-x86" if="HXCPP_M32 || HXCPP_X86" unless="HXCPP_ARMV7 || HXCPP_ARMV7S" />
+   <set name="LIBEXTRA" value="-x86_64" if="HXCPP_M64 || HXCPP_X86_64" unless="HXCPP_ARM64" />
+   <set name="LIBEXTRA" value="-v7" if="HXCPP_ARMV7 || HXCPP_ARMV7S" />
+   <set name="LIBEXTRA" value="-64" if="HXCPP_ARM64" />
 </section>
-<set name="LIBEXTRA" value="-x86" if="blackberry"/>
-<set name="LIBEXTRA" value="" if="blackberry" unless="simulator" />
-<set name="LIBEXTRA" value="-x86" if="HXCPP_X86" />
-<set name="LIBEXTRA" value="-x86_64" if="HXCPP_X86_64" />
-<set name="LIBEXTRA" value="-v7" if="HXCPP_ARMV7" unless="LIBEXTRA||linux" />
-<set name="LIBEXTRA" value="-64" if="HXCPP_ARM64" unless="LIBEXTRA||linux||isMsvc||macos" />
-<set name="LIBEXTRA" value="-x86" if="tizen"/>
-<set name="LIBEXTRA" value="" if="tizen" unless="simulator" />
 <set name="LIBEXT" value=".a" />
 <set name="LIBEXT" value=".lib" if="windows" unless="mingw" />
 
@@ -101,7 +93,6 @@
 
    <set name="LIBEXTRA" value="-19" if="MSVC_VER" />
    <set name="LIBEXTRA" value="-arm64" if="HXCPP_ARM64" />
-   <set name="HXCPP_M64" value="1" if="HXCPP_ARM64" />
    <set name="HX_LINK_SUFFIX" value="-19" if="MSVC_VER" />
    <set name="HX_TARGET_SUFFIX" value="-19" if="MSVC_VER static_link" />
 </section>

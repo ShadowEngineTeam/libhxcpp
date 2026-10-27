@@ -1,4 +1,0 @@
-sorted: a,b,c,d
-stable: bb,aa,cc,dd,x,y
-nulls first: null,a,b
-reverse: z,y,x

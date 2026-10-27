@@ -1,4 +1,0 @@
-stack root preserves the large parent: true
-stack root traces the large parent children: true
-explicit root preserves and traces children: true
-released parents and children finalize once: true

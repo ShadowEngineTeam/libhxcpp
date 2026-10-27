@@ -64,7 +64,7 @@
   #include <stddef.h>
 #endif
 
-#if defined(__EMSCRIPTEN__)  || defined(_ARM_) || defined(__arm__) || defined(GCW0)
+#if defined(__EMSCRIPTEN__)  || defined(_ARM_) || defined(__arm__)
    #define HXCPP_ALIGN_FLOAT
 #endif
 
@@ -208,7 +208,7 @@ typedef char HX_CHAR;
 #pragma warning(disable:4800)
 
 #if defined(_MSC_VER) && _MSC_VER < 1900
-#error libhxcpp needs Visual Studio 2015 or later
+#error hxcpp needs Visual Studio 2015 or later
 #endif
 
 

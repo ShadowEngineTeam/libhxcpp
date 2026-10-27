@@ -1,9 +1,0 @@
---main Script
--cppia bin/script.cppia
---next
---main Main
--cpp bin
--D scriptable
--D HXCPP_STACK_TRACE
--D HXCPP_CHECK_POINTER
---dce no

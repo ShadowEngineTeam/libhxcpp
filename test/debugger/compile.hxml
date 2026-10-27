@@ -1,5 +1,0 @@
--m App
--D hxcpp_debugger
--D HXCPP_DEBUGGER
---cpp bin
---debug

@@ -1,3 +1,0 @@
-IPv4 accept and transfer work: true
-blocking IPv6 accept and transfer work: true
-nonblocking IPv6 accept and transfer work: true

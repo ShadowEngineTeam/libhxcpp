@@ -1,9 +1,0 @@
---main Script
--cppia bin/script.cppia
--resource res.txt@res
---next
---main Main
--cpp bin
--D scriptable
--D HXCPP_STACK_TRACE
---dce no

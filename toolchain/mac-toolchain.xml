@@ -5,7 +5,7 @@
 
 
 <include name="toolchain/gcc-toolchain.xml"/>
-<setenv name="MACOSX_DEPLOYMENT_TARGET" value="10.9" unless="MACOSX_DEPLOYMENT_TARGET"/>
+<setenv name="MACOSX_DEPLOYMENT_TARGET" value="12.0" unless="MACOSX_DEPLOYMENT_TARGET"/>
 <path name="${DEVELOPER_DIR}/usr/bin" />
 <set name="HXCPP_LTO_THIN" value="1" if="HXCPP_OPTIMIZE_LINK_INCREMENTAL"/>
 
@@ -53,13 +53,14 @@
   <flag value="-flto" if="HXCPP_OPTIMIZE_LINK" unless="debug || HXCPP_LTO_THIN"/>
   <flag value="-flto=thin" if="HXCPP_LTO_THIN" unless="debug"/>
   <objdir value="obj/darwin${OBJEXT}/" />
-  <flag value="-msse4.1" if="HXCPP_SSE4" unless="HXCPP_ARM" />
+  <flag value="-march=x86-64-v3" unless="HXCPP_ARM64 || HXCPP_M32 || HXCPP_NO_ARCH_LEVEL" />
   <outflag value="-o"/>
   <ext value=".o"/>
   <getversion value="xcrun --sdk macosx${MACOSX_VER} clang++ -v" if="HXCPP_CLANG" />
 </compiler>
 
 <linker id="dll" exe="g++" if="macos">
+  <flag value="-fuse-ld=${HXCPP_USE_LD}" if="HXCPP_USE_LD"/>
   <exe name="xcrun --sdk macosx${MACOSX_VER} clang++" if="HXCPP_CLANG" />
   <fromfile value="" if="GCC_OLD" />
   <flag value="-Wl,-bundle,-bundle_loader,${dll_import_link}" if="dll_import_link" />
@@ -84,6 +85,7 @@
 </linker>
 
 <linker id="exe" exe="g++" if="macos">
+  <flag value="-fuse-ld=${HXCPP_USE_LD}" if="HXCPP_USE_LD"/>
   <exe name="xcrun --sdk macosx${MACOSX_VER} clang++" if="HXCPP_CLANG" />
   <!-- <flag value="-Wl,-stack_size,0x8000"/> -->
   <flag value="-rpath" />

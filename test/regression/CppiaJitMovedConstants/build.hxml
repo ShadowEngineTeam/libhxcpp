@@ -1,8 +1,0 @@
---main Script
--cppia bin/script.cppia
---next
---main Main
--cpp bin
--D scriptable
---dce no
--D HXCPP_GC_DEBUG_ALWAYS_MOVE

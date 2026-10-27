@@ -1,2 +1,0 @@
-peer certificate available: true
-peer certificate survives socket close: true

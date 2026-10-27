@@ -1,3 +1,0 @@
-select kept deadline: true
-fast_select kept deadline: true
-poll kept deadline: true

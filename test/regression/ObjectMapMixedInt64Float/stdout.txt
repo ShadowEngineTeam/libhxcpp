@@ -1,6 +1,0 @@
-initial Int64 preserved: true
-Float insertion preserves prior Int64: true
-Float value preserved: true
-reverse insertion order preserves Int64: true
-StringMap control preserves Int64: true
-IntMap control preserves Int64: true

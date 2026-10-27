@@ -1,7 +1,0 @@
-odd offsets: 0 wrong
-float 1.0 at 1: 0000803F
-double 1.0 at 3: 000000000000F03F
-float bits of 1.0: 3F800000
-i32 to float: 3.1415927410125732
-double bits of 1.0: 3FF0000000000000
-i64 to double: 2

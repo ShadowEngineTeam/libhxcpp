@@ -1,4 +1,0 @@
-<xml>
-  <echo value="BINDIR=${BINDIR}"/>
-  <target id="default"/>
-</xml>

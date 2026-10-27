@@ -35,17 +35,16 @@
   <flag value="armv7" if="HXCPP_ARMV7" />
   <flag value="armv7s" if="HXCPP_ARMV7S" />
   <flag value="arm64" if="HXCPP_ARM64" />
+  <flag value="-target"/>
+  <flag value="apple-ios"/>
   <flag value="-isysroot"/>
   <flag value="${DEVELOPER_DIR}/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS${IPHONE_VER}.sdk"/>
   <!-- <flag value="-miphoneos-version-min=3.0" if="HXCPP_GCC" unless="HXCPP_ARMV7" />
   <flag value="-miphoneos-version-min=5.0" if="HXCPP_ARMV7" /> -->
-  <flag value="-miphoneos-version-min=9.0" unless="HXCPP_IOS_MIN_VERSION" />
+  <flag value="-miphoneos-version-min=15.0" unless="HXCPP_IOS_MIN_VERSION" />
   <flag value="-miphoneos-version-min=${HXCPP_IOS_MIN_VERSION}" if="HXCPP_IOS_MIN_VERSION" />
   <flag value="-fobjc-arc" if="OBJC_ARC" />
   <flag value="-DOBJC_ARC" if="OBJC_ARC" />
-  <flag value="-DENABLE_BITCODE=YES"/>
-  <flag value="-fembed-bitcode" unless="debug" />
-  <flag value="-fembed-bitcode-marker" if="debug" />
   <flag value="-Wno-parentheses" />
   <flag value="-Wno-null-dereference" unless="HXCPP_GCC"/>
   <flag value="-Wno-unused-value" />
@@ -79,6 +78,7 @@
 </compiler>
 
 <linker id="dll" exe="g++" >
+  <flag value="-fuse-ld=${HXCPP_USE_LD}" if="HXCPP_USE_LD"/>
   <exe name="xcrun --sdk iphoneos${IPHONE_VER} g++" if="HXCPP_GCC" />
   <exe name="xcrun --sdk iphoneos${IPHONE_VER} clang++" />
   <flag value="-Wl,-cache_path_lto,/tmp" if="HXCPP_OPTIMIZE_LINK_INCREMENTAL" unless="debug"/>
@@ -90,7 +90,10 @@
   <flag value="arm64" if="HXCPP_ARM64" />
   <flag value="-isysroot"/>
   <flag value="${DEVELOPER_DIR}/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS${IPHONE_VER}.sdk"/>
-  <flag value="-Wl,-undefined,dynamic_lookup"/>
+  <flag value="-miphoneos-version-min=15.0" unless="HXCPP_IOS_MIN_VERSION" />
+  <flag value="-miphoneos-version-min=${HXCPP_IOS_MIN_VERSION}" if="HXCPP_IOS_MIN_VERSION" />
+  <flag value="-fobjc-arc" if="OBJC_ARC" />
+  <flag value="-DOBJC_ARC" if="OBJC_ARC" />
   <flag value="-fpic"/>
   <flag value="-fPIC"/>
   <flag value="-fvisibility=hidden"/>

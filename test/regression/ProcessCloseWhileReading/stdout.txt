@@ -1,1 +1,0 @@
-close returned at once: true, reader ended: true

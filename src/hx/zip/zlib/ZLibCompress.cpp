@@ -9,7 +9,7 @@
 
 // Surface the zlib failure detail (code and msg) instead of a bare
 // "ZLib Error" - msg is valid until deflateEnd/inflateEnd runs
-static void zlibThrow(z_stream *stream, int code)
+static void zlibThrow(zng_stream *stream, int code)
 {
 	String msg = HX_CSTRING("ZLib Error ") + String(code);
 	if (stream && stream->msg)
@@ -19,9 +19,9 @@ static void zlibThrow(z_stream *stream, int code)
 
 hx::zip::Compress hx::zip::Compress_obj::create(int level)
 {
-	auto handle = std::unique_ptr<z_stream>(new z_stream());
+	auto handle = std::unique_ptr<zng_stream>(new zng_stream());
 	auto memory = std::unique_ptr<hx::zip::zlib::ZLibMemory>(hx::zip::zlib::ZLibMemory::attach(handle.get()));
-	auto error  = deflateInit(handle.get(), level);
+	auto error  = zng_deflateInit(handle.get(), level);
 
 	if (error != Z_OK)
 	{
@@ -35,9 +35,9 @@ hx::zip::Compress hx::zip::Compress_obj::create(int level)
 Array<uint8_t> hx::zip::Compress_obj::run(cpp::marshal::View<uint8_t> src, int level)
 {
 	auto error  = 0;
-	auto handle = std::unique_ptr<z_stream>(new z_stream());
+	auto handle = std::unique_ptr<zng_stream>(new zng_stream());
 
-	if (Z_OK != (error = deflateInit(handle.get(), level)))
+	if (Z_OK != (error = zng_deflateInit(handle.get(), level)))
 	{
 		zlibThrow(handle.get(), error);
 	}
@@ -45,11 +45,11 @@ Array<uint8_t> hx::zip::Compress_obj::run(cpp::marshal::View<uint8_t> src, int l
 	// Release zlib's internal state on every exit, including throws
 	struct Closer
 	{
-		z_stream *stream;
-		~Closer() { deflateEnd(stream); }
+		zng_stream *stream;
+		~Closer() { zng_deflateEnd(stream); }
 	} closer = { handle.get() };
 
-	auto bounds = deflateBound(handle.get(), src.length);
+	auto bounds = zng_deflateBound(handle.get(), src.length);
 	if (bounds > std::numeric_limits<int32_t>::max()) {
 		hx::Throw(HX_CSTRING("Size Error"));
 	}
@@ -69,7 +69,7 @@ Array<uint8_t> hx::zip::Compress_obj::run(cpp::marshal::View<uint8_t> src, int l
 	handle->avail_out = dst.length;
 
 	EnterGCFreeZone();
-	error = deflate(handle.get(), Z_FINISH);
+	error = zng_deflate(handle.get(), Z_FINISH);
 	ExitGCFreeZone();
 
 	if (Z_STREAM_END != error) {
@@ -87,7 +87,7 @@ Array<uint8_t> hx::zip::Compress_obj::run(cpp::marshal::View<uint8_t> src, int l
 	return output;
 }
 
-hx::zip::zlib::ZLibCompress::ZLibCompress(z_stream* inHandle) : handle(inHandle), flush(0)
+hx::zip::zlib::ZLibCompress::ZLibCompress(zng_stream* inHandle) : handle(inHandle), flush(0)
 {
 	_hx_set_finalizer(this, [](Dynamic obj) { reinterpret_cast<ZLibCompress*>(obj.mPtr)->close(); });
 }
@@ -105,7 +105,7 @@ hx::zip::Result hx::zip::zlib::ZLibCompress::execute(cpp::marshal::View<uint8_t>
 	handle->avail_out = dst.length;
 
 	EnterGCFreeZone();
-	auto error = deflate(handle, flush);
+	auto error = zng_deflate(handle, flush);
 	ExitGCFreeZone();
 
 	// Inflate allocates its window on first use
@@ -163,7 +163,7 @@ int hx::zip::zlib::ZLibCompress::getBounds(const int length)
 		ZLIB_OBJ_CLOSED;
 	}
 
-	auto bounds = deflateBound(handle, length);
+	auto bounds = zng_deflateBound(handle, length);
 	if (bounds > std::numeric_limits<int32_t>::max())
 	{
 		hx::Throw(HX_CSTRING("Size Error"));
@@ -179,7 +179,7 @@ void hx::zip::zlib::ZLibCompress::close()
 		return;
 	}
 
-	deflateEnd(handle);
+	zng_deflateEnd(handle);
 
 	auto memory = static_cast<ZLibMemory *>(handle->opaque);
 	memory->release();

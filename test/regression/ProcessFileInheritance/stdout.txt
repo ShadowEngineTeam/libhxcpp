@@ -1,2 +1,0 @@
-written file: not inherited
-read file: not inherited

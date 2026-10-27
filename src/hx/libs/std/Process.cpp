@@ -992,7 +992,7 @@ Dynamic _hx_std_process_exit( Dynamic handle, bool block )
       DWORD wait = INFINITE;
       if (!block)
          wait = 0;
-
+      
       // The wait result is the authoritative liveness signal - inferring
       // it from rval==STILL_ACTIVE (259) made a process that really
       // exits with code 259 read as running forever
@@ -1011,7 +1011,7 @@ Dynamic _hx_std_process_exit( Dynamic handle, bool block )
    int options=0;
    if (!block)
       options = WNOHANG;
-
+   
    int rval=0;
    pid_t ret=-1;
    while( (ret = waitpid(p->pid,&rval,options)) != p->pid )
@@ -1020,7 +1020,7 @@ Dynamic _hx_std_process_exit( Dynamic handle, bool block )
       // from an earlier syscall turned the WNOHANG poll into a busy spin
       if( ret == -1 && errno == EINTR )
          continue;
-
+      
       if (!block && ret == 0)
       {
          hx::ExitGCFreeZone();

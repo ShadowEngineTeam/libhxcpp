@@ -21,13 +21,7 @@ typedef int64_t __int64;
 #ifdef ANDROID
 #include <android/log.h>
 #endif
-#ifdef WEBOS
-#include <syslog.h>
-#endif
-#ifdef TIZEN
-#include <dlog.h>
-#endif
-#if defined(BLACKBERRY) || defined(GCW0)
+#if defined(HX_MACOS) || defined(HX_LINUX)
 #include <unistd.h>
 #endif
 #include <string>
@@ -38,14 +32,11 @@ typedef int64_t __int64;
 #include <mutex>
 #include <chrono>
 
+
 #ifdef HX_WINRT
 #define PRINTF WINRT_PRINTF
-#elif defined(TIZEN)
-#define PRINTF(fmt, ...) dlog_dprint(DLOG_INFO, "trace", fmt, __VA_ARGS__);
 #elif defined(HX_ANDROID) && !defined(HXCPP_EXE_LINK)
 #define PRINTF(fmt, ...) __android_log_print(ANDROID_LOG_INFO, "trace", fmt, __VA_ARGS__);
-#elif defined(WEBOS)
-#define PRINTF(fmt, ...) syslog(LOG_INFO, "trace", fmt, __VA_ARGS__);
 #else
 #define PRINTF printf
 #endif
@@ -423,6 +414,21 @@ void WriteConsoleAllA(HANDLE h, const char *str, DWORD length) {
 }
 #endif
 
+#ifdef HX_WINDOWS
+// stdout console state - GetConsoleMode is a kernel round-trip, so probing
+// it per print made every println pay a syscall even when redirected.
+// Cached once: a process's stdout handle does not change under us in any
+// supported configuration.
+static bool hxStdoutIsConsole(HANDLE &outHandle)
+{
+   static HANDLE sHandle = GetStdHandle(STD_OUTPUT_HANDLE);
+   static DWORD sMode = 0;
+   static bool sIsConsole = GetConsoleMode(sHandle, &sMode) != 0;
+   outHandle = sHandle;
+   return sIsConsole;
+}
+#endif
+
 void __trace(Dynamic inObj, Dynamic info)
 {
    String text;
@@ -430,28 +436,27 @@ void __trace(Dynamic inObj, Dynamic info)
       text = inObj->toString();
 
 #ifdef HX_WINDOWS
-   HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
-   DWORD mode;
-   if (GetConsoleMode(handle, &mode))
-   {
-      fflush(stdout);
-      String s;
-      if (info == null()) {
-         s = HX_CSTRING("?? ") + text + HX_CSTRING("\n");
-      } else {
-         String filename = Dynamic((info)->__Field(HX_CSTRING("fileName"), HX_PROP_DYNAMIC))->toString();
-         int line = Dynamic((info)->__Field(HX_CSTRING("lineNumber"), HX_PROP_DYNAMIC))->__ToInt();
-         s = filename + HX_CSTRING(":") + line + HX_CSTRING(": ") + text + HX_CSTRING("\n");
-      }
-      if (s.isUTF16Encoded())
-      {
-         WriteConsoleAllW(handle, s.__WCStr(), s.length);
-      } else {
-         // ascii
-         WriteConsoleAllA(handle, s.__CStr(), s.length);
-      }
+   HANDLE handle;
+   if (!hxStdoutIsConsole(handle))
       return;
+
+   fflush(stdout);
+   String s;
+   if (info == null()) {
+      s = HX_CSTRING("?? ") + text + HX_CSTRING("\n");
+   } else {
+      String filename = Dynamic((info)->__Field(HX_CSTRING("fileName"), HX_PROP_DYNAMIC))->toString();
+      int line = Dynamic((info)->__Field(HX_CSTRING("lineNumber"), HX_PROP_DYNAMIC))->__ToInt();
+      s = filename + HX_CSTRING(":") + line + HX_CSTRING(": ") + text + HX_CSTRING("\n");
    }
+   if (s.isUTF16Encoded())
+      WriteConsoleAllW(handle, s.__WCStr(), s.length);
+   else
+      WriteConsoleAllA(handle, s.__CStr(), s.length);
+#else
+#if defined(HX_MACOS) || defined(HX_LINUX)
+   if (!isatty(STDOUT_FILENO))
+      return;
 #endif
 
    hx::strbuf convertBuf;
@@ -463,12 +468,10 @@ void __trace(Dynamic inObj, Dynamic info)
    {
       const char *filename = Dynamic((info)->__Field(HX_CSTRING("fileName"), HX_PROP_DYNAMIC))->toString().utf8_str(0,false);
       int line = Dynamic((info)->__Field( HX_CSTRING("lineNumber") , HX_PROP_DYNAMIC))->__ToInt();
-
-      hx::strbuf convertBuf;
-      //PRINTF("%s:%d: %s\n", filename, line, text.raw_ptr() ? text.out_str(&convertBuf) : "null");
       PRINTF("%s:%d: %s\n", filename, line, text.raw_ptr() ? text.out_str(&convertBuf) : "null");
    }
    fflush(stdout);
+#endif
 }
 
 void __hxcpp_exit(int inExitCode)
@@ -757,35 +760,25 @@ Array<String> __get_args()
 }
 
 
-#ifdef HX_WINDOWS
-// stdout console state - GetConsoleMode is a kernel round-trip, so probing
-// it per print made every println pay a syscall even when redirected.
-// Cached once: a process's stdout handle does not change under us in any
-// supported configuration.
-static bool hxStdoutIsConsole(HANDLE &outHandle)
-{
-   static HANDLE sHandle = GetStdHandle(STD_OUTPUT_HANDLE);
-   static DWORD sMode = 0;
-   static bool sIsConsole = GetConsoleMode(sHandle, &sMode) != 0;
-   outHandle = sHandle;
-   return sIsConsole;
-}
-#endif
-
 void __hxcpp_print_string(const String &inString)
 {
    const String &inV = inString.raw_ptr() ? inString : HX_CSTRING("null");
 #ifdef HX_WINDOWS
    HANDLE handle;
-   if (hxStdoutIsConsole(handle) && inV.isUTF16Encoded())
-   {
-      fflush(stdout);
-      WriteConsoleAllW(handle, inV.__WCStr(), inV.length);
+   if (!hxStdoutIsConsole(handle))
       return;
-   }
+
+   fflush(stdout);
+   WriteConsoleAllW(handle, inV.__WCStr(), inV.length);
+#else
+#if defined(HX_MACOS) || defined(HX_LINUX)
+   if (!isatty(STDOUT_FILENO))
+      return;
 #endif
+
    hx::strbuf convertBuf;
    PRINTF("%s", inV.out_str(&convertBuf) );
+#endif
 }
 
 void __hxcpp_println_string(const String &inString)
@@ -793,24 +786,23 @@ void __hxcpp_println_string(const String &inString)
    const String &inV = inString.raw_ptr() ? inString : HX_CSTRING("null");
 #ifdef HX_WINDOWS
    HANDLE handle;
-   bool isConsole = hxStdoutIsConsole(handle);
-   if (isConsole && inV.isUTF16Encoded())
-   {
-      fflush(stdout);
-      WriteConsoleAllW(handle, inV.__WCStr(), inV.length);
-      fwrite("\n", 1, 1, stdout);
-      fflush(stdout);
+   if (!hxStdoutIsConsole(handle))
       return;
-   }
+
+   fflush(stdout);
+   WriteConsoleAllW(handle, inV.__WCStr(), inV.length);
+   fwrite("\n", 1, 1, stdout);
+   fflush(stdout);
+#else
+#if defined(HX_MACOS) || defined(HX_LINUX)
+   if (!isatty(STDOUT_FILENO))
+      return;
 #endif
+
    hx::strbuf convertBuf;
    PRINTF("%s\n", inV.out_str(&convertBuf));
-   // Flush every line, redirected or not.  Boot asks for line buffering,
-   // but the Windows CRT treats _IOLBF as full buffering, so a redirected
-   // stdout there held a server's log lines back from whatever reads them,
-   // and lost them if the process died.  Elsewhere the buffer is already
-   // empty after the newline, so this costs nothing.
    fflush(stdout);
+#endif
 }
 
 

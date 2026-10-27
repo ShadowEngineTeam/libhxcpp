@@ -1,7 +1,7 @@
 #pragma once
 
 #include <hxcpp.h>
-#include <zlib.h>
+#include <zlib-ng.h>
 
 #include <atomic>
 #include <cstdlib>
@@ -19,7 +19,7 @@ namespace hx
 				std::atomic<size_t> live{ 0 };
 				size_t reported = 0;
 
-				static voidpf alloc(voidpf opaque, uInt items, uInt size)
+				static void * alloc(void * opaque, unsigned int items, unsigned int size)
 				{
 					size_t bytes = static_cast<size_t>(items) * size;
 					// Two words before the data keep zlib's 16-byte alignment
@@ -31,7 +31,7 @@ namespace hx
 					return block + 2;
 				}
 
-				static void free(voidpf opaque, voidpf address)
+				static void free(void * opaque, void * address)
 				{
 					if (!address)
 						return;
@@ -40,7 +40,7 @@ namespace hx
 					std::free(block);
 				}
 
-				static ZLibMemory *attach(z_stream *stream)
+				static ZLibMemory *attach(zng_stream *stream)
 				{
 					ZLibMemory *memory = new ZLibMemory();
 					stream->zalloc = alloc;

@@ -318,6 +318,9 @@ public:
    }
    #endif
 
+   bool __StartsWith(const String &inValue) const;
+   bool __EndsWith(const String &inValue) const;
+
 
    ::String &operator+=(const ::String &inRHS);
    ::String operator+(const ::String &inRHS) const;

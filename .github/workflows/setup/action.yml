@@ -7,7 +7,7 @@ runs:
   using: composite
   steps:
     - name: install haxe
-      uses: krdlab/setup-haxe@v2
+      uses: ShadowEngineTeam/setup-haxe@main
       with:
         haxe-version: ${{ inputs.haxe }}
 
@@ -21,13 +21,11 @@ runs:
           haxelib git utest https://github.com/haxe-utest/utest
         }
         haxelib git hx4compat https://github.com/HaxeFoundation/hx4compat
-        haxelib dev libhxcpp ${{ github.workspace }}
-        haxelib run libhxcpp setup
+        haxelib dev hxcpp ${{ github.workspace }}
         haxelib list
 
-    # The 32-bit Linux build's libraries, which arm64 runners do not have
     - name: install native libraries
-      if: runner.os == 'Linux' && runner.arch == 'X64'
+      if: runner.os == 'Linux'
       shell: pwsh
       run: |
         sudo apt-get update -qqy

@@ -1,2 +1,0 @@
-forward: held chain kept true, dropped chain collected true
-reverse: held chain kept true, dropped chain collected true

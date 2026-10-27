@@ -39,6 +39,8 @@
 	<section if="iphoneos || iphonesim || appletvos || appletvsim" unless="static_link">
 		<flag value="-framework"/>
 		<flag value="Security"/>
+		<flag value="-framework"/>
+		<flag value="CoreFoundation"/>
 	</section>
 </target>
 

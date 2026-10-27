@@ -497,7 +497,7 @@ int _hx_std_host_resolve( String host )
       struct hostent *h = 0;
       hx::strbuf hostBuf;
 
-#   if defined(NEKO_WINDOWS) || defined(NEKO_MAC) || defined(BLACKBERRY) || defined(__EMSCRIPTEN__) || defined(NEKO_BSD)
+#   if defined(NEKO_WINDOWS) || defined(NEKO_MAC) || defined(__EMSCRIPTEN__) || defined(NEKO_BSD)
       h = gethostbyname(host.utf8_str(&hostBuf));
 #   else
       struct hostent hbase;
@@ -633,7 +633,7 @@ String _hx_std_host_reverse( int host )
    struct hostent *h = 0;
    unsigned int ip = host;
    hx::EnterGCFreeZone();
-   #if defined(NEKO_WINDOWS) || defined(NEKO_MAC) || defined(ANDROID) || defined(BLACKBERRY) || defined(__EMSCRIPTEN__) || defined(NEKO_BSD)
+   #if defined(NEKO_WINDOWS) || defined(NEKO_MAC) || defined(ANDROID) || defined(__EMSCRIPTEN__) || defined(NEKO_BSD)
    h = gethostbyaddr((char *)&ip,4,AF_INET);
    #else
    struct hostent htmp;
@@ -654,7 +654,7 @@ String _hx_std_host_reverse_ipv6( Array<unsigned char> host )
 
    struct hostent *h = 0;
    hx::EnterGCFreeZone();
-   #if defined(NEKO_WINDOWS) || defined(NEKO_MAC) || defined(ANDROID) || defined(BLACKBERRY) || defined(__EMSCRIPTEN__) || defined(NEKO_BSD)
+   #if defined(NEKO_WINDOWS) || defined(NEKO_MAC) || defined(ANDROID) || defined(__EMSCRIPTEN__) || defined(NEKO_BSD)
    h = gethostbyaddr((char *)&host[0],16,AF_INET6);
    #else
    struct hostent htmp;

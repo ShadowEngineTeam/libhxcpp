@@ -1,4 +1,0 @@
-int ref kept, key kept
-bool ref kept, key kept
-char ref kept, key kept
-empty ref kept, key kept

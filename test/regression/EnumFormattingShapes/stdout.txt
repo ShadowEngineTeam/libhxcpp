@@ -1,9 +1,0 @@
-chain 2,048 deep formats completely: true
-chain 1,000,000 deep formats completely: true
-basic, Unicode and null parameters: true
-null string and array parameters: true
-shared children at each occurrence: true
-custom toString that collects: true
-custom toString called once each, in order: true
-constructor without parameters: true
-enum through Dynamic: true

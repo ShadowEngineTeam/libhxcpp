@@ -1,5 +1,0 @@
--m Main
---cpp bin
--debug
--D DEBUGSUFFIX=
--D HXCPP_GC_GENERATIONAL

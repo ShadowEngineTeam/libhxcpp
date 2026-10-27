@@ -1,27 +1,37 @@
-// How many of a group's files have compiled, shown before each file as it starts
+package;
+
 class Progress
 {
-   var finished:Int;
-   var total:Int;
+   public var current:Int;
+   public var total:Int;
 
-   public function new(inTotal:Int)
+   public function new(inCurrent:Int, inTotal:Int)
    {
-      finished = 0;
+      current = inCurrent;
       total = inTotal;
    }
 
-   public function label():String
+   public function getProgress():String
    {
-      var done = Std.string(finished);
-      while (done.length < Std.string(total).length)
-         done = " " + done;
-      return "\x1b[1m[" + done + "/" + total + "]\x1b[0m";
+      var percent = current / total;
+      var pct = Std.int(percent * 1000) / 10;
+      var progress = Std.string(pct);
+
+      if (Std.int(pct) == pct)
+         progress += ".0";
+
+      return progress + "%";
    }
 
-   public function fileDone()
+   public function getFormattedProgress():String
    {
-      Log.lock();
-      finished++;
-      Log.unlock();
+      var progress = getProgress();
+
+      var spaces = "";
+
+      while ((spaces.length + progress.length) < 6)
+         spaces += " ";
+
+      return "\x1b[1m[\x1b[0m" + spaces + "\x1b[33;1m" + progress + "\x1b[0m\x1b[1m]\x1b[0m";
    }
 }

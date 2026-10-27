@@ -1,4 +1,0 @@
-loaded: the callback ran 1 time, Script.hx known true
-file names and full paths pair up: true, host Util 4
-script booted
-script ran: 42

@@ -1,3 +1,0 @@
-stream has content: true
-getContent matches stream: true
-getBytes matches stream: true

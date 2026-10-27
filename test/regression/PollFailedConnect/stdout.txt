@@ -1,3 +1,0 @@
-failed first read socket is reported: true
-failed read socket beyond 64 is reported: true
-failed write-only socket is reported: true

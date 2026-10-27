@@ -70,10 +70,7 @@
    #endif
 
 
-   #if defined(TIZEN)
-   extern "C" EXPORT_EXTRA int OspMain (int argc, char* pArgv[])
-   {
-   #elif defined(HX_WIN_MAIN)
+   #if defined(HX_WIN_MAIN)
    int __stdcall WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
    {
    #else

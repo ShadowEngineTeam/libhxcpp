@@ -1,7 +1,7 @@
 setlocal
 @set "vswhere=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 @set InstallDir=
-@if exist "%vswhere%" for /f "usebackq tokens=*" %%i in (`"%vswhere%" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do @set "InstallDir=%%i"
+@if exist "%vswhere%" for /f "usebackq tokens=*" %%i in (`"%vswhere%" -latest -prerelease -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do @set "InstallDir=%%i"
 @if exist "%vswhere%" (
 	@if exist "%InstallDir%\Common7\Tools\VsDevCmd.bat" (
 		@call "%InstallDir%\Common7\Tools\VsDevCmd.bat" -arch=amd64 -app_platform=UWP -no_logo

@@ -3442,7 +3442,7 @@ void *HxAllocGCBlock(size_t inSize)
    {
       size_t size = 65536;
       size *= IMMIX_BLOCK_SIZE;
-      #if defined(HX_WINDOWS) && defined(HXCPP_M64)
+      #if defined(HX_WINDOWS) && (defined(HXCPP_M64)||defined(HXCPP_ARM64))
       chunkData = (unsigned char *)0x100000000;
       VirtualAlloc(chunkData,size,MEM_COMMIT|MEM_RESERVE,PAGE_READWRITE);
       #else
@@ -4151,7 +4151,7 @@ public:
          if (!result)
          {
             GCLOG("Memory exhausted.\n");
-            #ifndef HXCPP_M64
+            #if !defined(HXCPP_M64) && !defined(HXCPP_ARM64)
             GCLOG(" try 64 bit build.\n");
             #endif
             #ifndef HXCPP_GC_BIG_BLOCKS
@@ -5371,7 +5371,10 @@ public:
       sgAllocsSinceLastSpam = 0;
       #endif
 
+      // With Tracy, __hxt_gc_start/__hxt_gc_end emit this zone instead, so depth limits can't hide it.
+      #ifndef HXCPP_TRACY
       HX_STACK_FRAME("GC", "collect", 0, "GC::collect", __FILE__, __LINE__,0)
+      #endif
       #ifdef SHOW_MEM_EVENTS
       int here = 0;
       GCLOG("=== Collect === %p\n",&here);
@@ -7412,7 +7415,7 @@ void *InternalNew(size_t inSize,bool inIsObject)
       }
       else
       {
-         #if defined(HXCPP_GC_MOVING) && defined(HXCPP_M64)
+         #if defined(HXCPP_GC_MOVING) && (defined(HXCPP_M64)||defined(HXCPP_ARM64))
          if (inSize<8)
             return tla->CallAlloc(8,0);
          #endif
@@ -7541,7 +7544,7 @@ void *InternalRealloc(size_t inFromSize, void *inData, size_t inSize, bool inExp
    {
       LocalAllocator *tla = GetLocalAlloc();
 
-      #if defined(HXCPP_GC_MOVING) && defined(HXCPP_M64)
+      #if defined(HXCPP_GC_MOVING) && (defined(HXCPP_M64)||defined(HXCPP_ARM64))
       if (inSize<8)
           new_data =  tla->CallAlloc(8,0);
       else
@@ -7881,7 +7884,7 @@ void __hxcpp_gc_safe_point()
 
 //#define HXCPP_FORCE_OBJ_MAP
 
-#if defined(HXCPP_M64) || defined(HXCPP_GC_MOVING) || defined(HXCPP_FORCE_OBJ_MAP)
+#if defined(HXCPP_M64) || defined(HXCPP_ARM64) || defined(HXCPP_GC_MOVING) || defined(HXCPP_FORCE_OBJ_MAP)
 #define HXCPP_USE_OBJECT_MAP
 #endif
 
@@ -7917,7 +7920,7 @@ unsigned int __hxcpp_obj_hash(Dynamic inObj)
 {
    if (!inObj.mPtr) return 0;
    size_t h = (size_t)inObj.mPtr >> 3;
-   #if defined(HXCPP_M64)
+   #if (defined(HXCPP_M64)||defined(HXCPP_ARM64))
    return (unsigned int)h ^ (unsigned int)(h>>32);
    #else
    return (unsigned int)h;

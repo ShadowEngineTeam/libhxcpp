@@ -1,4 +1,0 @@
-empty poll waits for its timeout: true
-poll of an idle socket waits for its timeout: true
-poll emptied again waits for its timeout: true
-empty poll with no timeout returns at once: true

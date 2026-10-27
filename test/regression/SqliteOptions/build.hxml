@@ -1,4 +1,0 @@
--m Main
---cpp bin
--D HXCPP_SQLITE_FTS5
--L hx4compat

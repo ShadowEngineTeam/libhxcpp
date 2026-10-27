@@ -1,3 +1,0 @@
-handler kept: true
-write to an ended child throws: true
-handler calls: 0

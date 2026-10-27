@@ -1,3 +1,0 @@
-direct: 1,2,3 source 10,20,30
-reflected: 1,2,3 source 10,20,30
-dynamic: a,b source A,B

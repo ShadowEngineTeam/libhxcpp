@@ -5,7 +5,7 @@
  <flag value="-DHXCPP_STATIC_CFFI" if="HXCPP_STATIC_CFFI" tag="cffi" />
  <flag value="-DHXCPP_ARM64" if="HXCPP_ARM64"/>
  <flag value="-DHXCPP_ARMV7" if="HXCPP_ARMV7"/>
- <flag value="-DHXCPP_M64" if="HXCPP_M64||HXCPP_ARM64||HXCPP_X86_64"/>
+ <flag value="-DHXCPP_M64" if="HXCPP_M64||HXCPP_X86_64" unless="HXCPP_ARM64" />
  <flag value="-DHXCPP_VISIT_ALLOCS" tag="haxe" />
  <flag value="-DHXCPP_FLOAT32" if="HXCPP_FLOAT32" tag="haxe" />
  <flag value="-DHXCPP_CHECK_POINTER" if="HXCPP_CHECK_POINTER" tag="haxe" />
@@ -45,7 +45,6 @@
  <flag value='-DHXCPP_OBJC' if="objc"  tag="haxe"/>
  <flag value='-DHXCPP_GC_DEBUG_LEVEL=${HXCPP_GC_DEBUG_LEVEL}' if="HXCPP_GC_DEBUG_LEVEL" tag="gc" />
  <flag value='-DHXCPP_GC_VERIFY' if="HXCPP_GC_VERIFY" tag="gc" />
- <flag value='-DHXCPP_WINXP_COMPAT' if="HXCPP_WINXP_COMPAT" tag="haxe"/>
  
  <!-- fwd these defines into haxe target so we can check for it in telemetry -->
  <flag value="-DHXCPP_GC_MOVING" if="HXCPP_GC_MOVING" tag="haxe" />
@@ -65,6 +64,7 @@
  <flag value='-DHXCPP_TRACY_NO_EXIT' if="HXCPP_TRACY_NO_EXIT" tag="haxe"/>
  <flag value='-DHXCPP_TRACY_ON_DEMAND' if="HXCPP_TRACY_ON_DEMAND" tag="haxe"/>
  <flag value='-DHXCPP_TRACY_INCLUDE_CALLSTACKS' if="HXCPP_TRACY_INCLUDE_CALLSTACKS" tag="haxe"/>
+ <flag value='-DHXCPP_TRACY_MAX_ZONE_DEPTH=${HXCPP_TRACY_MAX_ZONE_DEPTH}' if="HXCPP_TRACY_MAX_ZONE_DEPTH" tag="haxe"/>
  <flag value='-DTRACY_TIMER_FALLBACK' if="HXCPP_TRACY_TIMER_FALLBACK" tag="haxe"/>
 
  <mmflag value='-Wno-invalid-offsetof' />

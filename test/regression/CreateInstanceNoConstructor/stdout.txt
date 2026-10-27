@@ -1,3 +1,0 @@
-createInstance(Int) threw
-createEmptyInstance(Shape) threw
-createInstance(Math) threw

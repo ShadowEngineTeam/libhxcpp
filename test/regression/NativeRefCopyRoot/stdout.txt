@@ -1,3 +1,0 @@
-copied references keep their targets: true
-a replaced target is released: true
-released references finalize each target once: true

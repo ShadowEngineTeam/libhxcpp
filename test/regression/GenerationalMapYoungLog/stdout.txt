@@ -1,6 +1,0 @@
-replaced values survive: true
-new entries and keys survive: true
-young object keys survive: true
-rehash and removal keep every entry: true
-whole-map fallback keeps every entry: true
-full collection keeps every entry: true

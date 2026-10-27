@@ -1,3 +1,0 @@
-worker reached the leaf: true
-other thread keeps its string: true
-after throws: true

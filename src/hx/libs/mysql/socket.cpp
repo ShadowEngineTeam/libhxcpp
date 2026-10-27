@@ -136,7 +136,7 @@ PHOST phost_resolve( const char *host ) {
 	PHOST ip = inet_addr(host);
 	if( ip == INADDR_NONE ) {
 		struct hostent *h;
-#	if defined(NEKO_WINDOWS) || defined(NEKO_MAC) || defined(BLACKBERRY)
+#	if defined(NEKO_WINDOWS) || defined(NEKO_MAC)
 		h = gethostbyname(host);
 #	else
 		struct hostent hbase;

@@ -1,3 +1,0 @@
-drained queue remains empty and reusable: true
-drained queue gives back the burst storage: true
-repeated small bursts keep order: true

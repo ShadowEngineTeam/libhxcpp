@@ -1,5 +1,0 @@
-text-mode checkpoint matches bulk-read control: true
-text-mode checkpoint restores next byte: true
-binary-mode checkpoint matches bulk-read control: true
-binary-mode checkpoint restores next byte: true
-text-mode readByte reads the whole file: true

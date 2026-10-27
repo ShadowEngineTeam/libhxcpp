@@ -1,2 +1,0 @@
-draws stay in range: true
-large bound reaches upper half: true

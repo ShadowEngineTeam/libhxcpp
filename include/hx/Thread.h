@@ -19,13 +19,8 @@
 
 #elif defined(_WIN32)
 
-#ifdef HXCPP_WINXP_COMPAT
-#undef _WIN32_WINNT
-#define _WIN32_WINNT 0x0400
-#else
 #undef _WIN32_WINNT
 #define _WIN32_WINNT 0x0600
-#endif
 
 #include <windows.h>
 #include <process.h>

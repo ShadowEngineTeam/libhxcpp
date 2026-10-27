@@ -1,9 +1,0 @@
-a class: Class true, Enum false
-an enum: Class false, Enum true
-String: Class true, Enum false
-Math: Class true, Enum false
-an instance: Class false, Enum false
-an enum value: Class false, Enum false
-null: Class false, Enum false
-serialized enum type: By8:SomeEnum
-round trip: true

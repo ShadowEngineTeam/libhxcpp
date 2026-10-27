@@ -10,7 +10,7 @@
 
 // Surface the zlib failure detail (code and msg) instead of a bare
 // "ZLib Error" - msg is valid until deflateEnd/inflateEnd runs
-static void zlibThrow(z_stream *stream, int code)
+static void zlibThrow(zng_stream *stream, int code)
 {
 	String msg = HX_CSTRING("ZLib Error ") + String(code);
 	if (stream && stream->msg)
@@ -20,9 +20,9 @@ static void zlibThrow(z_stream *stream, int code)
 
 hx::zip::Uncompress hx::zip::Uncompress_obj::create(int windowSize)
 {
-	auto handle = std::unique_ptr<z_stream>(new z_stream());
+	auto handle = std::unique_ptr<zng_stream>(new zng_stream());
 	auto memory = std::unique_ptr<hx::zip::zlib::ZLibMemory>(hx::zip::zlib::ZLibMemory::attach(handle.get()));
-	auto error  = inflateInit2(handle.get(), windowSize);
+	auto error  = zng_inflateInit2(handle.get(), windowSize);
 
 	if (error != Z_OK)
 	{
@@ -35,8 +35,8 @@ hx::zip::Uncompress hx::zip::Uncompress_obj::create(int windowSize)
 
 Array<uint8_t> hx::zip::Uncompress_obj::run(cpp::marshal::View<uint8_t> src, int bufferSize)
 {
-	auto handle = std::unique_ptr<z_stream>(new z_stream());
-	auto error  = inflateInit2(handle.get(), 15);
+	auto handle = std::unique_ptr<zng_stream>(new zng_stream());
+	auto error  = zng_inflateInit2(handle.get(), 15);
 
 	if (error != Z_OK)
 	{
@@ -46,8 +46,8 @@ Array<uint8_t> hx::zip::Uncompress_obj::run(cpp::marshal::View<uint8_t> src, int
 	// Release zlib's internal state on every exit, including throws
 	struct Closer
 	{
-		z_stream *stream;
-		~Closer() { inflateEnd(stream); }
+		zng_stream *stream;
+		~Closer() { zng_inflateEnd(stream); }
 	} closer = { handle.get() };
 
 	// Pin the source data for the free-zone inflate calls (the per-chunk
@@ -74,7 +74,7 @@ Array<uint8_t> hx::zip::Uncompress_obj::run(cpp::marshal::View<uint8_t> src, int
 		handle->avail_out = bufferSize;
 
 		EnterGCFreeZone();
-		error = inflate(handle.get(), Z_SYNC_FLUSH);
+		error = zng_inflate(handle.get(), Z_SYNC_FLUSH);
 		ExitGCFreeZone();
 
 		// Z_NEED_DICT (a stream built with a preset dictionary) repeats
@@ -100,7 +100,7 @@ Array<uint8_t> hx::zip::Uncompress_obj::run(cpp::marshal::View<uint8_t> src, int
 	return output;
 }
 
-hx::zip::zlib::ZLibUncompress::ZLibUncompress(z_stream* inHandle) : handle(inHandle), flush(0)
+hx::zip::zlib::ZLibUncompress::ZLibUncompress(zng_stream* inHandle) : handle(inHandle), flush(0)
 {
 	_hx_set_finalizer(this, [](Dynamic obj) { reinterpret_cast<ZLibUncompress*>(obj.mPtr)->close(); });
 }
@@ -118,7 +118,7 @@ hx::zip::Result hx::zip::zlib::ZLibUncompress::execute(cpp::marshal::View<uint8_
 	handle->avail_out = dst.length;
 
 	EnterGCFreeZone();
-	auto error = inflate(handle, flush);
+	auto error = zng_inflate(handle, flush);
 	ExitGCFreeZone();
 
 	// Inflate allocates its window on first use
@@ -178,7 +178,7 @@ void hx::zip::zlib::ZLibUncompress::close()
 		return;
 	}
 
-	inflateEnd(handle);
+	zng_inflateEnd(handle);
 
 	auto memory = static_cast<ZLibMemory *>(handle->opaque);
 	memory->release();

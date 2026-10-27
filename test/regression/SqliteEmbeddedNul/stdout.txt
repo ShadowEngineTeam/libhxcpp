@@ -1,3 +1,0 @@
-row text preserved: true
-indexed text preserved: true
-SQL NULL preserved: true

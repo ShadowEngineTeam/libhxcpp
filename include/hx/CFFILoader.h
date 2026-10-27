@@ -68,9 +68,6 @@
 
 
 #endif
-#if defined(BLACKBERRY)
-using namespace std;
-#endif
 typedef void *(*ResolveProc)(const char *inName);
 static ResolveProc sResolveProc = 0;
 
