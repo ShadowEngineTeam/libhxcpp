@@ -80,6 +80,7 @@ typedef int SocketLen;
 #   include <netdb.h>
 #   include <fcntl.h>
 #   include <errno.h>
+#   include <stdlib.h>
 #   include <stdio.h>
 #   include <poll.h>
    typedef int SOCKET;
@@ -476,6 +477,36 @@ Array<unsigned char> _hx_std_socket_read( Dynamic o )
    return result;
 }
 
+#if !(defined(NEKO_WINDOWS) || defined(NEKO_MAC) || defined(BLACKBERRY) || defined(__EMSCRIPTEN__) || defined(NEKO_BSD))
+// Scratch space for gethostbyname_r and gethostbyaddr_r, which give ERANGE
+// when the answer does not fit. A fixed 1 KiB took that for a missing host,
+// so a host with many aliases or addresses was unknown. The lookup is tried
+// again with twice the space, up to 1 MiB. Called in a GC-free zone.
+struct ResolverScratch
+{
+   union { char local[1024]; void *align; };
+   char *data;
+   size_t size;
+
+   ResolverScratch() : data(local), size(sizeof(local)) { }
+   ~ResolverScratch() { if (data!=local) free(data); }
+
+   bool grow()
+   {
+      if (size >= 1024*1024)
+         return false;
+      char *bigger = (char *)malloc(size*2);
+      if (!bigger)
+         return false;
+      if (data!=local)
+         free(data);
+      data = bigger;
+      size *= 2;
+      return true;
+   }
+};
+#endif
+
 /**
    host_resolve : string -> 'int32
    <doc>Resolve the given host string into an IP address.</doc>
@@ -501,9 +532,11 @@ int _hx_std_host_resolve( String host )
       h = gethostbyname(host.utf8_str(&hostBuf));
 #   else
       struct hostent hbase;
-      char buf[1024];
+      ResolverScratch scratch;
       int errcode;
-      gethostbyname_r(host.utf8_str(&hostBuf),&hbase,buf,1024,&h,&errcode);
+      const char *name = host.utf8_str(&hostBuf);
+      while( gethostbyname_r(name,&hbase,scratch.data,scratch.size,&h,&errcode)==ERANGE && scratch.grow() )
+         h = 0;
 #   endif
       if( !h ) {
          hx::ExitGCFreeZone();
@@ -638,8 +671,9 @@ String _hx_std_host_reverse( int host )
    #else
    struct hostent htmp;
    int errcode;
-   char buf[1024];
-   gethostbyaddr_r((char *)&ip,4,AF_INET,&htmp,buf,1024,&h,&errcode);
+   ResolverScratch scratch;
+   while( gethostbyaddr_r((char *)&ip,4,AF_INET,&htmp,scratch.data,scratch.size,&h,&errcode)==ERANGE && scratch.grow() )
+      h = 0;
    #endif
    hx::ExitGCFreeZone();
    if( !h )
@@ -652,15 +686,19 @@ String _hx_std_host_reverse_ipv6( Array<unsigned char> host )
    if (!host.mPtr || host->length!=16)
       return String();
 
+   // Out of the array first: it may move once the zone is entered
+   unsigned char addr[16];
+   memcpy(addr, host->GetBase(), 16);
    struct hostent *h = 0;
    hx::EnterGCFreeZone();
    #if defined(NEKO_WINDOWS) || defined(NEKO_MAC) || defined(ANDROID) || defined(BLACKBERRY) || defined(__EMSCRIPTEN__) || defined(NEKO_BSD)
-   h = gethostbyaddr((char *)&host[0],16,AF_INET6);
+   h = gethostbyaddr((char *)addr,16,AF_INET6);
    #else
    struct hostent htmp;
    int errcode;
-   char buf[1024];
-   gethostbyaddr_r((char *)&host[0],16,AF_INET6,&htmp,buf,1024,&h,&errcode);
+   ResolverScratch scratch;
+   while( gethostbyaddr_r((char *)addr,16,AF_INET6,&htmp,scratch.data,scratch.size,&h,&errcode)==ERANGE && scratch.grow() )
+      h = 0;
    #endif
    hx::ExitGCFreeZone();
    if( !h )

@@ -1,0 +1,6 @@
+large resolver record control succeeds: true
+forward lookup retries a small resolver buffer: true
+reverse IPv4 lookup retries a small resolver buffer: true
+reverse IPv6 lookup retries a small resolver buffer: true
+a record that never fits stays unknown: true
+literal addresses and missing hosts retain behavior: true
