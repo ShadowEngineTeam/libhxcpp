@@ -43,6 +43,7 @@ libhxcpp 6.0.0 (unreleased)
 * Fixed cpp.NativeArray.reserve doing nothing on an empty Array<Dynamic>, which has no storage until its first element: the capacity is now kept and given to that storage, and capacity() reports it meanwhile. Filling a reserved 1,000,000-element array is 1.2x faster and peaks at 25 MB instead of 45 MB (libhxcpp #297)
 * indexOf and lastIndexOf on typed arrays and Strings take an Int start position without boxing it, which allocated for every start past 255: searches that start each call from an offset are 2.9x faster (libhxcpp #307)
 * Fixed String.split and lastIndexOf, and indexOf between a byte and a wide string, comparing a long needle again at every position where its start matched, as indexOf on two strings of one encoding already no longer did: they now finish with a search that stays linear in the text. Splitting 1 MB of "a" on a near-miss 8,192-character delimiter takes 1.3 ms instead of 208 ms, and lastIndexOf 0.5 ms instead of 208 ms (libhxcpp #280)
+* Std.parseInt and Std.parseFloat no longer convert a whole UTF-16 string to UTF-8 to read the number at its start: only the ASCII before its first other character is copied, so a line of non-ASCII text after a number no longer costs its length. Parsing numbers at the start of such lines is 4.5x faster (libhxcpp #284)
 
 libhxcpp 6.0.0-rc.1
 ------------------------------------------------------------

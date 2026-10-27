@@ -1094,6 +1094,46 @@ class Test extends utest.Test
       Assert.equals( 5, Std.parseInt(' \t\n5'));
    }
 
+   // parseInt and parseFloat read only the ASCII start of a UTF-16 string,
+   // so a non-ASCII suffix must not change what the ASCII part alone gives
+   function testParseWideSuffix()
+   {
+      log("Test number parsing with a non-ASCII suffix");
+      final inputs = [
+         "123", " 123", "\t\n-42", "+7", "0x1F", "-0x10", "0X7fffffff", "12.5", "-12.5e-3", "1e5", ".5", "-.5", "5.", "Infinity",
+         "-Infinity", "+Infinity", "NaN", "nan", "inf", "", " ", "-", "+", "x12", "2147483648", "-2147483649", "99999999999999999999",
+         "1e400", "0.1e-400", "007", "1_000", "12abc", "0x", "0xg", "  0x1A", "3.14159265358979323846", "1.7976931348623157e308"
+      ];
+      final suffixes = ["α", " Zürich", " ", "１２", "\u0000", "é123", "日本"];
+      for (input in inputs)
+      {
+         final int = Std.parseInt(input);
+         final float = Std.parseFloat(input);
+         for (suffix in suffixes)
+         {
+            Assert.equals(int, Std.parseInt(input + suffix), '"$input" with a suffix');
+            final wide = Std.parseFloat(input + suffix);
+            if (Math.isNaN(float))
+               Assert.isTrue(Math.isNaN(wide), '"$input" with a suffix');
+            else
+               Assert.equals(float, wide, '"$input" with a suffix');
+         }
+      }
+
+      final buffer = new StringBuf();
+      for (i in 0...4096)
+         buffer.add("α");
+      final suffix = buffer.toString();
+      Assert.equals(123, Std.parseInt("123 " + suffix));
+      Assert.equals(1.5, Std.parseFloat("1.5 " + suffix));
+      Assert.isNull(Std.parseInt(suffix + "123"));
+      Assert.isTrue(Math.isNaN(Std.parseFloat(suffix + "1.5")));
+      Assert.isNull(Std.parseInt(" " + "5"));
+      Assert.isTrue(Math.isNaN(Std.parseFloat("　" + "5")));
+      Assert.isNull(Std.parseInt("１２３"));
+      Assert.isTrue(Math.isNaN(Std.parseFloat("１.５")));
+   }
+
    public static function main()
    {
       switch Sys.args() {
