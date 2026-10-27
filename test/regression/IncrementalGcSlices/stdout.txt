@@ -1,0 +1,7 @@
+partial slices preserve the current allocation range: true
+publication after holder scan preserves descendants: true
+detached writer and reflective stores preserve edges: true
+collection can finish across separate marking slices: true
+explicit collection completes pending work: true
+fallback retraces objects left white by the partial cycle: true
+invalid scheduling requests leave the collector usable: true

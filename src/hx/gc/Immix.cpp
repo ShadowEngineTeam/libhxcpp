@@ -17,6 +17,10 @@
 #include <limits>
 #include <exception>
 
+#ifdef HXCPP_GC_INCREMENTAL
+#include <chrono>
+#endif
+
 #ifdef __EMSCRIPTEN__
    #include <emscripten/stack.h>
    #ifdef HXCPP_SINGLE_THREADED_APP
@@ -219,7 +223,7 @@ static size_t sgMaximumFreeSpace  = 1024*1024*1024;
 //  every collect so you can see where it goes wrong (usually requires HX_GC_FIXED_BLOCKS)
 //#define HX_WATCH
 
-#if defined(HXCPP_GC_VERIFY) && defined(HXCPP_GC_GENERATIONAL)
+#if defined(HXCPP_GC_VERIFY) && defined(HXCPP_GC_GENERATIONAL_RUNTIME)
 #define HX_GC_VERIFY_GENERATIONAL
 #endif
 
@@ -521,6 +525,9 @@ static void VisitLocalAlloc(LocalAllocator *inAlloc,hx::VisitContext *__inCtx);
 static void WaitForSafe(LocalAllocator *inAlloc);
 static void ReleaseFromSafe(LocalAllocator *inAlloc);
 static void ClearPooledAlloc(LocalAllocator *inAlloc);
+#ifdef HXCPP_GC_INCREMENTAL
+static void RestoreIncrementalAlloc(LocalAllocator *inAlloc);
+#endif
 static void CollectFromThisThread(bool inMajor,bool inForceCompact);
 // What a collection that a thread starts is, in one argument (see
 //  LocalAllocator::SetupStackAndCollectFlags)
@@ -874,7 +881,7 @@ struct BlockDataInfo
    unsigned char mZeroed;
    bool         mReclaimed;
    bool         mOwned;
-   #ifdef HXCPP_GC_GENERATIONAL
+   #ifdef HXCPP_GC_GENERATIONAL_RUNTIME
    bool         mHasSurvivor;
    #endif
    std::atomic_int mZeroLock;
@@ -947,7 +954,7 @@ struct BlockDataInfo
    void clearBlockMarks()
    {
       mPinned = false;
-      #ifdef HXCPP_GC_GENERATIONAL
+      #ifdef HXCPP_GC_GENERATIONAL_RUNTIME
       mHasSurvivor = false;
       #endif
    }
@@ -1049,7 +1056,7 @@ struct BlockDataInfo
 
    void countRows(BlockDataStats &outStats)
    {
-      #ifdef HXCPP_GC_GENERATIONAL
+      #ifdef HXCPP_GC_GENERATIONAL_RUNTIME
       // Only a minor collection counts rows, and it marks rows in a block only
       // for an object it marks there, which sets mHasSurvivor. Without one,
       // the row marks are the ones mUsedRows was worked out from, so it stands,
@@ -1761,6 +1768,9 @@ struct GlobalChunks
 
    int takeArrayJob(hx::Object **inPtr, int inLen)
    {
+      #ifdef HXCPP_GC_INCREMENTAL
+      if (gIncrementalActive.load(std::memory_order_relaxed)) return 0;
+      #endif
       if (sLazyThreads)
       {
          int n = (inLen/2) & ~15;
@@ -1970,7 +1980,7 @@ struct GlobalChunks
 
 GlobalChunks sGlobalChunks;
 
-#ifdef HXCPP_GC_GENERATIONAL
+#ifdef HXCPP_GC_GENERATIONAL_RUNTIME
 // A young value stored in an old array or map made the whole of it a
 // remembered referrer, so the next minor collection marked every element,
 // however few changed: one store in an old four-million-element array added
@@ -2072,6 +2082,15 @@ static void MarkYoungValues(bool inMark, hx::MarkContext *inCtx)
 }
 #endif
 
+#ifdef HXCPP_GC_INCREMENTAL
+static double IncrementalNow()
+{
+   return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+static bool IncrementalExpired();
+static void IncrementalScanned(Object *inObject);
+#endif
+
 class MarkContext
 {
     #ifdef HXCPP_DEBUG
@@ -2091,6 +2110,12 @@ public:
     enum { StackSize = 8192 };
 
     bool isGenerational;
+
+    #ifdef HXCPP_GC_INCREMENTAL_VERIFY
+    bool incrementalOracle = false;
+    std::unordered_map<void *,bool> oracleVisited;
+    std::vector<Object *> oracleQueue;
+    #endif
 
     #ifdef HX_GC_VERIFY_GENERATIONAL
     // The object whose members are being marked, so a nursery object that
@@ -2235,6 +2260,9 @@ public:
     {
        while(true)
        {
+          #ifdef HXCPP_GC_INCREMENTAL
+          if (IncrementalExpired()) { releaseIncrementalJobs(); return; }
+          #endif
           if (!marking || !marking->count)
           {
              #ifdef HX_MULTI_THREAD_MARKING
@@ -2261,6 +2289,9 @@ public:
 
           while(marking)
           {
+             #ifdef HXCPP_GC_INCREMENTAL
+             if (IncrementalExpired()) { releaseIncrementalJobs(); return; }
+             #endif
              hx::Object *obj = marking->pop();
              if (obj)
              {
@@ -2279,6 +2310,9 @@ public:
                 #endif
                 #ifdef HXCPP_DEBUG
                 mTraceCut = -1;
+                #endif
+                #ifdef HXCPP_GC_INCREMENTAL
+                IncrementalScanned(obj);
                 #endif
                 #ifdef HX_MULTI_THREAD_MARKING
                 // Load balance
@@ -2300,6 +2334,46 @@ public:
           }
        }
     }
+
+    #ifdef HXCPP_GC_INCREMENTAL
+    void releaseIncrementalJobs()
+    {
+       if (marking && marking->count)
+       {
+          MarkChunk *head = sGlobalChunks.processList.load();
+          do
+          {
+             marking->next = head;
+          } while (!sGlobalChunks.processList.compare_exchange_weak(head, marking));
+       }
+       else if (marking)
+          sGlobalChunks.release(marking);
+       marking = nullptr;
+       if (mThreadId >= 0)
+       {
+          std::lock_guard<std::mutex> lock(sThreadPoolLock);
+          if (sRunningThreads & (1 << mThreadId))
+             sGlobalChunks.completeThreadLocked(mThreadId);
+       }
+    }
+    bool hasWork() const { return (marking && marking->count) || sGlobalChunks.processList; }
+    void discardJobs()
+    {
+       if (marking)
+       {
+          marking->count = 0;
+          sGlobalChunks.free(marking);
+          marking = nullptr;
+       }
+       while (sGlobalChunks.processList)
+       {
+          MarkChunk *chunk = sGlobalChunks.processList;
+          sGlobalChunks.processList = chunk->next;
+          chunk->count = 0;
+          sGlobalChunks.free(chunk);
+       }
+    }
+#endif
 };
 
 
@@ -2370,8 +2444,34 @@ struct AutoMarkPush
 
 
 
+#ifdef HXCPP_GC_INCREMENTAL_VERIFY
+bool IncrementalOracleMark(void *inPointer, bool inObject, MarkContext *inCtx)
+{
+   if (!inCtx || !inCtx->incrementalOracle)
+      return false;
+   if (!inPointer)
+      return true;
+   unsigned int flags;
+   memcpy(&flags, static_cast<char *>(inPointer) - sizeof(flags), sizeof(flags));
+   if (flags & HX_GC_CONST_ALLOC_BIT)
+      return true;
+   auto result = inCtx->oracleVisited.emplace(inPointer, inObject);
+   // A backing allocation can also have been encountered through an object
+   // pointer. In that case its outgoing members still need the object walk.
+   if (inObject && (flags & IMMIX_ALLOC_IS_CONTAINER) && (result.second || !result.first->second))
+   {
+      result.first->second = true;
+      inCtx->oracleQueue.push_back(static_cast<Object *>(inPointer));
+   }
+   return true;
+}
+#endif
+
 void MarkAllocUnchecked(void *inPtr,hx::MarkContext *__inCtx)
 {
+   #ifdef HXCPP_GC_INCREMENTAL_VERIFY
+   if (IncrementalOracleMark(inPtr,false,__inCtx)) return;
+   #endif
    #ifdef PROFILE_COLLECT
    sAllocMarks++;
    #endif
@@ -2412,7 +2512,7 @@ void MarkAllocUnchecked(void *inPtr,hx::MarkContext *__inCtx)
          while(_hx_atomic_compare_exchange((volatile int *)pos, val,val|gImmixStartFlag[start&127]) != val)
             val = *pos;
 
-         #ifdef HXCPP_GC_GENERATIONAL
+         #ifdef HXCPP_GC_GENERATIONAL_RUNTIME
          info->mHasSurvivor = true;
          #endif
       }
@@ -2486,6 +2586,9 @@ static void CensusCount(hx::Object *inPtr, unsigned int inFlags)
 
 void MarkObjectAllocUnchecked(hx::Object *inPtr,hx::MarkContext *__inCtx)
 {
+   #ifdef HXCPP_GC_INCREMENTAL_VERIFY
+   if (IncrementalOracleMark(inPtr,true,__inCtx)) return;
+   #endif
    size_t ptr_i = ((size_t)inPtr)-sizeof(int);
    unsigned int flags =  *((unsigned int *)ptr_i);
    #ifdef HXCPP_GC_NURSERY
@@ -2520,7 +2623,7 @@ void MarkObjectAllocUnchecked(hx::Object *inPtr,hx::MarkContext *__inCtx)
          unsigned int val = *pos;
          while(_hx_atomic_compare_exchange( (volatile int *)pos, val, val|gImmixStartFlag[start&127]) != val)
             val = *pos;
-         #ifdef HXCPP_GC_GENERATIONAL
+         #ifdef HXCPP_GC_GENERATIONAL_RUNTIME
          info->mHasSurvivor = true;
          #endif
       }
@@ -3503,6 +3606,9 @@ void RegisterWeakHash(HashBase<Dynamic> *inHash)
 
 void InternalEnableGC(bool inEnable)
 {
+   #ifdef HXCPP_GC_INCREMENTAL
+   if (!inEnable && gIncrementalActive.load()) InternalCollectBytes(true,false);
+   #endif
    //printf("Enable %d\n", sgInternalEnable);
    sgInternalEnable = inEnable;
 }
@@ -3772,6 +3878,11 @@ static int sMaxZeroQueueSize = 32;
 #define BLOCK_OFSIZE_COUNT 12
 
 
+#ifdef HXCPP_GC_INCREMENTAL
+#include "Incremental.h"
+static void IncrementalAutomatic(hx::ImmixAllocator *inAlloc, bool inPressure);
+#endif
+
 class GlobalAllocator
 {
    enum { LOCAL_POOL_SIZE = 2 };
@@ -3814,7 +3925,7 @@ public:
       // Until we add ourselves, the collector will not wait
       //  on us - ie, we are assumed ot be in a GC free zone.
       std::lock_guard<std::recursive_mutex> lock(*gThreadStateChangeLock);
-      #ifdef HXCPP_GC_GENERATIONAL
+      #ifdef HXCPP_GC_GENERATIONAL_RUNTIME
       // Under the lock, so a collection cannot switch modes between the
       //  check and the push
       ((hx::StackContext *)inAlloc)->mOldReferrers =
@@ -3898,6 +4009,10 @@ public:
       #endif
          return;
 
+      #ifdef HXCPP_GC_INCREMENTAL
+      // Pending marking jobs may still refer to replaced backing storage.
+      if (hx::gIncrementalActive.load(std::memory_order_relaxed)) return;
+      #endif
 #ifdef HXCPP_TELEMETRY
        __hxt_gc_free_large(inLarge);
 #endif
@@ -4060,6 +4175,12 @@ public:
       if (hx::gPauseForCollect)
          __hxcpp_gc_safe_point();
 
+      #ifdef HXCPP_GC_INCREMENTAL
+      if (sgInternalEnable && (hx::gIncrementalActive.load(std::memory_order_relaxed) ||
+          inSize+mIncrementalAllocated.load(std::memory_order_relaxed) > mIncrementalStartAt.load(std::memory_order_relaxed)))
+         IncrementalAutomatic(HX_CTX_GET,inSize+mIncrementalAllocated.load(std::memory_order_relaxed) > mIncrementalStartAt.load(std::memory_order_relaxed)*3/2);
+      #endif
+
       //Should we force a collect ? - the 'large' data are not considered when allocating objects
       // from the blocks, and can 'pile up' between smalll object allocations
       if ((inSize+mLargeAllocated > mLargeAllocForceRefresh) && sgInternalEnable)
@@ -4164,6 +4285,10 @@ public:
       __hxt_gc_alloc(result + 2, inSize);
 #endif
 
+      #ifdef HXCPP_GC_INCREMENTAL
+      mIncrementalAllocated.fetch_add(inSize,std::memory_order_relaxed);
+      if (hx::gIncrementalActive.load(std::memory_order_relaxed)) hx::IncrementalAllocated(result+2,inContainer,HX_CTX_GET);
+      #endif
       return result+2;
    }
 
@@ -4309,6 +4434,10 @@ public:
                    else
                    {
                       info->mOwned = true;
+
+                      #ifdef HXCPP_GC_INCREMENTAL
+                      mIncrementalAllocated.fetch_add(info->GetFreeData(),std::memory_order_relaxed);
+                      #endif
 
                       // Increase the mNextFreeBlockOfSize
                       int idx = nextFreeBlock;
@@ -4477,7 +4606,7 @@ public:
 
    bool allowMoreBlocks()
    {
-      #ifdef HXCPP_GC_GENERATIONAL
+      #ifdef HXCPP_GC_GENERATIONAL_RUNTIME
       return sGcMode==gcmFull;
       #else
       return true;
@@ -4492,6 +4621,11 @@ public:
 
    BlockDataInfo *GetFreeBlock(size_t inRequiredBytes, hx::ImmixAllocator *inAlloc)
    {
+      #ifdef HXCPP_GC_INCREMENTAL
+      if (sgInternalEnable && (hx::gIncrementalActive.load(std::memory_order_relaxed) ||
+          mIncrementalAllocated.load(std::memory_order_relaxed) > mIncrementalStartAt.load(std::memory_order_relaxed)))
+         IncrementalAutomatic(inAlloc,mIncrementalAllocated.load(std::memory_order_relaxed) > mIncrementalStartAt.load(std::memory_order_relaxed)*3/2);
+      #endif
       while(true)
       {
          if (hx::gPauseForCollect)
@@ -5065,7 +5199,7 @@ public:
          VisitLocalAlloc(mLocalAllocs[i], inCtx);
 
       hx::VisitClassStatics(inCtx);
-      #if defined(HXCPP_SCRIPTABLE) && defined(HXCPP_GC_GENERATIONAL)
+      #if defined(HXCPP_SCRIPTABLE) && defined(HXCPP_GC_GENERATIONAL_RUNTIME)
       hx::scriptVisitModules(inCtx);
       #endif
 
@@ -5470,12 +5604,31 @@ public:
    double tMarkLocal;
    double tMarkLocalEnd;
    double tMarked;
-   void MarkAll(bool inGenerational)
+   #ifdef HXCPP_GC_INCREMENTAL
+   static void IncrementalMarkWorkers(hx::MarkContext *inCtx, void *inData)
+   {
+      if (!inCtx->hasWork())
+         return;
+      GlobalAllocator *owner = static_cast<GlobalAllocator *>(inData);
+#ifdef HX_MULTI_THREAD_MARKING
+      if (MAX_GC_THREADS > 1)
+      {
+         inCtx->releaseJobs();
+         owner->StartThreadJobs(tpjMark, MAX_GC_THREADS, true);
+      }
+      else
+#endif
+         inCtx->processMarkStack();
+   }
+#endif
+   bool MarkAll(bool inGenerational, bool inResume=false)
    {
       // The old allocations' index stays: only a change to them drops it
       mLargeLookups = 0;
       mYoungLargeIndexReady = false;
       mYoungLargeLookups = 0;
+
+      if (!inResume) {
 
       if (!inGenerational)
       {
@@ -5530,6 +5683,7 @@ public:
       #endif
 
       MEM_STAMP(tMarkInit);
+      }
 
       #ifdef PROFILE_THREAD_USAGE
       for(int i=-1;i<MAX_GC_THREADS;i++)
@@ -5556,7 +5710,7 @@ public:
       #endif
 
       hx::MarkClassStatics(&mMarker);
-      #if defined(HXCPP_SCRIPTABLE) && defined(HXCPP_GC_GENERATIONAL)
+      #if defined(HXCPP_SCRIPTABLE) && defined(HXCPP_GC_GENERATIONAL_RUNTIME)
       hx::scriptMarkModules(&mMarker, inGenerational);
       #endif
 
@@ -5592,7 +5746,7 @@ public:
       #endif
 
 
-      #ifdef HXCPP_GC_GENERATIONAL
+      #ifdef HXCPP_GC_GENERATIONAL_RUNTIME
       {
       hx::AutoMarkPush info(&mMarker,"Young array values","young");
       // The first mark of a collection takes the log: a full one has no use
@@ -5624,6 +5778,27 @@ public:
 
       MEM_STAMP(tMarkLocalEnd);
 
+      #ifdef HXCPP_GC_INCREMENTAL
+      if (hx::IncrementalData().tracing) {
+         if (!hx::IncrementalDrain(&mMarker,IncrementalMarkWorkers,this)) return false;
+         if (hx::IncrementalData().deadline > 0) {
+            for (int i=0;i<mLocalAllocs.size();i++)
+               if (((hx::StackContext *)mLocalAllocs[i])->mIncrementalMutations) return false;
+            // Avoid adding weak processing and reclamation to a full marking
+            // slice. Roots and mutation logs are checked again at the next
+            // stop before the cycle is allowed to finish.
+            if (!hx::IncrementalData().finishPending)
+            {
+               hx::IncrementalData().finishPending = true;
+               return false;
+            }
+         }
+         hx::IncrementalData().tracing = false;
+         hx::gIncrementalAllocationsWhite = false;
+      }
+      else
+      #endif
+      {
       #ifdef HX_MULTI_THREAD_MARKING
       // Gc.trace counts objects as it marks them, so like a census it
       //  marks on one thread, where nothing is marked twice
@@ -5645,6 +5820,7 @@ public:
       else
       #endif
          mMarker.processMarkStack();
+      }
 
       if (sgCensusDeferred)
          MarkCensusDeferred();
@@ -5656,6 +5832,16 @@ public:
 
 
       MEM_STAMP(tMarked);
+
+      #ifdef HXCPP_GC_INCREMENTAL_VERIFY
+      #ifdef HXCPP_GC_INCREMENTAL_TEST
+      if (hx::IncrementalData().omit) {
+         reinterpret_cast<unsigned char *>(hx::IncrementalData().omit)[HX_ENDIAN_MARK_ID_BYTE] = hx::gPrevByteMarkID;
+         hx::IncrementalData().omit = nullptr;
+      }
+      #endif
+      if (hx::gIncrementalActive.load(std::memory_order_relaxed)) VerifyIncremental();
+      #endif
 
       // An object that only a weak hash value keeps is not a zombie while its key lives,
       // and a zombie can keep more keys alive
@@ -5691,10 +5877,60 @@ public:
          GCLOG(" ******** is marked  : %d\n", (reinterpret_cast<unsigned char*>(watch)[HX_ENDIAN_MARK_ID_BYTE] == gByteMarkID));
       }
       #endif
+      return true;
    }
 
 
    
+   #ifdef HXCPP_GC_INCREMENTAL_VERIFY
+   void VerifyIncremental()
+   {
+      hx::MarkContext oracle;
+      oracle.incrementalOracle = true;
+      hx::MarkClassStatics(&oracle);
+      {
+         std::lock_guard<std::mutex> lock(*hx::sGCRootLock);
+         for (hx::Object **slot : *hx::sgRootSet)
+            if (*slot)
+               hx::MarkObjectAlloc(*slot, &oracle);
+         if (hx::sgOffsetRootSet)
+            for (const auto &entry : *hx::sgOffsetRootSet)
+            {
+               char *ptr = *static_cast<char **>(entry.first);
+               if (ptr)
+                  hx::MarkObjectAlloc(reinterpret_cast<hx::Object *>(ptr - entry.second), &oracle);
+            }
+      }
+      for (int i = 0; i < hx::sZombieList.size(); i++)
+         hx::MarkObjectAlloc(hx::sZombieList[i], &oracle);
+      for (int i = 0; i < mLocalAllocs.size(); i++)
+         MarkLocalAlloc(mLocalAllocs[i], &oracle);
+      while (!oracle.oracleQueue.empty())
+      {
+         hx::Object *object = oracle.oracleQueue.back();
+         oracle.oracleQueue.pop_back();
+         object->__Mark(&oracle);
+      }
+      for (const auto &entry : oracle.oracleVisited)
+      {
+         uintptr_t header = reinterpret_cast<uintptr_t>(entry.first) - sizeof(unsigned int);
+         unsigned int flags = *reinterpret_cast<unsigned int *>(header);
+         bool valid = (flags & IMMIX_ALLOC_MARK_ID) == hx::gMarkID;
+         unsigned int rows = flags & IMMIX_ALLOC_ROW_COUNT;
+         unsigned char *row = reinterpret_cast<unsigned char *>(header & IMMIX_BLOCK_BASE_MASK) +
+                              ((header & IMMIX_BLOCK_OFFSET_MASK) >> IMMIX_LINE_BITS);
+         for (unsigned int r = 0; r < rows; r++)
+            valid = valid && row[r];
+         if (!valid)
+         {
+            fprintf(stderr, "Incremental GC omitted reachable %s %p flags=%08x epoch=%08x rows=%u first=%u vtable=%p\n", entry.second ? "object" : "allocation", entry.first, flags, hx::gMarkID, rows, rows ? *row : 0, entry.second ? *static_cast<void **>(entry.first) : nullptr);
+            fflush(stderr);
+            abort();
+         }
+      }
+   }
+#endif
+
    // The stack values a census put aside: what a reference reached is marked, and
    // counted, by now, and the rest is marked as the stack scan would have
    void MarkCensusDeferred()
@@ -5797,6 +6033,9 @@ public:
 
    void Collect(bool inMajor, bool inForceCompact, bool inLocked,bool inFreeIsFragged)
    {
+      #ifdef HXCPP_GC_INCREMENTAL
+      double incrementalStarted = hx::IncrementalNow();
+      #endif
       PROFILE_COLLECT_SUMMARY_START;
 
       #ifndef HXCPP_SINGLE_THREADED_APP
@@ -5843,6 +6082,38 @@ public:
 
       sgIsCollecting = true;
 
+      #ifdef HXCPP_GC_INCREMENTAL
+      struct ExitCollection
+      {
+         GlobalAllocator *owner;
+         LocalAllocator *current;
+         bool locked;
+         double start;
+         bool completed = false;
+         ExitCollection(GlobalAllocator *inOwner, LocalAllocator *inCurrent, bool inLocked, double inStart)
+             : owner(inOwner), current(inCurrent), locked(inLocked), start(inStart) {}
+         ~ExitCollection()
+         {
+            if (!completed)
+            {
+               if (hx::gIncrementalActive.load())
+               {
+                  std::lock_guard<std::mutex> lock(hx::IncrementalData().statsLock);
+                  hx::IncrementalData().fallbacks++;
+               }
+               owner->CancelIncremental();
+               for (int i = 0; i < owner->mLocalAllocs.size(); i++)
+               {
+                  ((hx::StackContext *)owner->mLocalAllocs[i])->mIncrementalEntries.clear();
+                  ((hx::StackContext *)owner->mLocalAllocs[i])->mIncrementalRead = 0;
+               }
+            }
+            owner->ResumeIncremental(current, locked);
+            hx::IncrementalData().pause(start, hx::sIncrementalRequestMs > 0);
+         }
+      } incrementalExit{this, this_local, inLocked, incrementalStarted};
+#endif
+
       StopThreadJobs(true);
       #ifdef HXCPP_DEBUG
       sgAllocsSinceLastSpam = 0;
@@ -5879,7 +6150,7 @@ public:
       // Now all threads have mTopOfStack & mBottomOfStack set.
       bool generational = false; 
 
-      #ifdef HXCPP_GC_GENERATIONAL
+      #ifdef HXCPP_GC_GENERATIONAL_RUNTIME
       if (sGcMode==gcmGenerational)
       {
          for(int i=0;i<mLocalAllocs.size();i++)
@@ -5909,7 +6180,94 @@ public:
 
       STAMP(t1)
 
+      #ifdef HXCPP_GC_INCREMENTAL
+      {
+         hx::IncrementalState &state = hx::IncrementalData();
+         bool active = hx::gIncrementalActive.load(std::memory_order_relaxed);
+         bool requested = hx::sIncrementalRequestMs > 0 && !sgCensus;
+         if (active && !requested)
+         {
+            std::lock_guard<std::mutex> lock(state.statsLock);
+            state.forcedFinishes++;
+         }
+         if (active && sgCensus)
+            state.failed.store(true, std::memory_order_relaxed);
+         if (active && hx::sIncrementalRequestMs == 0)
+         {
+            for (int i = 0; i < mLocalAllocs.size(); i++)
+               if (((hx::StackContext *)mLocalAllocs[i])->mIncrementalMutations)
+                  state.failed.store(true, std::memory_order_relaxed);
+         }
+         if (active && state.failed.exchange(false, std::memory_order_relaxed))
+         {
+            CancelIncremental();
+            {
+               std::lock_guard<std::mutex> lock(state.statsLock);
+               state.fallbacks++;
+            }
+            active = requested = false;
+         }
+         if (active || requested)
+         {
+            if (!active)
+            {
+               state.clearWork();
+               state.slices = 0;
+               // Materialize the previous completed collection's free ranges
+               // before replacing its row marks with a partial new mark.
+               for (int i = 0; i < mAllBlocks.size(); i++)
+                  if (!mAllBlocks[i]->mReclaimed)
+                     mAllBlocks[i]->reclaim<false>(nullptr);
+               state.failed.store(false, std::memory_order_relaxed);
+               hx::gIncrementalActive.store(true, std::memory_order_relaxed);
+            }
+            state.tracing = true;
+            state.work = 0;
+            hx::gIncrementalAllocationsWhite = true;
+            state.deadline = requested ? incrementalStarted + hx::sIncrementalRequestMs / 1000.0 : 0;
+            state.dirty.clear();
+            state.slices++;
+            mMarker.init();
+            state.logsPending = !hx::IncrementalEntries(state.detached, state.detachedRead, &mMarker);
+            for (int i = 0; i < mLocalAllocs.size(); i++)
+            {
+               hx::StackContext *ctx = (hx::StackContext *)mLocalAllocs[i];
+               if (!hx::IncrementalEntries(ctx->mIncrementalEntries, ctx->mIncrementalRead, &mMarker))
+                  state.logsPending = true;
+            }
+            if (!MarkAll(false, active))
+            {
+               incrementalExit.completed = true;
+               PROFILE_COLLECT_SUMMARY_END;
+               return;
+            }
+            hx::gIncrementalActive.store(false, std::memory_order_relaxed);
+            for (int i = 0; i < mLocalAllocs.size(); i++)
+            {
+               ClearPooledAlloc(mLocalAllocs[i]);
+               ((hx::StackContext *)mLocalAllocs[i])->mIncrementalEntries.clear();
+               ((hx::StackContext *)mLocalAllocs[i])->mIncrementalRead = 0;
+            }
+            {
+               std::lock_guard<std::mutex> lock(state.statsLock);
+               state.cycles++;
+               state.lastSlices = state.slices;
+            }
+            state.clearWork();
+         }
+         else
+         {
+            for (int i = 0; i < mLocalAllocs.size(); i++)
+            {
+               ((hx::StackContext *)mLocalAllocs[i])->mIncrementalEntries.clear();
+               ((hx::StackContext *)mLocalAllocs[i])->mIncrementalRead = 0;
+            }
+            MarkAll(false);
+         }
+      }
+#else
       MarkAll(generational);
+      #endif
 
       #ifdef HX_GC_VERIFY_GENERATIONAL
       {
@@ -6319,7 +6677,15 @@ public:
 
       mTotalAfterLastCollect = MemUsage();
 
-      #ifdef HXCPP_GC_GENERATIONAL
+      #ifdef HXCPP_GC_INCREMENTAL
+      // A stable live heap must not trigger another major mark immediately.
+      // Spend half of the normal allocation reserve before starting, then
+      // shorten the scheduling interval once three quarters have been spent.
+      mIncrementalStartAt.store(std::max(size_t{256}*1024,targetFree/2),std::memory_order_relaxed);
+      mIncrementalAllocated.store(0,std::memory_order_relaxed);
+      #endif
+
+      #ifdef HXCPP_GC_GENERATIONAL_RUNTIME
       if (generational)
       {
          // TODO - include large too?
@@ -6415,7 +6781,7 @@ public:
       sSpinCount = 0;
       #endif
 
-      #ifdef HXCPP_GC_GENERATIONAL
+      #ifdef HXCPP_GC_GENERATIONAL_RUNTIME
       if (sGcMode==gcmGenerational)
          for(int i=0;i<mLocalAllocs.size();i++)
          {
@@ -6442,10 +6808,16 @@ public:
             ClearPooledAlloc(l);
       }
 
-      #ifdef HXCPP_TELEMETRY
+      #if defined(HXCPP_TELEMETRY) && !defined(HXCPP_GC_INCREMENTAL)
       __hxt_gc_end();
       #endif
 
+      #ifdef HXCPP_GC_INCREMENTAL
+      // incrementalExit resumes the other threads as Collect returns
+      if (hx::sFinalizerException)
+         hx::sFinalizerExceptionOwner.store((void *)hx::tlsStackContext, std::memory_order_release);
+      incrementalExit.completed = true;
+      #else
       sgIsCollecting = false;
 
       if (hx::sFinalizerException)
@@ -6469,15 +6841,68 @@ public:
         hx::gMainThreadContext->byteMarkId = hx::gByteMarkID;
         #endif
       #endif
+      #endif // HXCPP_GC_INCREMENTAL
 
       releaseDropped(dropped, inForceCompact);
-
 
       PROFILE_COLLECT_SUMMARY_END;
 
       if (!inLocked)
          hx::ThrowFinalizerException();
    }
+
+   #ifdef HXCPP_GC_INCREMENTAL
+   void CancelIncremental()
+   {
+      if (hx::gIncrementalActive.load(std::memory_order_relaxed))
+      {
+         // A partial mark contains both epochs. Advancing again would make
+         // its unvisited objects look black to the alternating-bit fast
+         // path. Undo this epoch before starting an independent full mark.
+         for (int b = 0; b < mAllBlocks.size(); b++)
+         {
+            BlockDataInfo *block = mAllBlocks[b];
+            for (int r = IMMIX_HEADER_LINES; r < IMMIX_LINES; r++)
+            {
+               unsigned int starts = block->allocStart[r];
+               unsigned int *headers = reinterpret_cast<unsigned int *>(block->mPtr->row(r));
+               for (int bit = 0; starts; bit++, starts >>= 1)
+                  if ((starts & 1) && (headers[bit] & IMMIX_ALLOC_MARK_ID) == hx::gMarkID)
+                     reinterpret_cast<unsigned char *>(headers + bit + 1)[HX_ENDIAN_MARK_ID_BYTE] = hx::gPrevByteMarkID;
+            }
+         }
+         for (int i = 0; i < mLargeList.size(); i++)
+            if ((mLargeList[i][1] & IMMIX_ALLOC_MARK_ID) == hx::gMarkID)
+               reinterpret_cast<unsigned char *>(mLargeList[i] + 2)[HX_ENDIAN_MARK_ID_BYTE] = hx::gPrevByteMarkID;
+         hx::gByteMarkID = hx::gPrevByteMarkID;
+         hx::gMarkID = hx::gByteMarkID << 24;
+         hx::gMarkIDWithContainer = hx::gMarkID | IMMIX_ALLOC_IS_CONTAINER;
+         hx::gPrevMarkIdMask = (hx::gMarkID & 0x30000000) | HX_GC_CONST_ALLOC_BIT;
+         hx::gPrevByteMarkID = ((hx::gByteMarkID - 1) & 0x0f) | ((hx::gByteMarkID & 1) ? 0x10 : 0x20);
+         hx::gRememberedByteMarkID = hx::gByteMarkID | HX_GC_REMEMBERED;
+      }
+      hx::IncrementalDiscard(&mMarker);
+   }
+
+   void ResumeIncremental(LocalAllocator *inCurrent, bool inLocked)
+   {
+      if (hx::gIncrementalActive.load(std::memory_order_relaxed))
+         for (int i = 0; i < mLocalAllocs.size(); i++)
+            RestoreIncrementalAlloc(mLocalAllocs[i]);
+#ifdef HXCPP_TELEMETRY
+      __hxt_gc_end();
+#endif
+      sgIsCollecting = false;
+      hx::gPauseForCollect = 0;
+#ifndef HXCPP_SINGLE_THREADED_APP
+      for (int i = 0; i < mLocalAllocs.size(); i++)
+         if (mLocalAllocs[i] != inCurrent)
+            ReleaseFromSafe(mLocalAllocs[i]);
+      if (!inLocked)
+         gThreadStateChangeLock->unlock();
+#endif
+   }
+#endif
 
    void reclaimBlocks(bool full, BlockDataStats &outStats)
    {
@@ -6510,7 +6935,7 @@ public:
       // with few that do the work is less than waking the marking threads for
       // it: that took most of an otherwise idle minor collection (#329)
       bool threaded = MAX_GC_THREADS>1;
-      #ifdef HXCPP_GC_GENERATIONAL
+      #ifdef HXCPP_GC_GENERATIONAL_RUNTIME
       if (threaded)
       {
          int changed = 0;
@@ -6787,6 +7212,11 @@ public:
 
    hx::MarkContext mMarker;
 
+   #ifdef HXCPP_GC_INCREMENTAL
+   std::atomic_size_t mIncrementalStartAt{hx::sgMinimumWorkingMemory/2};
+   std::atomic_size_t mIncrementalAllocated{0};
+   #endif
+
    volatile int mNextFreeBlockOfSize[BLOCK_OFSIZE_COUNT];
    std::atomic_size_t mThreadJobId;
 
@@ -6865,7 +7295,7 @@ void MarkConservative(int *inBottom, int *inTop,hx::MarkContext *__inCtx)
    bool isWatch{};
    #endif
 
-   #ifdef HXCPP_GC_GENERATIONAL
+   #ifdef HXCPP_GC_GENERATIONAL_RUNTIME
    // If this is a generational mark, then the byte marker has not been increased.
    // Previous mark Ids are therfore from more than 1 collection ago
    bool allowPrevious{ !__inCtx->isGenerational };
@@ -6913,6 +7343,12 @@ void MarkConservative(int *inBottom, int *inTop,hx::MarkContext *__inCtx)
             {
                // A pointer into it, as into an object in a block, marks it
                potentialObject = largeBase;
+               #ifdef HXCPP_GC_INCREMENTAL
+               unsigned int flags = reinterpret_cast<unsigned int *>(potentialObject)[-1];
+               if (flags & IMMIX_ALLOC_IS_CONTAINER)
+                  hx::MarkObjectAlloc(reinterpret_cast<hx::Object *>(potentialObject),__inCtx);
+               else hx::MarkAlloc(reinterpret_cast<void *>(potentialObject),__inCtx);
+               #else
                unsigned char& mark{ reinterpret_cast<unsigned char*>(potentialObject)[HX_ENDIAN_MARK_ID_BYTE] };
                // A large object's members are marked as from any other root:
                //  setting its mark kept the object but none of what it held
@@ -6925,6 +7361,7 @@ void MarkConservative(int *inBottom, int *inTop,hx::MarkContext *__inCtx)
                   else
                      mark = static_cast<unsigned char>(gByteMarkID);
                }
+               #endif
             }
             else
             {
@@ -6976,6 +7413,12 @@ void MarkConservative(int *inBottom, int *inTop,hx::MarkContext *__inCtx)
                }
                else if (t==allocMarked)
                {
+                  #ifdef HXCPP_GC_INCREMENTAL_VERIFY
+                  if (__inCtx->incrementalOracle) {
+                     unsigned int flags = reinterpret_cast<unsigned int *>(potentialObject)[-1];
+                     hx::IncrementalOracleMark(reinterpret_cast<void *>(potentialObject),(flags & IMMIX_ALLOC_IS_CONTAINER)!=0,__inCtx);
+                  }
+                  #endif
                   #ifdef HX_WATCH
                   if (isWatch)
                      GCLOG(" pin alloced %p (%p)\n", reinterpret_cast<void*>(potentialObject), ptr);
@@ -7072,6 +7515,8 @@ public:
    {
       Reset();
 
+      // The fields remain in the barrier-compatible layout for incremental
+      // builds, even though that mode never creates generational logs.
       #ifdef HXCPP_GC_GENERATIONAL
       mOldReferrers = 0;
       mYoungValues = 0;
@@ -7094,7 +7539,7 @@ public:
       mID = GetCurrentThreadId();
       #endif
 
-      #ifdef HXCPP_GC_GENERATIONAL
+      #ifdef HXCPP_GC_GENERATIONAL_RUNTIME
       if (mOldReferrers)
       {
          GCLOG("Uncleaned referrers\n");
@@ -7126,11 +7571,15 @@ public:
 
       std::lock_guard<std::recursive_mutex> lock(*gThreadStateChangeLock);
 
+      #ifdef HXCPP_GC_INCREMENTAL
+      hx::IncrementalTransfer(this);
+      #endif
+
       #ifdef HX_WINDOWS
       mID = 0;
       #endif
 
-      #ifdef HXCPP_GC_GENERATIONAL
+      #ifdef HXCPP_GC_GENERATIONAL_RUNTIME
       if (mOldReferrers)
       {
          if ( mOldReferrers->count )
@@ -7172,6 +7621,21 @@ public:
       #endif
       mMoreHoles = false;
    }
+
+   #ifdef HXCPP_GC_INCREMENTAL
+   void RestoreIncrementalRange()
+   {
+      // WaitForSafe invalidates these bounds to park a running allocator.
+      // A partial mark did not reclaim anything, so its owned hole is still
+      // usable. Dropping it on every slice wastes reserve and forces more GC.
+      if (allocBase && mCurrentHole && mCurrentHole <= mCurrentHoles)
+      {
+         const HoleRange &range = mCurrentRange[mCurrentHole - 1];
+         spaceEnd = range.start + range.length;
+         mMoreHoles = mCurrentHole < mCurrentHoles;
+      }
+   }
+   #endif
 
    // The main of haxe calls SetTopOfStack(top,false)
    //   via hxcpp_set_top_of_stack or HX_TOP_OF_STACK in HxcppMain.cpp/Macros.h
@@ -7648,6 +8112,11 @@ public:
                __hxt_gc_alloc(buffer, inSize);
                #endif
 
+               #ifdef HXCPP_GC_INCREMENTAL
+               if (hx::gIncrementalActive.load(std::memory_order_relaxed))
+                  hx::IncrementalAllocated(buffer,(inObjectFlags & IMMIX_ALLOC_IS_CONTAINER)!=0,this);
+               #endif
+
                return buffer;
             }
             // Read once: the collecting thread zeroes spaceEnd in WaitForSafe
@@ -7737,6 +8206,9 @@ public:
       #ifndef HXCPP_SINGLE_THREADED_APP
       if (!mTopOfStack)
       {
+         #ifdef HXCPP_GC_INCREMENTAL
+         if (hx::gIncrementalActive.load(std::memory_order_relaxed)) return;
+         #endif
          Reset();
          return;
       }
@@ -7787,6 +8259,9 @@ public:
             MarkMember( *(hx::Object **)&stringSet, __inCtx);
       #endif
 
+      #ifdef HXCPP_GC_INCREMENTAL
+      if (!hx::gIncrementalActive.load(std::memory_order_relaxed))
+      #endif
       Reset();
 
    }
@@ -7809,6 +8284,8 @@ inline LocalAllocator *GetLocalAlloc(bool inAllowEmpty=false)
    #endif
 }
 
+#include "IncrementalApi.h"
+
 #ifndef HXCPP_SINGLE_THREADED_APP
 void WaitForSafe(LocalAllocator *inAlloc)
 {
@@ -7830,6 +8307,13 @@ void ClearPooledAlloc(LocalAllocator *inAlloc)
 {
    inAlloc->Reset();
 }
+
+#ifdef HXCPP_GC_INCREMENTAL
+void RestoreIncrementalAlloc(LocalAllocator *inAlloc)
+{
+   inAlloc->RestoreIncrementalRange();
+}
+#endif
 
 void GlobalAllocator::ForEachStackContext(void (*inFunc)(hx::StackContext *, void *), void *inData)
 {
@@ -8083,7 +8567,13 @@ size_t InternalCollectBytes(bool inMajor,bool inCompact)
    if (!sgAllocInit)
        return 0;
 
-   GetLocalAlloc()->SetupStackAndCollectFlags( (inMajor ? collectMajor : 0) | (inCompact ? collectCompact : 0) );
+   do {
+      GetLocalAlloc()->SetupStackAndCollectFlags( (inMajor ? collectMajor : 0) | (inCompact ? collectCompact : 0) );
+      #ifdef HXCPP_GC_INCREMENTAL
+      if (gIncrementalActive.load()) continue;
+      #endif
+      break;
+   } while (true);
 
    return sGlobalAlloc->MemUsage();
 }
@@ -8224,7 +8714,7 @@ void *InternalRealloc(size_t inFromSize, void *inData, size_t inSize, bool inExp
    return new_data;
 }
 
-#ifdef HXCPP_GC_GENERATIONAL
+#ifdef HXCPP_GC_GENERATIONAL_RUNTIME
 void NewMarkedObject(hx::Object *inPtr)
 {
    HX_OBJ_WB_PESSIMISTIC_GET(inPtr);

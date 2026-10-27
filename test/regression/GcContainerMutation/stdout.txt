@@ -1,0 +1,3 @@
+resized and overlapping pointer arrays preserve payloads: true
+rehash and replacement preserve managed map values: true
+removed entries stay absent after collection: true

@@ -6,6 +6,7 @@ import ArrayBenchmarks;
 import CffiBenchmarks;
 import EnumBenchmarks;
 import GcBenchmarks;
+import GcFrameBenchmarks;
 import IoBenchmarks;
 import LargeBenchmarks;
 import MapBenchmarks;
@@ -35,7 +36,7 @@ class Main {
 		return CppiaBenchmarks.all();
 		#else
 		return [
-			new AllocSmall(), new AllocStrings(), new AllocArrays(), new GcPauses(), new MapInt(), new MapString(), new MapObject(),
+			new AllocSmall(), new AllocStrings(), new AllocArrays(), new GcPauses(), new GcFrames(), new MapInt(), new MapString(), new MapObject(),
 			new StringBuild(), new StringIndex(), new StringSubstr(), new StringSplit(), new StringCase(), new SortInt(), new SortString(),
 			new SortObject(), new DequePush(), new DequeBurst(), new CffiCallVector(), new CffiStringView(), new EnumFormat(),
 			new MapInt64(), new MapInt64Values(), new ArrayPushDynamic(), new ArrayReserveDynamic(), new ArrayPop(),
@@ -135,6 +136,9 @@ class Main {
 			peakRss: Native.peakRss(),
 			heapReserved: Gc.memInfo64(Gc.MEM_INFO_RESERVED),
 			heapUsage: Gc.memInfo64(Gc.MEM_INFO_USAGE),
+			#if HXCPP_GC_INCREMENTAL
+			incrementalGc: hxcpp.gc.Incremental.getStats(),
+			#end
 		}));
 	}
 

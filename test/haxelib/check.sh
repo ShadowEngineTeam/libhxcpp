@@ -65,6 +65,10 @@ package() {
       sed "s/\"version\": \"[^\"]*\"/\"version\": \"$version\"/" "$ROOT/haxelib.json" > "$dir/haxelib.json"
       cp "$ROOT/run.n" "$dir/"
       sed "s/,\"[^\"]*\")/,\"$version\")/" "$ROOT/extraParams.hxml" > "$dir/extraParams.hxml"
+      # extraParams also loads the collector configuration macro, even when
+      # incremental mode is off. Keep that dependency in the test package.
+      mkdir -p "$dir/hxcpp"
+      cp "$ROOT/hxcpp/IncrementalGcConfig.hx" "$dir/hxcpp/"
    else
       printf '{ "name": "%s", "version": "%s", "license": "BSD", "url": "https://example.org", "description": "stand-in", "releasenote": "", "contributors": ["nobody"], "dependencies": {} }\n' "$name" "$version" > "$dir/haxelib.json"
    fi
@@ -72,8 +76,10 @@ package() {
 import os, sys, zipfile
 src, out = sys.argv[1], sys.argv[2]
 with zipfile.ZipFile(out, "w") as z:
-    for f in os.listdir(src):
-        z.write(os.path.join(src, f), f)
+    for directory, _, files in os.walk(src):
+        for name in files:
+            path = os.path.join(directory, name)
+            z.write(path, os.path.relpath(path, src))
 PY
    echo "$dir.zip"
 }

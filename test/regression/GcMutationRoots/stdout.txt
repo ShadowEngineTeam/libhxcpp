@@ -1,0 +1,3 @@
+rewired graphs retain older descendants: true
+reflective anonymous fields retain replacement graphs: true
+mutable closure captures retain replacement graphs: true

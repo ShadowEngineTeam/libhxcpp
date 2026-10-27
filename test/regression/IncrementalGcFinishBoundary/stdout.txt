@@ -1,0 +1,2 @@
+stores after the finishing boundary preserve new descendants: true
+container mutation before finishing remains visible: true

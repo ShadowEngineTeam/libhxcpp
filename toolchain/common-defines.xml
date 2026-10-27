@@ -31,6 +31,10 @@
  <flag value="-DHXCPP_GC_CHECK_POINTER" if="HXCPP_GC_CHECK_POINTER" tag="haxe" />
  <flag value="-DHXCPP_GC_DEBUG_ALWAYS_MOVE" if="HXCPP_GC_DEBUG_ALWAYS_MOVE" tag="haxe" />
  <flag value="-DHXCPP_GC_GENERATIONAL" if="HXCPP_GC_GENERATIONAL" tag="haxe" />
+ <flag value="-DHXCPP_GC_INCREMENTAL" if="HXCPP_GC_INCREMENTAL" tag="haxe" />
+ <flag value="-DHXCPP_GC_INCREMENTAL_BARRIERS" if="HXCPP_GC_INCREMENTAL_BARRIERS" tag="haxe" />
+ <flag value="-DHXCPP_GC_INCREMENTAL_VERIFY" if="HXCPP_GC_INCREMENTAL_VERIFY" tag="haxe" />
+ <flag value="-DHXCPP_GC_INCREMENTAL_TEST" if="HXCPP_GC_INCREMENTAL_TEST" tag="haxe" />
  <flag value="-DHXCPP_ALIGN_ALLOC" if="HXCPP_ALIGN_ALLOC" tag="haxe" />
  <flag value="-DHXCPP_GC_NURSERY" if="HXCPP_GC_NURSERY" tag="haxe" />
  <flag value="-DHXCPP_DLL_IMPORT" if="dll_import" tag="haxe" />

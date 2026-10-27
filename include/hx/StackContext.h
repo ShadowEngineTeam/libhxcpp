@@ -414,6 +414,11 @@ inline bool hxExceptionUnwinding()
 
 struct StackContext : public hx::ImmixAllocator
 {
+   #ifdef HXCPP_GC_INCREMENTAL
+   std::vector<hx::IncrementalEntry> mIncrementalEntries;
+   size_t mIncrementalRead = 0;
+   unsigned int mIncrementalMutations = 0;
+   #endif
    #ifdef HXCPP_STACK_IDS
       int  mThreadId;
    #endif

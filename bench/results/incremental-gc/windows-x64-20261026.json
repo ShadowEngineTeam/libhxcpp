@@ -1,0 +1,546 @@
+{
+  "metadata": {
+    "recordedAt": "2026-10-26T22:04:17.6818665-04:00",
+    "baseRevision": "4cdca9600f0a7c182693d244a00389ef3b9a75df",
+    "source": "Implementation and benchmarks in the containing commit",
+    "platform": "Windows x64",
+    "cpu": "AMD Ryzen 9 9950X 16-Core Processor",
+    "haxe": "4.3.7",
+    "compilerEnvironment": {
+      "apiLevel": 430,
+      "pointerBits": 64,
+      "compiler": "MSVC 194435213"
+    },
+    "buildFlags": [
+      "HXCPP_M64"
+    ],
+    "incrementalFlags": [
+      "HXCPP_GC_INCREMENTAL"
+    ],
+    "verification": false,
+    "deterministicControls": false,
+    "targetSliceMs": 0.5,
+    "preferredIntervalMs": 1.0,
+    "warmup": 2,
+    "samples": 5,
+    "processes": 3,
+    "order": "control/incremental, incremental/control, control/incremental for each workload",
+    "sourceSha256": {
+      "extraParams.hxml": "256a66dc79e6e22d48d3077981cb182081c7d0657790bf9604189486a97e7ce2",
+      "hxcpp/IncrementalGcConfig.hx": "41db824cda90cb1cd611dafca9ee9e3c491988d24bb284781326bf528f689d3b",
+      "hxcpp/gc/Incremental.hx": "3558678121ed13b2407d4807e50bd05e709ba082a312836eca6505e8f31328ac",
+      "include/Array.h": "842b58003246efcd524e6312da766d27dd8e7168d5089d494ff8442333a3a0be",
+      "include/hx/GC.h": "74741fd8487a410752f44813c55ee676a45c2a3980377fd111ccdc98bfe37eca",
+      "include/hx/StackContext.h": "7d4ea034344c2f9eec99df4de0e900020bd5e126817f0d7a112342924b99cb21",
+      "include/hxcpp.h": "faa4a58e05659def176fd5d3c73f21483630808a93a47bebfcfd2d4a818f3dba",
+      "src/Array.cpp": "b71686943c6ff3e4e0a3b10fa47d705bf175b9cb3cf262e999d002086f73e11f",
+      "src/hx/Hash.h": "bd38f41dbc992cc70df1a31daa1ffa1553d067606324412a91c20cde3db15133",
+      "src/hx/gc/Immix.cpp": "2b835876479d6233bd8c17eb6f6085fda06bb0b8f80d57f69ebd64ed0b5269ee",
+      "src/hx/gc/Incremental.h": "238b5a0451493f61a20c4c041a60ab8473a4834f110c34a9f500adcdd257a8ec",
+      "src/hx/gc/IncrementalApi.h": "8ba9d3ddb2cd6d2519e6989766919460f7b57d021ec8fc467eaad6fc10103085",
+      "toolchain/common-defines.xml": "bf4a2f0f86ef7dd3eac1ca985f7b63b106295c012cac8cfccb26ada2db3f7670",
+      "toolchain/haxe-target.xml": "27600d3d033f8e7e0a1c35d1ead14c1b1bc704d42e17759dc15414aa4a6a08b2",
+      "bench/src/AllocBenchmarks.hx": "044d1e7396c8f30da2d4c5211e8696fea10a32a1ae5f33083ee90c1f0b88eb02",
+      "bench/src/Benchmark.hx": "dc03d00619fc5ea990cd664ae5b3490b962dd3e6e4f8259951713061a9f5aadd",
+      "bench/src/CppiaBenchmarks.hx": "26b46915d257e3b52cd8b45b58d47d49b840e53758ace91360387ba9a367b5d0",
+      "bench/src/GcFrameBenchmarks.hx": "f98d20b82bbbf4d69225a9768ddd92686962c6ea69180330b8b80099eaa3182d",
+      "bench/src/Main.hx": "821d73fdc5b3a631f934e1bc311b80182aac7b1a4f234b0ecf173543351e10a2",
+      "bench/src/MapBenchmarks.hx": "4e96cd9aaab24105f25a303ab7da1093eb319a21bb67cd564599d30ca57ef7ae",
+      "bench/src/Native.hx": "44d6edec4562b97094fb2648876a46fc0163156a3b7fdde62c3fb879112f0d8c",
+      "bench/src/SortBenchmarks.hx": "72981b661edfddc9ac6df39f185bc2c1e6a3355c53f0c03ce4af148c4da93587",
+      "bench/src/StringBenchmarks.hx": "91b44e16d39a9f6b27ba58b58a8c1ee9a9941c6cca425c3551fbc93d5dd8a9a8"
+    }
+  },
+  "summary": [
+    {
+      "name": "gc_frames",
+      "mode": "control",
+      "medianMs": 240.24559999999994,
+      "p999Ms": 7.742000000000138,
+      "maxMs": 9.728300000000134,
+      "rssMiB": 128.76171875,
+      "reservedMiB": 115.36090087890625,
+      "maxSlice": null,
+      "maxSync": null
+    },
+    {
+      "name": "gc_frames",
+      "mode": "incremental",
+      "medianMs": 294.96049999999997,
+      "p999Ms": 0.969099999999945,
+      "maxMs": 1.8576000000001258,
+      "rssMiB": 131.9765625,
+      "reservedMiB": 118.29131317138672,
+      "maxSlice": 1.3457000022754073,
+      "maxSync": 13.553299999330193
+    },
+    {
+      "name": "gc_pauses",
+      "mode": "control",
+      "medianMs": 145.42859999999996,
+      "p999Ms": 5.055200000000037,
+      "maxMs": 8.28910000000005,
+      "rssMiB": 135.28515625,
+      "reservedMiB": 121.55069732666016,
+      "maxSlice": null,
+      "maxSync": null
+    },
+    {
+      "name": "gc_pauses",
+      "mode": "incremental",
+      "medianMs": 256.8428,
+      "p999Ms": 2.7182999999999513,
+      "maxMs": 5.232199999999909,
+      "rssMiB": 135.51953125,
+      "reservedMiB": 122.51187896728516,
+      "maxSlice": 1.7831000150181353,
+      "maxSync": 9.970500017516315
+    }
+  ],
+  "processes": [
+    {
+      "benchmark": "gc_frames",
+      "mode": "control",
+      "process": 1,
+      "result": {
+        "samples": 5,
+        "checksum": 1106626610,
+        "peakRss": 135016448,
+        "warmup": 2,
+        "heapReserved": 120964672,
+        "ops": 2000,
+        "heapUsage": 61615936,
+        "times": [
+          0.24637399999999998,
+          0.2529614,
+          0.2433593999999999,
+          0.2284682,
+          0.19830669999999984
+        ],
+        "name": "gc_frames",
+        "unit": "frames",
+        "latency": {
+          "max": 0.009728300000000134,
+          "p50": 9.159999999996948E-05,
+          "p99": 0.0001541999999998822,
+          "p999": 0.007534999999999958,
+          "count": 10000
+        }
+      }
+    },
+    {
+      "benchmark": "gc_frames",
+      "mode": "incremental",
+      "process": 1,
+      "result": {
+        "samples": 5,
+        "checksum": 1106626610,
+        "peakRss": 138387456,
+        "warmup": 2,
+        "heapReserved": 124037432,
+        "ops": 2000,
+        "heapUsage": 74859320,
+        "times": [
+          0.28636759999999994,
+          0.2775067000000001,
+          0.30213140000000016,
+          0.30950809999999995,
+          0.2895357999999999
+        ],
+        "name": "gc_frames",
+        "unit": "frames",
+        "incrementalGc": {
+          "cycles": 32,
+          "pauses": 887,
+          "fallbacks": 0,
+          "totalPauseMs": 535.3046006639488,
+          "maxPauseMs": 10.890499979723245,
+          "lastPauseMs": 0.7890000124461949,
+          "lastCycleSlices": 32,
+          "active": false,
+          "forcedFinishes": 0,
+          "requestedSlices": 879,
+          "maxSlicePauseMs": 1.0647000162862241,
+          "maxSynchronousPauseMs": 10.890499979723245
+        },
+        "latency": {
+          "max": 0.0012659999999999894,
+          "p50": 9.890000000001287E-05,
+          "p99": 0.0007062999999998265,
+          "p999": 0.0009261000000000408,
+          "count": 10000
+        }
+      }
+    },
+    {
+      "benchmark": "gc_frames",
+      "mode": "incremental",
+      "process": 2,
+      "result": {
+        "samples": 5,
+        "checksum": 1106626610,
+        "peakRss": 136904704,
+        "warmup": 2,
+        "heapReserved": 123029560,
+        "ops": 2000,
+        "heapUsage": 73562296,
+        "times": [
+          0.29496049999999996,
+          0.27863859999999996,
+          0.2975342999999999,
+          0.2834756999999999,
+          0.29728529999999975
+        ],
+        "name": "gc_frames",
+        "unit": "frames",
+        "incrementalGc": {
+          "cycles": 32,
+          "pauses": 886,
+          "fallbacks": 0,
+          "totalPauseMs": 535.8317995560355,
+          "maxPauseMs": 11.42449997132644,
+          "lastPauseMs": 0.8314999868161976,
+          "lastCycleSlices": 30,
+          "active": false,
+          "forcedFinishes": 0,
+          "requestedSlices": 878,
+          "maxSlicePauseMs": 1.031799998600036,
+          "maxSynchronousPauseMs": 11.42449997132644
+        },
+        "latency": {
+          "max": 0.0011380000000000834,
+          "p50": 9.429999999999161E-05,
+          "p99": 0.0007025000000000503,
+          "p999": 0.000969099999999945,
+          "count": 10000
+        }
+      }
+    },
+    {
+      "benchmark": "gc_frames",
+      "mode": "control",
+      "process": 2,
+      "result": {
+        "samples": 5,
+        "checksum": 1106626610,
+        "peakRss": 134717440,
+        "warmup": 2,
+        "heapReserved": 120964672,
+        "ops": 2000,
+        "heapUsage": 61536320,
+        "times": [
+          0.21032800000000001,
+          0.24482479999999995,
+          0.25531689999999996,
+          0.24024559999999995,
+          0.22539920000000002
+        ],
+        "name": "gc_frames",
+        "unit": "frames",
+        "latency": {
+          "max": 0.008739399999999842,
+          "p50": 9.320000000001549E-05,
+          "p99": 0.00015439999999999898,
+          "p999": 0.007512999999999881,
+          "count": 10000
+        }
+      }
+    },
+    {
+      "benchmark": "gc_frames",
+      "mode": "control",
+      "process": 3,
+      "result": {
+        "samples": 5,
+        "checksum": 1106626610,
+        "peakRss": 134443008,
+        "warmup": 2,
+        "heapReserved": 120964672,
+        "ops": 2000,
+        "heapUsage": 61532736,
+        "times": [
+          0.24843500000000007,
+          0.2260025,
+          0.22785539999999993,
+          0.2584962999999998,
+          0.23801709999999998
+        ],
+        "name": "gc_frames",
+        "unit": "frames",
+        "latency": {
+          "max": 0.009555599999999997,
+          "p50": 9.40000000000385E-05,
+          "p99": 0.00016039999999994947,
+          "p999": 0.007742000000000138,
+          "count": 10000
+        }
+      }
+    },
+    {
+      "benchmark": "gc_frames",
+      "mode": "incremental",
+      "process": 3,
+      "result": {
+        "samples": 5,
+        "checksum": 1106626610,
+        "peakRss": 136818688,
+        "warmup": 2,
+        "heapReserved": 123078704,
+        "ops": 2000,
+        "heapUsage": 74368176,
+        "times": [
+          0.3064074,
+          0.27760989999999997,
+          0.26471449999999996,
+          0.34805299999999995,
+          0.3361160000000001
+        ],
+        "name": "gc_frames",
+        "unit": "frames",
+        "incrementalGc": {
+          "cycles": 32,
+          "pauses": 911,
+          "fallbacks": 0,
+          "totalPauseMs": 552.3110998328775,
+          "maxPauseMs": 13.553299999330193,
+          "lastPauseMs": 0.7738000131212175,
+          "lastCycleSlices": 32,
+          "active": false,
+          "forcedFinishes": 0,
+          "requestedSlices": 903,
+          "maxSlicePauseMs": 1.3457000022754073,
+          "maxSynchronousPauseMs": 13.553299999330193
+        },
+        "latency": {
+          "max": 0.0018576000000001258,
+          "p50": 9.77999999998147E-05,
+          "p99": 0.000728300000000015,
+          "p999": 0.0009550000000000392,
+          "count": 10000
+        }
+      }
+    },
+    {
+      "benchmark": "gc_pauses",
+      "mode": "control",
+      "process": 1,
+      "result": {
+        "samples": 5,
+        "checksum": 458711266,
+        "peakRss": 141705216,
+        "warmup": 2,
+        "heapReserved": 127455144,
+        "ops": 12000000,
+        "heapUsage": 63901608,
+        "times": [
+          0.14542859999999996,
+          0.1483196,
+          0.14318609999999998,
+          0.16387969999999996,
+          0.15101699999999996
+        ],
+        "name": "gc_pauses",
+        "unit": "objects",
+        "latency": {
+          "max": 0.00828910000000005,
+          "p50": 3.770000000002938E-05,
+          "p99": 7.109999999999062E-05,
+          "p999": 0.0050552000000000374,
+          "count": 15000
+        }
+      }
+    },
+    {
+      "benchmark": "gc_pauses",
+      "mode": "incremental",
+      "process": 1,
+      "result": {
+        "samples": 5,
+        "checksum": 458711266,
+        "peakRss": 139386880,
+        "warmup": 2,
+        "heapReserved": 125439400,
+        "ops": 12000000,
+        "heapUsage": 68641832,
+        "times": [
+          0.30509410000000003,
+          0.2524731,
+          0.25684280000000004,
+          0.24843189999999993,
+          0.27013109999999996
+        ],
+        "name": "gc_pauses",
+        "unit": "objects",
+        "incrementalGc": {
+          "cycles": 67,
+          "pauses": 1282,
+          "fallbacks": 0,
+          "totalPauseMs": 859.6196983125992,
+          "maxPauseMs": 9.095899993553758,
+          "lastPauseMs": 1.2173000141046941,
+          "lastCycleSlices": 20,
+          "active": false,
+          "forcedFinishes": 2,
+          "requestedSlices": 1274,
+          "maxSlicePauseMs": 1.635099994018674,
+          "maxSynchronousPauseMs": 9.095899993553758
+        },
+        "latency": {
+          "max": 0.004448599999999914,
+          "p50": 4.9100000000024124E-05,
+          "p99": 0.0008038000000000212,
+          "p999": 0.0026836999999999556,
+          "count": 15000
+        }
+      }
+    },
+    {
+      "benchmark": "gc_pauses",
+      "mode": "incremental",
+      "process": 2,
+      "result": {
+        "samples": 5,
+        "checksum": 458711266,
+        "peakRss": 142102528,
+        "warmup": 2,
+        "heapReserved": 128463016,
+        "ops": 12000000,
+        "heapUsage": 69051816,
+        "times": [
+          0.2640766,
+          0.2714901999999999,
+          0.24795060000000002,
+          0.2534077000000001,
+          0.2789665000000001
+        ],
+        "name": "gc_pauses",
+        "unit": "objects",
+        "incrementalGc": {
+          "cycles": 67,
+          "pauses": 1256,
+          "fallbacks": 0,
+          "totalPauseMs": 841.6912006214261,
+          "maxPauseMs": 9.970500017516315,
+          "lastPauseMs": 1.3644999708049,
+          "lastCycleSlices": 21,
+          "active": false,
+          "forcedFinishes": 2,
+          "requestedSlices": 1248,
+          "maxSlicePauseMs": 1.7831000150181353,
+          "maxSynchronousPauseMs": 9.970500017516315
+        },
+        "latency": {
+          "max": 0.003992400000000007,
+          "p50": 4.830000000000112E-05,
+          "p99": 0.0007869000000000348,
+          "p999": 0.0026610000000000245,
+          "count": 15000
+        }
+      }
+    },
+    {
+      "benchmark": "gc_pauses",
+      "mode": "control",
+      "process": 2,
+      "result": {
+        "samples": 5,
+        "checksum": 458711266,
+        "peakRss": 141783040,
+        "warmup": 2,
+        "heapReserved": 127455144,
+        "ops": 12000000,
+        "heapUsage": 63921832,
+        "times": [
+          0.1479591,
+          0.13846270000000005,
+          0.1390443,
+          0.18794849999999996,
+          0.13155680000000014
+        ],
+        "name": "gc_pauses",
+        "unit": "objects",
+        "latency": {
+          "max": 0.0071702000000000155,
+          "p50": 3.74999999999126E-05,
+          "p99": 6.970000000006138E-05,
+          "p999": 0.004966299999999979,
+          "count": 15000
+        }
+      }
+    },
+    {
+      "benchmark": "gc_pauses",
+      "mode": "control",
+      "process": 3,
+      "result": {
+        "samples": 5,
+        "checksum": 458711266,
+        "peakRss": 141856768,
+        "warmup": 2,
+        "heapReserved": 127455144,
+        "ops": 12000000,
+        "heapUsage": 63997480,
+        "times": [
+          0.1410866,
+          0.1433025,
+          0.1535462999999999,
+          0.15883440000000004,
+          0.14439540000000006
+        ],
+        "name": "gc_pauses",
+        "unit": "objects",
+        "latency": {
+          "max": 0.007081800000000027,
+          "p50": 3.799999999998249E-05,
+          "p99": 6.340000000015777E-05,
+          "p999": 0.005047300000000032,
+          "count": 15000
+        }
+      }
+    },
+    {
+      "benchmark": "gc_pauses",
+      "mode": "incremental",
+      "process": 3,
+      "result": {
+        "samples": 5,
+        "checksum": 458711266,
+        "peakRss": 138481664,
+        "warmup": 2,
+        "heapReserved": 124431528,
+        "ops": 12000000,
+        "heapUsage": 68537384,
+        "times": [
+          0.23862309999999998,
+          0.24273489999999998,
+          0.28725959999999984,
+          0.28037370000000017,
+          0.24740240000000013
+        ],
+        "name": "gc_pauses",
+        "unit": "objects",
+        "incrementalGc": {
+          "cycles": 67,
+          "pauses": 1252,
+          "fallbacks": 0,
+          "totalPauseMs": 829.1372993262485,
+          "maxPauseMs": 9.615200047846884,
+          "lastPauseMs": 1.248000015038997,
+          "lastCycleSlices": 19,
+          "active": false,
+          "forcedFinishes": 1,
+          "requestedSlices": 1244,
+          "maxSlicePauseMs": 1.6203999985009432,
+          "maxSynchronousPauseMs": 9.615200047846884
+        },
+        "latency": {
+          "max": 0.005232199999999909,
+          "p50": 4.76000000000365E-05,
+          "p99": 0.0008002000000000287,
+          "p999": 0.0027182999999999513,
+          "count": 15000
+        }
+      }
+    }
+  ]
+}

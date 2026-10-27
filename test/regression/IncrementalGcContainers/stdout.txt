@@ -1,0 +1,2 @@
+resized and reordered range jobs preserve every payload: true
+compaction preserves completed range results: true
