@@ -1,3 +1,4 @@
 normal collection preserves a deep linked graph: true
 trace counts a shallow graph without printing paths: true
 trace counts a deep graph without terminating: true
+trace prints a path into a deep graph without terminating: true

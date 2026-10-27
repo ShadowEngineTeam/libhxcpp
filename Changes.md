@@ -2,6 +2,7 @@
 libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
+* Fixed Gc.trace with path printing overflowing the native stack on a deep graph, as it marked by recursing all the way down: it now recurses 256 objects deep, and paths below that start with "... + higher". It also counts instances that are large allocations and instances with no object fields, which it missed, and prints paths through large objects from their root (libhxcpp #389)
 * Fixed val_buffer losing the text of a value after a NUL character: it measured the UTF-8 text with strlen. It now appends the text's full byte count (libhxcpp #393)
 * Fixed Date's local fields keeping the previous time zone after the zone changed: the last time converted is cached per thread, and the cache was keyed by the time alone, so a date read before the change read the old zone until another time was converted. The cache now also keys on the zone the C library has, and Sys.putEnv("TZ") applies the new zone at once, where localtime_r and the Windows CRT had kept the old one until something called tzset (libhxcpp #392)
 * Fixed cpp.NativeFile.file_open with an exclusive-create mode such as "wbx" truncating a file that exists on Linux, macOS and other POSIX systems: files are opened with open(2) to make them close-on-exec, and the mode was mapped without O_EXCL. Such a mode now fails on a file that exists and leaves it as it was, and x without w fails too (libhxcpp #391)

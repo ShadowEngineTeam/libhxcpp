@@ -33,6 +33,7 @@ GcScopeOwnership: counts thread attachments, which single-threaded Emscripten bu
 GcSmallNursery: threads (std::thread, which needs a pthreads build)
 GcStackLargeContainer: threads (std::thread, which needs a pthreads build)
 GcTraceDeepGraph: processes (runs itself) and threads (std::thread, which needs a pthreads build)
+GcTraceLargeObjects: processes (runs itself)
 GcWeakMapChain: threads
 GenerationalArrayYoungLog: threads
 GenerationalBlockAccounting: threads (std::thread, which needs a pthreads build)
