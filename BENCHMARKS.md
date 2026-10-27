@@ -97,6 +97,7 @@ These numbers are from one Windows machine; Linux and macOS results are still to
 | `alloc_strings` | Int-to-String conversion plus a concatenation per string |
 | `alloc_arrays` | Arrays of 1 to 64 Ints grown by `push`, plus a 256 KB buffer every 4000 arrays |
 | `gc_pauses` | Collection pauses as the program sees them: a large live graph stays reachable while the program allocates in fixed work units, and each unit's duration is recorded. The tail holds the units that included a collection |
+| `gc_frames` | 2,000 frames over 150,000 retained entities with graph and inventory mutation, temporary particle chains and event strings, fixed-size spatial cells and periodic allocation bursts. Records frame latency and checks retained payloads. Uses automatic GC without frame hooks or sleeps |
 | `map_int` | `IntMap`: on a fresh map, N sets, N hits, N misses, N/2 removes, then iterating the N/2 values left |
 | `map_string` | `StringMap`, the same cycle |
 | `map_object` | `ObjectMap`, the same cycle |

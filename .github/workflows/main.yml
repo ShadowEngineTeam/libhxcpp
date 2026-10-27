@@ -224,6 +224,20 @@ jobs:
       working-directory: test/gc_stress
       run: haxe compile.hxml -D HXCPP_M64 -D HXCPP_SANITIZE=${{ matrix.sanitize }} && bin/Stress 10
 
+    # The new collector has its own deterministic scheduling and barrier paths.
+    - name: Run incremental GC regressions
+      if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+      working-directory: test/regression
+      run: |
+        for test in GcMutationRoots GcContainerMutation IncrementalGcSlices IncrementalGcContainers IncrementalGcFinishBoundary GcWeakMapChain GenerationalFinalizerLifecycle GenerationalLargeBufferLifecycle; do
+          (cd "$test" && haxe -main Main -cpp bin -lib hxcpp -D HXCPP_M64 -D HXCPP_GC_INCREMENTAL -D HXCPP_GC_INCREMENTAL_VERIFY -D HXCPP_GC_INCREMENTAL_TEST -D HXCPP_SANITIZE=${{ matrix.sanitize }} && bin/Main > out.txt && diff <(tr -d '\r' < stdout.txt) <(tr -d '\r' < out.txt))
+        done
+
+    - name: Run incremental GC stress
+      if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+      working-directory: test/gc_stress
+      run: haxe compile.hxml -lib hxcpp -D HXCPP_M64 -D HXCPP_GC_INCREMENTAL -D HXCPP_GC_INCREMENTAL_VERIFY -D HXCPP_SANITIZE=${{ matrix.sanitize }} && bin/Stress 10 8 2012663045
+
     - name: Show the sanitizer reports
       if: ${{ !cancelled() }}
       run: cat /tmp/sanitizer/report.* 2>/dev/null || echo "No sanitizer reports"

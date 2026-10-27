@@ -1,6 +1,7 @@
 package;
 
 import AllocBenchmarks;
+import GcFrameBenchmarks;
 import MapBenchmarks;
 import SortBenchmarks;
 import StringBenchmarks;
@@ -26,7 +27,7 @@ class Main {
 		return CppiaBenchmarks.all();
 		#else
 		return [
-			new AllocSmall(), new AllocStrings(), new AllocArrays(), new GcPauses(), new MapInt(), new MapString(), new MapObject(),
+			new AllocSmall(), new AllocStrings(), new AllocArrays(), new GcPauses(), new GcFrames(), new MapInt(), new MapString(), new MapObject(),
 			new StringBuild(), new StringIndex(), new StringSubstr(), new StringSplit(), new StringCase(), new SortInt(), new SortString(),
 			new SortObject(),
 		];
@@ -121,6 +122,9 @@ class Main {
 			peakRss: Native.peakRss(),
 			heapReserved: Gc.memInfo64(Gc.MEM_INFO_RESERVED),
 			heapUsage: Gc.memInfo64(Gc.MEM_INFO_USAGE),
+			#if HXCPP_GC_INCREMENTAL
+			incrementalGc: hxcpp.gc.Incremental.getStats(),
+			#end
 		}));
 	}
 

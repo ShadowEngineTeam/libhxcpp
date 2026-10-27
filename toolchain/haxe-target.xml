@@ -184,6 +184,8 @@
   <depend name="${HXCPP}/src/hx/Hash.h"/>
   <depend name="${HXCPP}/src/hx/Unicase.h"/>
   <depend name="${HXCPP}/src/hx/gc/GcRegCapture.h"/>
+  <depend name="${HXCPP}/src/hx/gc/Incremental.h"/>
+  <depend name="${HXCPP}/src/hx/gc/IncrementalApi.h"/>
   <depend name="${HXCPP}/src/hx/thread/ThreadImpl.hpp"/>
 
   <compilerflag value="-DHX_UNDEFINE_H" />

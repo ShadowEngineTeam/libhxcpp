@@ -22,6 +22,14 @@
 
 // Function called by the haxe code...
 
+HXCPP_EXTERN_CLASS_ATTRIBUTES bool __hxcpp_gc_incremental_step(double inBudgetMs);
+HXCPP_EXTERN_CLASS_ATTRIBUTES void __hxcpp_gc_incremental_configure(double inBudgetMs, double inIntervalMs);
+HXCPP_EXTERN_CLASS_ATTRIBUTES bool __hxcpp_gc_incremental_active();
+HXCPP_EXTERN_CLASS_ATTRIBUTES Dynamic __hxcpp_gc_incremental_stats();
+#ifdef HXCPP_GC_INCREMENTAL_TEST
+HXCPP_EXTERN_CLASS_ATTRIBUTES int __hxcpp_gc_incremental_test(int inOperation, hx::Object *inObject=0);
+#endif
+
 #ifdef HXCPP_TELEMETRY
 extern void __hxt_gc_new(hx::StackContext *inStack, void* obj, int inSize, const char *inName);
 extern void __hxt_gc_alloc(void* obj, int inSize);
@@ -349,6 +357,37 @@ namespace hx
 
 struct StackContext;
 
+#ifdef HXCPP_GC_INCREMENTAL
+class ImmixAllocator;
+struct IncrementalEntry
+{
+   hx::Object *owner;
+   const void *value;
+};
+extern HXCPP_EXTERN_CLASS_ATTRIBUTES std::atomic<bool> gIncrementalActive;
+extern HXCPP_EXTERN_CLASS_ATTRIBUTES bool gIncrementalAllocationsWhite;
+extern HXCPP_EXTERN_CLASS_ATTRIBUTES int gPrevByteMarkID;
+HXCPP_EXTERN_CLASS_ATTRIBUTES void IncrementalRemember(hx::Object *inOwner, const void *inValue, StackContext *inCtx);
+HXCPP_EXTERN_CLASS_ATTRIBUTES void IncrementalAllocated(void *inValue, bool inObject, ImmixAllocator *inCtx);
+typedef bool (*IncrementalRangeScan)(hx::Object *, size_t &, size_t &, MarkContext *);
+HXCPP_EXTERN_CLASS_ATTRIBUTES bool IncrementalRange(hx::Object *inOwner, IncrementalRangeScan inScan, MarkContext *inCtx);
+HXCPP_EXTERN_CLASS_ATTRIBUTES void IncrementalMutationEnter(hx::Object *inOwner, StackContext *inCtx);
+HXCPP_EXTERN_CLASS_ATTRIBUTES void IncrementalMutationLeave(hx::Object *inOwner, StackContext *inCtx);
+#ifdef HXCPP_GC_INCREMENTAL_VERIFY
+bool IncrementalOracleMark(void *inPointer, bool inObject, MarkContext *inCtx);
+#endif
+struct IncrementalMutationScope
+{
+   hx::Object *owner;
+   StackContext *ctx;
+   IncrementalMutationScope(hx::Object *inOwner, StackContext *inCtx) : owner(inOwner), ctx(inCtx) { IncrementalMutationEnter(owner, ctx); }
+   ~IncrementalMutationScope() { IncrementalMutationLeave(owner, ctx); }
+};
+#define HX_INCREMENTAL_MUTATION(owner) ::hx::IncrementalMutationScope _hx_incremental_mutation(const_cast<::hx::Object *>(static_cast<const ::hx::Object *>(owner)),HX_CTX_GET)
+#else
+#define HX_INCREMENTAL_MUTATION(owner)
+#endif
+
 EXTERN_FAST_TLS_DATA(StackContext, tlsStackContext);
 
 extern StackContext *gMainThreadContext;
@@ -456,6 +495,13 @@ public:
             __hxt_gc_alloc(buffer, inSize);
             __hxt_gc_new((hx::StackContext *)alloc,buffer, inSize, inName);
             #endif
+            #ifdef HXCPP_GC_INCREMENTAL
+            if (gIncrementalActive.load(std::memory_order_relaxed)) {
+               if (gIncrementalAllocationsWhite)
+                  reinterpret_cast<unsigned char *>(buffer)[HX_ENDIAN_MARK_ID_BYTE] = static_cast<unsigned char>(gPrevByteMarkID);
+               else IncrementalAllocated(buffer,inContainer,alloc);
+            }
+            #endif
             return buffer;
          }
 
@@ -475,7 +521,11 @@ typedef ImmixAllocator GcAllocator;
 typedef ImmixAllocator Ctx;
 
 
-#ifdef HXCPP_GC_GENERATIONAL
+#if defined(HXCPP_GC_INCREMENTAL)
+  #define HX_OBJ_WB_CTX(obj,value,ctx) { const void *_hx_inc_value = value; if (_hx_inc_value && ::hx::gIncrementalActive.load(std::memory_order_relaxed)) { ::hx::Object *_hx_inc_owner = obj; if (!_hx_inc_owner || reinterpret_cast<unsigned char *>(_hx_inc_owner)[HX_ENDIAN_MARK_ID_BYTE] == ::hx::gByteMarkID) ::hx::IncrementalRemember(_hx_inc_owner,_hx_inc_value,ctx); } }
+  #define HX_OBJ_WB_PESSIMISTIC_CTX(obj,ctx) { if (::hx::gIncrementalActive.load(std::memory_order_relaxed)) { ::hx::Object *_hx_inc_owner = obj; if (!_hx_inc_owner || reinterpret_cast<unsigned char *>(_hx_inc_owner)[HX_ENDIAN_MARK_ID_BYTE] == ::hx::gByteMarkID) ::hx::IncrementalRemember(_hx_inc_owner,nullptr,ctx); } }
+  #define HX_OBJ_WB_NEW_MARKED_OBJECT(obj) HX_OBJ_WB_PESSIMISTIC_CTX(obj,HX_CTX_GET)
+#elif defined(HXCPP_GC_GENERATIONAL)
   #define HX_OBJ_WB_CTX(obj,value,ctx) { \
         unsigned char &mark =  ((unsigned char *)(obj))[ HX_ENDIAN_MARK_ID_BYTE]; \
         if (mark == ::hx::gByteMarkID && value && !((unsigned char *)(value))[ HX_ENDIAN_MARK_ID_BYTE  ] ) { \
@@ -499,7 +549,9 @@ typedef ImmixAllocator Ctx;
 #endif
 
 #define HX_OBJ_WB(obj,value) HX_OBJ_WB_CTX(obj,value,_hx_ctx)
-#ifdef HXCPP_GC_GENERATIONAL
+#ifdef HXCPP_GC_INCREMENTAL
+  #define HX_ARRAY_WB(array,index,value) HX_OBJ_WB_CTX(array,value,_hx_ctx)
+#elif defined(HXCPP_GC_GENERATIONAL)
   // Storing a young value in an old array: see ArrayYoungStore
   #define HX_ARRAY_WB(array,index,value) { \
         unsigned char mark =  ((unsigned char *)(array))[ HX_ENDIAN_MARK_ID_BYTE]; \
@@ -532,6 +584,9 @@ HXCPP_EXTERN_CLASS_ATTRIBUTES void NewMarkedObject(hx::Object *inPtr);
 
 inline void MarkAlloc(void *inPtr ,hx::MarkContext *__inCtx)
 {
+   #ifdef HXCPP_GC_INCREMENTAL_VERIFY
+   if (IncrementalOracleMark(inPtr,false,__inCtx)) return;
+   #endif
    #ifdef __EMSCRIPTEN__
    // Unaligned must be constants...
    if ( ((size_t)inPtr) & 3 )
@@ -545,6 +600,9 @@ inline void MarkAlloc(void *inPtr ,hx::MarkContext *__inCtx)
 }
 inline void MarkObjectAlloc(hx::Object *inPtr ,hx::MarkContext *__inCtx)
 {
+   #ifdef HXCPP_GC_INCREMENTAL_VERIFY
+   if (IncrementalOracleMark(inPtr,true,__inCtx)) return;
+   #endif
    #ifdef __EMSCRIPTEN__
    // Unaligned must be constants...
    if ( !( ((size_t)inPtr) & 3) )

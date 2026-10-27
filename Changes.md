@@ -2,6 +2,7 @@
 libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
+* Added an opt-in incremental marking collector for native Haxe 4 C++ builds (`-lib hxcpp -D HXCPP_GC_INCREMENTAL`), with automatic allocation pacing, optional `hxcpp.gc.Incremental` scheduling hooks, resumable array and map scans, an independent verifier and deterministic regression tests. The existing collector remains the default. Slice budgets are targets, and synchronous completion and memory pressure can still cause longer pauses; see docs/IncrementalGc.md
 * Emscripten programs let memory grow and get a 5 MB stack by default. They linked with Emscripten's fixed 16 MB of memory, which aborts with "Aborted(OOM)" as soon as a program holds more, and since Emscripten 3.1.27 a 64 KB stack, which Haxe recursion and the pointers that spill-pointers keeps on the stack soon overflow. HXCPP_LINK_NO_MEMORY_GROWTH and HXCPP_LINK_NO_STACK_SIZE restore Emscripten's settings, and HXCPP_LINK_STACK_SIZE sets another size
 * Fixed converting a long or a size_t to Dynamic failing to compile on Emscripten, where long is 32 bits but not int, as an Int default of -2147483648 does (HaxeFoundation/hxcpp#621)
 * Fixed cppia hosts built with HXCPP_DEBUGGER failing to compile on Emscripten, which has no cppia JIT: the debugger's frame reader asked whether a function was jitted through a field that only exists with the JIT

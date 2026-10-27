@@ -475,5 +475,8 @@ class Stress {
 			Sys.exit(1);
 		}
 		Sys.println("ok");
+		#if HXCPP_GC_INCREMENTAL
+		Sys.println("incremental " + haxe.Json.stringify(hxcpp.gc.Incremental.getStats()));
+		#end
 	}
 }

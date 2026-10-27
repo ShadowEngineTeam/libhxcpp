@@ -54,6 +54,7 @@ SslPeerCertificateLifetime: sockets
 SslSniLifetime: sockets
 SslSniName: sockets
 ThreadEndsAtExit: threads
+IncrementalGcSlices: threads (std::thread, which needs a pthreads build)
 ThreadEndsAtExitDebugger: threads
 ThreadEndsWhileCollecting: threads
 ThreadWaitTimeouts: threads

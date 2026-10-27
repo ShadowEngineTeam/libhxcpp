@@ -234,6 +234,7 @@ public:
 
    void setUnmanagedData(void *inData, int inElements)
    {
+      HX_INCREMENTAL_MUTATION(this);
       mBase = (char *)inData;
       length = inElements;
       mAlloc = -1;
@@ -745,10 +746,26 @@ public:
       if (mAlloc>0) hx::MarkAlloc((void *)mBase, __inCtx );
       if (length && hx::ContainsPointers<ELEM_>())
       {
+         #ifdef HXCPP_GC_INCREMENTAL
+         if (length > 256 && hx::IncrementalRange(this,IncrementalScan,__inCtx)) return;
+         #endif
          ELEM_ *ptr = (ELEM_ *)mBase;
          HX_MARK_MEMBER_ARRAY(ptr,length);
       }
    }
+
+   #ifdef HXCPP_GC_INCREMENTAL
+   static bool IncrementalScan(hx::Object *inOwner, size_t &ioCursor, size_t &ioItem, hx::MarkContext *__inCtx) {
+      Array_obj<ELEM_> *array = static_cast<Array_obj<ELEM_> *>(inOwner);
+      size_t length = array->length;
+      if (ioCursor >= length) return true;
+      size_t count = std::min(size_t{256},length-ioCursor);
+      ELEM_ *ptr = reinterpret_cast<ELEM_ *>(array->mBase) + ioCursor;
+      HX_MARK_MEMBER_ARRAY(ptr,count);
+      ioCursor += count;
+      return ioCursor >= length;
+   }
+   #endif
 
    #ifdef HXCPP_VISIT_ALLOCS
    void __Visit(hx::VisitContext *__inCtx) HXCPP_OVERRIDE
@@ -953,6 +970,7 @@ public:
 
    void reverse()
    {
+      HX_INCREMENTAL_MUTATION(this);
       int half = length/2;
       ELEM_ *e = (ELEM_ *)mBase;
       for(int i=0;i<half;i++)
@@ -966,12 +984,14 @@ public:
    // Will do random pointer sorting for object pointers
    inline void sortAscending()
    {
+      HX_INCREMENTAL_MUTATION(this);
       ELEM_ *e = (ELEM_ *)mBase;
       std::sort(e, e+length);
    }
    static inline bool greaterThan(const ELEM_ &inA, const ELEM_ &inB) { return inB < inA; }
    inline void sortDescending()
    {
+      HX_INCREMENTAL_MUTATION(this);
       ELEM_ *e = (ELEM_ *)mBase;
       std::sort(e, e+length, greaterThan);
    }
@@ -995,6 +1015,7 @@ public:
 
    inline void qsort(SorterFunc inSorter)
    {
+      HX_INCREMENTAL_MUTATION(this);
       ELEM_ *e = (ELEM_ *)mBase;
       std::sort(e, e+length, Sorter(inSorter) );
    }
@@ -1293,6 +1314,7 @@ Array<ELEM_> Array_obj<ELEM_>::__new(int inSize,int inReserve)
 template<typename ELEM_>
 void Array_obj<ELEM_>::sort(SorterFunc inSorter)
 {
+   HX_INCREMENTAL_MUTATION(this);
    if (hx::ArrayValueSortable<ELEM_>::Yes)
    {
       // Plain values.  (Dispatching on the StoreType here would send

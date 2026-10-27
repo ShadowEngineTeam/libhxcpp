@@ -1,0 +1,1 @@
+independent verifier rejects an omitted descendant: true

@@ -148,6 +148,7 @@ ArrayBase::ArrayBase(int inSize,int inReserve,int inElementSize,bool inAtomic)
 
 void ArrayBase::reserve(int inSize) const
 {
+   HX_INCREMENTAL_MUTATION(this);
    if (mAlloc<inSize)
    {
       int elemSize = GetElementSize();
@@ -186,6 +187,7 @@ void ArrayBase::reserve(int inSize) const
 
 void ArrayBase::Realloc(int inSize) const
 {
+   HX_INCREMENTAL_MUTATION(this);
    // Try to detect "push" case vs resizing to big array size explicitly by looking at gap
    if (inSize<0)
       hx::Throw( HX_CSTRING("Array allocation too large") );
@@ -248,6 +250,7 @@ void ArrayBase::Realloc(int inSize) const
 // Set numeric values to 0, pointers to null, bools to false
 void ArrayBase::zero(Dynamic inFirst, Dynamic inCount)
 {
+   HX_INCREMENTAL_MUTATION(this);
    int first = inFirst==null() ? 0 : inFirst->__ToInt();
    if (first<0)
       first+=length;
@@ -283,6 +286,7 @@ int ArrayBase::Memcmp(ArrayBase *inOther)
 
 void ArrayBase::Blit(int inDestElement, ArrayBase *inSourceArray, int inSourceElement, int inElementCount)
 {
+   HX_INCREMENTAL_MUTATION(this);
    int srcSize = inSourceArray->GetElementSize();
    int srcElems = inSourceArray->length;
    if (inDestElement<0 || inSourceElement<0 || inElementCount<0 ||
@@ -336,6 +340,7 @@ String ArrayBase::toString()
 
 void ArrayBase::__SetSizeExact(int inSize)
 {
+   HX_INCREMENTAL_MUTATION(this);
    if (inSize==0)
    {
       if (mAlloc>=0)
@@ -397,6 +402,7 @@ Dynamic ArrayBase::__unsafe_set(const Dynamic &i, const Dynamic &val)
 
 void ArrayBase::Insert(int inPos)
 {
+   HX_INCREMENTAL_MUTATION(this);
    if (inPos>=length)
       resize(length+1);
    else
@@ -409,6 +415,7 @@ void ArrayBase::Insert(int inPos)
 
 void ArrayBase::Splice(ArrayBase *outResult,int inPos,int inLen)
 {
+   HX_INCREMENTAL_MUTATION(this);
    if (inPos>=length)
    {
       return;
@@ -446,6 +453,7 @@ void ArrayBase::Splice(ArrayBase *outResult,int inPos,int inLen)
 
 void ArrayBase::Slice(ArrayBase *outResult,int inPos,int inEnd)
 {
+   HX_INCREMENTAL_MUTATION(this);
    if (inPos<0)
    {
       inPos += length;
@@ -475,6 +483,7 @@ void ArrayBase::Slice(ArrayBase *outResult,int inPos,int inEnd)
 
 void ArrayBase::RemoveElement(int inPos)
 {
+   HX_INCREMENTAL_MUTATION(this);
    if (inPos<length)
    {
       int s = GetElementSize();
@@ -486,6 +495,7 @@ void ArrayBase::RemoveElement(int inPos)
 
 void ArrayBase::Concat(ArrayBase *outResult,const char *inSecond,int inLen)
 {
+   HX_INCREMENTAL_MUTATION(this);
    char *ptr =  outResult->GetBase();
    int n = length * GetElementSize();
    // Either array may be empty, with no buffer
@@ -643,6 +653,7 @@ String ArrayBase::joinArray(ArrayBase *inBase, String inSeparator)
 
 void ArrayBase::safeSort(DynamicSorterFunc inSorter, bool inIsString)
 {
+   HX_INCREMENTAL_MUTATION(this);
    if (inIsString)
    {
       // The comparator takes Dynamic arguments, so box each String once
