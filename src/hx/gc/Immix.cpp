@@ -349,6 +349,18 @@ static bool sgCensus = false;
 static std::unordered_map<hx::Class_obj *,CensusEntry> *sgCensusCounts = 0;
 static std::vector< std::pair<void *,bool> > *sgCensusDeferred = 0;
 
+// While the weak hash values are marked, the entries whose object key is not
+//  marked yet, by key, and those whose key the marking has reached since.
+//  Marking is single-threaded then
+struct EphemeronEntry
+{
+   hx::HashRoot *hash;
+   void         *element;
+};
+typedef std::unordered_multimap<hx::Object *,EphemeronEntry> EphemeronPending;
+static EphemeronPending *sgEphemeronPending = 0;
+static std::vector<EphemeronEntry> *sgEphemeronReady = 0;
+
 #ifdef HXCPP_DEBUG
 static hx::Object *gCollectTrace = 0;
 static bool gCollectTraceDoPrint = false;
@@ -515,6 +527,12 @@ static std::atomic_int sReleaseAllRequests{0};
 namespace hx
 {
 std::atomic_uint gPauseForCollect{ 0x00000000 };
+
+void EphemeronWait(hx::Object *inKey, HashRoot *inHash, void *inElement)
+{
+   if (sgEphemeronPending)
+      sgEphemeronPending->insert(std::make_pair(inKey, EphemeronEntry{ inHash, inElement }));
+}
 
 StackContext *gMainThreadContext = 0;
 
@@ -2457,6 +2475,14 @@ void MarkObjectAllocUnchecked(hx::Object *inPtr,hx::MarkContext *__inCtx)
 
    if (sgCensus)
       CensusCount(inPtr, flags);
+
+   if (sgEphemeronPending && !sgEphemeronPending->empty())
+   {
+      auto range = sgEphemeronPending->equal_range(inPtr);
+      for(auto i=range.first; i!=range.second; ++i)
+         sgEphemeronReady->push_back(i->second);
+      sgEphemeronPending->erase(range.first, range.second);
+   }
 
    int rows = flags & IMMIX_ALLOC_ROW_COUNT;
    if (rows)
@@ -5437,13 +5463,25 @@ public:
    // direction, so one registered the other way resolves in the next (libhxcpp #203).
    // Before, what a pass found was marked only at the end of the pass, by restarting
    // the marking threads, so such a chain gave up one link per pass.
+   //
+   // Within one hash that did not help: a key that only another entry's value
+   // leads to was found marked in the next pass over the whole table, so a
+   // chain of N such entries took N passes (libhxcpp #378). An entry whose
+   // object key is not marked is now remembered by its key while the values
+   // are marked, and once the marking reaches the key its value is marked
+   // too, in the same pass. String keys still wait for the next pass.
    void MarkWeakHashValues()
    {
+      EphemeronPending pending;
+      std::vector<EphemeronEntry> ready;
+      sgEphemeronReady = &ready;
       bool marked;
       bool forward = true;
       do
       {
          marked = false;
+         pending.clear();
+         sgEphemeronPending = &pending;
          int count = hx::sWeakHashList.size();
          for(int i=0;i<count;i++)
          {
@@ -5456,11 +5494,22 @@ public:
                   marked = true;
                   mMarker.processMarkStack();
                }
+               while(!ready.empty())
+               {
+                  marked = true;
+                  mMarker.init();
+                  for(size_t r=0;r<ready.size();r++)
+                     ready[r].hash->markWeakElement(ready[r].element, &mMarker);
+                  ready.clear();
+                  mMarker.processMarkStack();
+               }
             }
          }
          forward = !forward;
       }
       while(marked);
+      sgEphemeronPending = 0;
+      sgEphemeronReady = 0;
    }
 
    #ifdef HX_GC_VERIFY_ALLOC_START

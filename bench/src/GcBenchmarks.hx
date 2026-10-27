@@ -269,6 +269,45 @@ class GcObjectIdBurst extends Benchmark {
 	}
 }
 
+class GcLink {
+	public var next:GcKey;
+
+	public function new(next:GcKey)
+		this.next = next;
+}
+
+/**
+	A WeakMap of 4,096 entries in which each key's value leads to the next
+	key, and only the first key is held elsewhere (libhxcpp #378).
+**/
+class GcWeakMapChain extends GcCollections {
+	static inline var N = 4096;
+
+	final map = new WeakMap<GcKey, GcLink>();
+	var first:GcKey;
+
+	public function new() {
+		super("gc_weak_map_chain");
+	}
+
+	override public function setup() {
+		var keys = [for (i in 0...N + 1) new GcKey(i)];
+		for (i in 0...N)
+			map.set(keys[i], new GcLink(keys[i + 1]));
+		first = keys[0];
+	}
+
+	override function check():Int {
+		var key = first;
+		var n = 0;
+		while (map.get(key) != null) {
+			key = map.get(key).next;
+			n++;
+		}
+		return n;
+	}
+}
+
 /**
 	65,536 retained 4 KB buffers, with twelve raw pointers into them on the stack
 	while the collections run, so the stack scan looks them up (libhxcpp #365).

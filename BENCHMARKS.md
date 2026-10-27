@@ -117,6 +117,7 @@ These numbers are from one Windows machine; Linux and macOS results are still to
 | `gc_idle_minor` | 2,000 collections of a heap of 128 retained objects, so that a minor collection has nothing to mark |
 | `gc_remembered_burst` | 250,000 retained objects each take a new child, then a collection: a burst of remembered referrers and marking in each round |
 | `gc_object_id_burst` | 250,000 new objects given IDs with `__hxcpp_obj_id`, dropped, then a full collection, in each round |
+| `gc_weak_map_chain` | Collections with a `WeakMap` of 4,096 entries in which each key's value leads to the next key, and only the first key is held elsewhere |
 | `noop` | Starting the program and exiting at once (startup time, measured 20 times per runtime) |
 
 ### CPPIA

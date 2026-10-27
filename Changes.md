@@ -2,6 +2,7 @@
 libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
+* A chain of entries inside one weak map, each key's value leading to the next key, is marked in one pass over the map instead of one pass per link: a 4,096-link chain made a full collection take 73 ms, and takes 0.9 ms. The rest of the chain #203 left to the next pass for a single map (libhxcpp #378)
 * Full collections give back the object ID tables' storage once the IDs' objects have died: the unused IDs at the top of the range are dropped and storage far beyond what is left is freed. After a million IDs whose objects died, about 13 MB of vectors and a million hash buckets stayed allocated (libhxcpp #379)
 * The collector keeps 256 spare marking chunks and frees half of the rest in each full collection, at most 1,024, where it kept every chunk it ever made: after a million old objects each took a young child, about 9,600 chunks, 4.7 MB, stayed allocated for the rest of the process (libhxcpp #374)
 * A collection whose roots and stacks leave nothing to mark no longer wakes and joins every marking thread to find that out: an idle minor collection with HXCPP_GC_GENERATIONAL took about 0.02 ms, almost all of it the workers, and takes about 0.005 ms (libhxcpp #377)
