@@ -230,8 +230,10 @@ jobs:
 
   # The regression tests built for Emscripten and run under node, with the
   # tests in test/regression/emscripten-skip.txt left out, and the memory and
-  # stack test in test/emscripten. No other job builds for Emscripten, so a
-  # platform guard that leaves it out would otherwise pass (libhxcpp #335).
+  # stack, exception, Embind and JS Prime tests in test/emscripten. No other
+  # job builds for Emscripten, so a platform guard that leaves it out would
+  # otherwise pass (libhxcpp #335). Node is not a browser: this does not cover
+  # a browser's event loop, workers or cross-origin isolation (libhxcpp #337).
   check-emscripten:
     name: Check Emscripten
     runs-on: ubuntu-latest
@@ -265,6 +267,12 @@ jobs:
         echo "EM_CONFIG=$PWD/emsdk/.emscripten" >> $GITHUB_ENV
         echo "$PWD/emsdk/upstream/emscripten" >> $GITHUB_PATH
 
+    - name: Tool versions
+      run: |
+        emcc --version | head -n 1
+        echo "node $(node --version)"
+        echo "haxe $(haxe -version)"
+
     - name: Run the regression tests
       if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
       working-directory: test/regression
@@ -273,6 +281,10 @@ jobs:
     - name: Run the memory and stack test
       if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
       run: timeout 600 sh test/emscripten/run.sh
+
+    - name: Run the exception test, with wasm and JavaScript exceptions
+      if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+      run: timeout 1200 sh test/emscripten/exceptions/run.sh
 
     - name: Run the Embind test
       if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
