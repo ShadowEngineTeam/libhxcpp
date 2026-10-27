@@ -1,0 +1,11 @@
+first Int64 value gets Int64 storage: true
+second Int64 value keeps Int64 storage: true
+Int64 values read back: true
+Int value gets Int storage: true
+Int64 after an Int widens to Int64 storage: true
+Int after the Int64 keeps Int64 storage: true
+widened values read back: true
+String after an Int64 gets object storage: true
+Int64 after the String keeps object storage: true
+mixed values read back: true
+missing key reads null: true
