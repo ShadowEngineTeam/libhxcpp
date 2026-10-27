@@ -136,6 +136,8 @@
 
 	<!-- hxcpp's own: the Windows mutexes, installed before main -->
 	<file name="${this_dir}/config/mbedtls/threading_alt.c" />
+	<!-- and the allocator, which counts a TLS context's memory -->
+	<file name="${this_dir}/config/mbedtls/memory_count.c" />
 </files>
 
 </xml>

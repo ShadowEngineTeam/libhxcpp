@@ -1,0 +1,4 @@
+reused and new large buffers are whole and zero-filled: true
+the retained buffer survives the purges: true
+compaction gives back the dropped caches: true
+the retained buffer survives compaction: true

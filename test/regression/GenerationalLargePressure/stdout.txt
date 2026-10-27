@@ -1,0 +1,3 @@
+large allocation pressure starts collections: true
+large pressure reclaims released old buffers: true
+a full collection releases the rest: true

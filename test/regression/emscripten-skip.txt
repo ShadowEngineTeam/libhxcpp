@@ -28,6 +28,7 @@ GenerationalArrayYoungLog: threads
 GenerationalBlockAccounting: threads (std::thread, which needs a pthreads build)
 GenerationalFinalizerLifecycle: threads (std::thread, which needs a pthreads build)
 GenerationalLargeBufferLifecycle: threads (std::thread, which needs a pthreads build)
+GenerationalLargePressure: threads (std::thread, which needs a pthreads build)
 GenerationalTraceCounts: threads (std::thread, which needs a pthreads build)
 GenerationalWeakRefLifecycle: threads (std::thread, which needs a pthreads build)
 Int64DivisionBoundary: processes (runs itself)
@@ -36,6 +37,8 @@ Issue1063: needs a file creation time, which Emscripten's stat does not have, so
 Issue971: threads
 LargeAllocThreads: threads
 LargeAllowanceDecays: threads
+LargeRecyclePurgeLifecycle: threads (std::thread, which needs a pthreads build)
+LargeRecycleReservedMemory: threads (std::thread, which needs a pthreads build)
 NativeRefCopyRoot: threads (std::thread, which needs a pthreads build)
 NativeRefInterfaceRetarget: threads (std::thread, which needs a pthreads build)
 PollEmptyTimeout: sockets
@@ -52,6 +55,7 @@ ProcessReapAfterClose: processes
 ProcessSigpipeHandler: processes
 ProcessWaitError: processes
 RegexpFailedSubjectRetention: threads (std::thread, which needs a pthreads build)
+RegexpNativeMemoryPressure: threads (std::thread, which needs a pthreads build)
 RegexpObsoleteSubject: threads (std::thread, which needs a pthreads build)
 RegisterHeldRoots: threads
 RootWalkRace: threads (std::thread, which needs a pthreads build)
@@ -60,9 +64,11 @@ SocketEmptyBytes: sockets
 SocketIpv6Accept: sockets
 SocketIpv6ConcurrentFormat: threads (std::thread, which needs a pthreads build)
 SocketTinyTimeout: sockets
+SqliteNativeMemoryPressure: threads (std::thread, which needs a pthreads build)
 SqliteResultConnectionLifetime: threads (std::thread, which needs a pthreads build)
 SslClosedState: sockets
 SslErrorCodes: sockets
+SslNativeMemoryPressure: threads (std::thread, which needs a pthreads build)
 SslPeerCertificateLifetime: sockets
 SslSniLifetime: sockets
 SslSniName: sockets

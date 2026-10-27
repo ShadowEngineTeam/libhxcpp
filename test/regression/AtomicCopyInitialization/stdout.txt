@@ -1,0 +1,4 @@
+large copies are exact: true
+copies are independent of their source: true
+large string copies are exact and hash alike: true
+other large allocations are zero-filled: true

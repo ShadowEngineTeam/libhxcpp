@@ -1,0 +1,5 @@
+reserved memory counts the recycle cache: true
+the cache is not counted as live: true
+reuse does not count a buffer twice: true
+compaction releases the cache: true
+the anchor survives: true

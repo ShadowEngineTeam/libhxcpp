@@ -1,0 +1,5 @@
+compiled expressions contribute to GC pressure: true
+second width compilation contributes to GC pressure: true
+retained expressions remain usable: true
+finalization removes reported native pressure: true
+abandoned expressions are released: true
