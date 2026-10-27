@@ -71,6 +71,17 @@ jobs:
         if: ${{ !cancelled() && steps.runtime.outcome == 'success' }}
         working-directory: test/haxe
         run: bash ../../.github/workflows/traced.sh bin/TestMain
+      # compile.hxml builds with the generational collector, so the default
+      # one needs its own build
+      - name: runtime build (default gc)
+        id: runtime_default
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        working-directory: test/haxe
+        run: haxe compile-default.hxml -D $HXCPP_ARCH_FLAG
+      - name: runtime run (default gc)
+        if: ${{ !cancelled() && steps.runtime_default.outcome == 'success' }}
+        working-directory: test/haxe
+        run: bash ../../.github/workflows/traced.sh bin/TestMain
 
       - name: native build
         id: native
@@ -261,6 +272,12 @@ jobs:
         run: |
           haxe compile.hxml --debug -D HXCPP_GC_DEBUG_ALWAYS_MOVE -D $HXCPP_ARCH_FLAG
           bin/TestMain-debug
+      - name: runtime (moving gc, not generational)
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        working-directory: test/haxe
+        run: |
+          haxe compile-default.hxml -D HXCPP_GC_MOVING -D $HXCPP_ARCH_FLAG
+          bin/TestMain
       - name: runtime (gc verify)
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         working-directory: test/haxe
