@@ -1265,7 +1265,7 @@ void VirtualArray_obj::MakeIntArray()
       base = new Array_obj<int>(len,len);
    }
    else if (!base)
-      base = new Array_obj<int>(0,0);
+      base = new Array_obj<int>(0,takePendingReserve());
    else
    {
       Array<int> result = Dynamic(base);
@@ -1283,7 +1283,7 @@ void VirtualArray_obj::MakeInt64Array()
       base = new Array_obj< ::cpp::Int64>(len, len);
    }
    else if (!base)
-      base = new Array_obj< ::cpp::Int64>(0, 0);
+      base = new Array_obj< ::cpp::Int64>(0,takePendingReserve());
    else
    {
       Array< ::cpp::Int64> result = Dynamic(base);
@@ -1301,7 +1301,7 @@ void VirtualArray_obj::MakeObjectArray()
    }
    else if (!base)
    {
-      base = new Array_obj<Dynamic>(0,0);
+      base = new Array_obj<Dynamic>(0,takePendingReserve());
       HX_OBJ_WB_GET(this,base);
    }
    else
@@ -1322,7 +1322,7 @@ void VirtualArray_obj::MakeStringArray()
       base = new Array_obj<String>(len,len);
    }
    else if (!base)
-      base = new Array_obj<String>(0,0);
+      base = new Array_obj<String>(0,takePendingReserve());
    else
    {
       Array<String> result = Dynamic(base);
@@ -1341,7 +1341,7 @@ void VirtualArray_obj::MakeBoolArray()
       base = new Array_obj<bool>(len,len);
    }
    else if (!base)
-      base = new Array_obj<bool>(0,0);
+      base = new Array_obj<bool>(0,takePendingReserve());
    else
    {
       Array<bool> result = Dynamic(base);
@@ -1360,7 +1360,7 @@ void VirtualArray_obj::MakeFloatArray()
       base = new Array_obj<Float>(len,len);
    }
    else if (!base)
-      base = new Array_obj<Float>(0,0);
+      base = new Array_obj<Float>(0,takePendingReserve());
    else
    {
       Array<Float> result = Dynamic(base);
@@ -1372,7 +1372,7 @@ void VirtualArray_obj::MakeFloatArray()
 
 void VirtualArray_obj::CreateEmptyArray(int inLen)
 {
-   base = new Array_obj<Dynamic>(inLen,inLen);
+   base = new Array_obj<Dynamic>(inLen,takePendingReserve());
    // The new elements are nulls, which only object storage represents.
    // Leaving the store empty made the resized array report length 0,
    // turned pop/shift/copy/concat into no-ops, and rewrote the nulls as

@@ -3,6 +3,11 @@ import utest.Assert;
 
 class TestDynamicArray extends Test
 {
+   static function capacity(a:Array<Dynamic>):Int
+   {
+      return untyped __cpp__("{0}->capacity()", a);
+   }
+
    // push appends numbers and strings without boxing them, through the
    // backing array's typed set
    public function testPushValues()
@@ -82,5 +87,41 @@ class TestDynamicArray extends Test
       var sharedFloats:Array<Dynamic> = cast floatsTyped;
       sharedFloats.push(2);
       Assert.same([0.5, 2.0], floatsTyped);
+   }
+
+   // A reserve on an empty Array<Dynamic>, which has no storage until its
+   // first element, is kept for that storage
+   public function testReserveEmpty()
+   {
+      var values:Array<Dynamic> = [];
+      cpp.NativeArray.reserve(values, 1024);
+      Assert.equals(0, values.length);
+      Assert.isTrue(capacity(values) >= 1024);
+      values.push(1000);
+      Assert.isTrue(capacity(values) >= 1024);
+      values.push(2.5);
+      values.push("text");
+      Assert.same([1000, 2.5, "text"], values);
+   }
+
+   public function testReserveThenIndexOrResize()
+   {
+      var floats:Array<Dynamic> = [];
+      cpp.NativeArray.reserve(floats, 512);
+      floats[0] = 0.5;
+      Assert.isTrue(capacity(floats) >= 512);
+      Assert.equals(0.5, floats[0]);
+
+      var resized:Array<Dynamic> = [];
+      cpp.NativeArray.reserve(resized, 256);
+      resized.resize(3);
+      Assert.equals(3, resized.length);
+      Assert.isNull(resized[0]);
+      Assert.isNull(resized[2]);
+      Assert.isTrue(capacity(resized) >= 256);
+
+      var seeded:Array<Dynamic> = [1];
+      cpp.NativeArray.reserve(seeded, 1024);
+      Assert.isTrue(capacity(seeded) >= 1024);
    }
 }

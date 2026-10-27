@@ -62,8 +62,11 @@ public:
    typedef hx::Object super;
    ArrayStore  store;
    ArrayBase   *base;
+   // Capacity reserved while the array is empty and has no storage yet,
+   // given to the storage its first element chooses
+   mutable int pendingReserve;
 
-   VirtualArray_obj(ArrayBase *inBase=0, bool inFixed=false) : base(inBase)
+   VirtualArray_obj(ArrayBase *inBase=0, bool inFixed=false) : base(inBase), pendingReserve(0)
    {
       mArrayConvertId = hx::aciVirtualArray;
       store = inFixed && inBase ? hx::arrayFixed : base ? base->getStoreType() : hx::arrayEmpty;
@@ -73,7 +76,7 @@ public:
       #endif
    }
 
-   VirtualArray_obj(ArrayStore inStore)
+   VirtualArray_obj(ArrayStore inStore) : base(0), pendingReserve(0)
    {
       mArrayConvertId = hx::aciVirtualArray;
       store = inStore;
@@ -364,13 +367,22 @@ public:
    {
       if (base)
          base->reserve(inSize);
+      else if (inSize>pendingReserve)
+         pendingReserve = inSize;
    }
 
    inline int capacity()
    {
       if (base)
          return base->capacity();
-      return 0;
+      return pendingReserve;
+   }
+
+   inline int takePendingReserve()
+   {
+      int result = pendingReserve;
+      pendingReserve = 0;
+      return result;
    }
 
    void resize(int inLen)
