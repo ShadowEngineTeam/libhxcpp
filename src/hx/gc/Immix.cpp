@@ -3529,6 +3529,7 @@ public:
       mLargeOldReleased = false;
       mRecycleSize = 0;
       mRecycleBytes = 0;
+      mDroppedBytes = 0;
       mLargeAllocSpace = sLargeAllocSpaceFloor;
       mLargeAllocForceRefresh = mLargeAllocSpace;
       // Start at 1 Meg...
@@ -3682,17 +3683,101 @@ public:
       return result;
    }
 
-   static void freeRecycle(RecycleLists &ioLists)
+   // Returns the data bytes it freed
+   static size_t freeRecycle(RecycleLists &ioLists)
    {
+      size_t bytes = 0;
       for(RecycleLists::iterator list=ioLists.begin(); list!=ioLists.end(); ++list)
          for(unsigned int *blob=list->second; blob; )
          {
             unsigned int *next = recycleNext(blob);
+            bytes += blob[0];
             HxFree(blob);
             blob = next;
          }
       ioLists.clear();
+      return bytes;
    }
+
+   // A collection drops the recycle cache it found, and frees it once every
+   //  thread runs again: freeing tens of thousands of buffers took tens of
+   //  milliseconds while they all waited (libhxcpp #332). A thread of its
+   //  own frees each batch, so the thread that collected does not wait for
+   //  it either. A compacting collection frees its batch, and any waiting,
+   //  before it returns
+   void releaseDropped(RecycleLists &ioDropped, bool inNow)
+   {
+      if (ioDropped.empty() && !inNow)
+         return;
+      #if !defined(HXCPP_SINGLE_THREADED_APP) && !defined(__EMSCRIPTEN__)
+      if (!inNow)
+      {
+         std::unique_lock<std::mutex> lock(mReleaseLock);
+         // At most one batch waits, so a releaser that falls behind does
+         //  not let them pile up
+         if (!mReleaseQueue.empty())
+            inNow = true;
+         else if (!mReleaseStarted)
+         {
+            try
+            {
+               std::thread thread(SReleaseLoop, this);
+               thread.detach();
+               mReleaseStarted = true;
+            }
+            catch(...)
+            {
+               inNow = true;
+            }
+         }
+         if (!inNow)
+         {
+            mReleaseQueue.push_back(RecycleLists());
+            mReleaseQueue.back().swap(ioDropped);
+            mReleaseWake.notify_one();
+            return;
+         }
+      }
+      #endif
+
+      mDroppedBytes.fetch_sub(freeRecycle(ioDropped), std::memory_order_relaxed);
+
+      #if !defined(HXCPP_SINGLE_THREADED_APP) && !defined(__EMSCRIPTEN__)
+      std::unique_lock<std::mutex> lock(mReleaseLock);
+      while(!mReleaseQueue.empty())
+      {
+         RecycleLists waiting;
+         waiting.swap(mReleaseQueue.back());
+         mReleaseQueue.pop_back();
+         lock.unlock();
+         mDroppedBytes.fetch_sub(freeRecycle(waiting), std::memory_order_relaxed);
+         lock.lock();
+      }
+      mReleaseIdle.wait(lock, [this]() { return !mReleaseBusy; });
+      #endif
+   }
+
+   #if !defined(HXCPP_SINGLE_THREADED_APP) && !defined(__EMSCRIPTEN__)
+   static void SReleaseLoop(GlobalAllocator *inAlloc) { inAlloc->ReleaseLoop(); }
+
+   void ReleaseLoop()
+   {
+      std::unique_lock<std::mutex> lock(mReleaseLock);
+      while(true)
+      {
+         mReleaseWake.wait(lock, [this]() { return !mReleaseQueue.empty(); });
+         RecycleLists batch;
+         batch.swap(mReleaseQueue.back());
+         mReleaseQueue.pop_back();
+         mReleaseBusy = true;
+         lock.unlock();
+         mDroppedBytes.fetch_sub(freeRecycle(batch), std::memory_order_relaxed);
+         lock.lock();
+         mReleaseBusy = false;
+         mReleaseIdle.notify_all();
+      }
+   }
+   #endif
 
    void *AllocLarge(size_t inSize, bool inClear, bool inContainer=false)
    {
@@ -5628,7 +5713,9 @@ public:
       // Manage recycle size ?
       //  clear old frames recycle objects
       int l2 = mRecycleSize.load(std::memory_order_relaxed);
-      freeRecycle(mRecycle);
+      RecycleLists dropped;
+      dropped.swap(mRecycle);
+      mDroppedBytes.fetch_add(mRecycleBytes.load(std::memory_order_relaxed), std::memory_order_relaxed);
       mRecycleBytes.store(0, std::memory_order_relaxed);
       mRecycleSize.store(0, std::memory_order_relaxed);
 
@@ -6006,6 +6093,8 @@ public:
         #endif
       #endif
 
+      releaseDropped(dropped, inForceCompact);
+
 
       PROFILE_COLLECT_SUMMARY_END;
 
@@ -6149,6 +6238,7 @@ public:
    size_t MemReserved()
    {
       return mLargeAllocated + mRecycleBytes.load(std::memory_order_relaxed) +
+             mDroppedBytes.load(std::memory_order_relaxed) +
              (mAllBlocksCount*IMMIX_USEFUL_LINES<<IMMIX_LINE_BITS);
    }
 
@@ -6298,6 +6388,16 @@ public:
    RecycleLists mRecycle;
    // Their data bytes, read unlocked for the reserved memory figure
    std::atomic_size_t mRecycleBytes;
+   // The data bytes of dropped caches not freed yet
+   std::atomic_size_t mDroppedBytes;
+   #if !defined(HXCPP_SINGLE_THREADED_APP) && !defined(__EMSCRIPTEN__)
+   std::mutex mReleaseLock;
+   std::condition_variable mReleaseWake;
+   std::condition_variable mReleaseIdle;
+   std::vector<RecycleLists> mReleaseQueue;
+   bool mReleaseBusy = false;
+   bool mReleaseStarted = false;
+   #endif
 
    void ForEachStackContext(void (*inFunc)(hx::StackContext *, void *), void *inData);
    // Lock-free probe for AllocLarge - only read unlocked, maintained under
