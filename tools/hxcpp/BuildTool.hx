@@ -213,6 +213,12 @@ class BuildTool
 
       setupAppleDirectories(mDefines);
 
+      // HXCPP_SANITIZE=address,fuzzer also defines HXCPP_SANITIZE_address and
+      // HXCPP_SANITIZE_fuzzer, for compilers that take one sanitizer per flag
+      if (mDefines.exists("HXCPP_SANITIZE"))
+         for(name in mDefines.get("HXCPP_SANITIZE").split(","))
+            mDefines.set("HXCPP_SANITIZE_" + StringTools.trim(name), "1");
+
       if (isMsvc())
       {
          mDefines.set("isMsvc","1");

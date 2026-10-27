@@ -2,6 +2,7 @@
 libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
+* HXCPP_SANITIZE works with MSVC for address and fuzzer, so -D HXCPP_SANITIZE=address builds with cl.exe's AddressSanitizer. The collector's stack scan and ASan defaults had GCC-only attributes that stopped such a build compiling
 * The benchmarks run in CI for each change against its base commit on the same runner, and report throughput, tail pauses and peak memory separately, as warnings when they move past their run-to-run noise. A daily run compares main with itself to measure that noise, and runs on main keep their results on the bench-history branch. bench/Run.hx compares with another libhxcpp checkout with --base, and bench/Compare.hx reports the differences (libhxcpp #258)
 * On Windows, a build with cl.exe warns when a source, generated header or object path reaches 260 characters, which MSVC cannot open even with long paths enabled and reports as missing, and says how to build through a short junction instead. Object file names longer than 48 characters are cut and hashed, so a generic instance's object path no longer reaches the limit before its source. Shorter generated file names need a Haxe change; docs/WindowsLongPaths.md has the details (libhxcpp #356)
 * Fixed a sys.thread.Deque keeping the storage a burst grew it to once it drained: a thread mailbox that once held a million messages held 8 MB for as long as it lived. A deque that drains now gives back storage above 16,384 messages (libhxcpp #316)

@@ -127,6 +127,13 @@
   <flag value="-EHs" unless="HXCPP_CATCH_SEGV || winrt"/>
   <flag value="-EHsc" if="winrt" unless="HXCPP_CATCH_SEGV" />
   <flag value="-GS-"/>
+  <!-- cl takes one sanitizer per flag, and only address and fuzzer. Its fuzzer
+       flag never replaces a main the program has, so it serves for
+       fuzzer-no-link too. The objects name the runtime libraries for link.exe -->
+  <flag value="-fsanitize=address" if="HXCPP_SANITIZE_address"/>
+  <flag value="-fsanitize=fuzzer" if="HXCPP_SANITIZE_fuzzer || HXCPP_SANITIZE_fuzzer-no-link"/>
+  <!-- Instrumented cppia sources pass the default limit on sections -->
+  <flag value="-bigobj" if="HXCPP_SANITIZE" unless="debug"/>
   <flag value="-arch:${MSVC_ARCH}" if="MSVC_ARCH" />
   <flag value="-I${HXCPP}/include"/>
   <include name="toolchain/common-defines.xml" />

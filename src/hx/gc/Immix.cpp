@@ -41,7 +41,11 @@
 // use-after-return check moves locals into frames off the stack, where the
 // scan cannot see them; their objects would then be freed while in use.
 // ASan reads its defaults from here, and ASAN_OPTIONS still overrides them.
+#ifdef _MSC_VER
+extern "C" const char *__asan_default_options()
+#else
 extern "C" __attribute__((visibility("default"), used)) const char *__asan_default_options()
+#endif
 {
    return "detect_stack_use_after_return=0";
 }
