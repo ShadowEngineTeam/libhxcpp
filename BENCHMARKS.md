@@ -108,6 +108,7 @@ These numbers are from one Windows machine; Linux and macOS results are still to
 | `sort_int` | `Array<Int>` sorted with a comparator closure |
 | `sort_string` | `Array<String>` sorted with `Reflect.compare` |
 | `sort_object` | Objects sorted by an Int field, with repeated keys |
+| `gc_weak_map_int` | Collections with an unchanged `WeakMap` of 262,144 retained keys to Int values; each collection's duration is recorded |
 | `noop` | Starting the program and exiting at once (startup time, measured 20 times per runtime) |
 
 ### CPPIA

@@ -432,7 +432,11 @@ struct Hash : public HashBase< typename ELEMENT::Key >
 
    bool markWeakValues(MarkContext *__inCtx) HXCPP_OVERRIDE
    {
-      if (!Element::WeakKeys || !Element::ManageKeys)
+      // Int, Float, Int64 and null values reach nothing to mark, and the map
+      //  keeps this storage until it converts to another Hash. The walk took
+      //  longer than the rest of a minor collection (libhxcpp #333)
+      enum { ManagedValues = StoreOf<Value>::store==hashString || StoreOf<Value>::store==hashObject };
+      if (!Element::WeakKeys || !Element::ManageKeys || !ManagedValues)
          return false;
 
       bool marked = false;
