@@ -357,12 +357,25 @@ class Fuzz {
 		if (nesting(b, "aolbqMcwj", "hg") > MAX_NESTING)
 			return;
 		var v1 = attempt(() -> haxe.Unserializer.run(b.toString()));
-		var s1:String = v1 == null ? null : attempt(() -> haxe.Serializer.run(v1));
+		var s1:String = v1 == null ? null : attempt(() -> serialize(v1));
 		var v2 = s1 == null ? null : attempt(() -> haxe.Unserializer.run(s1));
-		var s2:String = v2 == null ? null : attempt(() -> haxe.Serializer.run(v2));
+		var s2:String = v2 == null ? null : attempt(() -> serialize(v2));
 		var v3 = s2 == null ? null : attempt(() -> haxe.Unserializer.run(s2));
 		if (v3 != null && canon(v2) != canon(v3))
 			fail('serialized $s1 then $s2');
+	}
+
+	/**
+		With the cache, so a value that holds itself comes out as a reference:
+		the input's references can make one in a few bytes ("oy1:ar0g"), and
+		without the cache the std's Serializer recurses into it until the
+		stack overflows, on every target.
+	**/
+	static function serialize(v:Dynamic):String {
+		var s = new haxe.Serializer();
+		s.useCache = true;
+		s.serialize(v);
+		return s.toString();
 	}
 
 	/** Parse and print three times: the last two parsed values must be the same, as for serializer. **/
