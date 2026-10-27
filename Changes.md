@@ -44,6 +44,7 @@ libhxcpp 6.0.0 (unreleased)
 * Fixed FileInput.tell after readByte on a file opened in text mode on Windows giving a position past unread text, so seeking back to it skipped some: the bytes read ahead had their CRLFs turned into LFs, and tell took back fewer bytes than the stream had moved over. Text-mode files no longer read ahead on Windows (libhxcpp #353)
 * Fixed FileSystem.readDirectory on Windows throwing "Invalid directory" for a path longer than MAX_PATH, such as an extended-length one starting with \\?\, before Windows saw it, though other file functions take such a path. The search pattern is now as long as the path needs, after a backslash, since \\?\ paths take no forward slashes (libhxcpp #352, HaxeFoundation/hxcpp#1352)
 * Fixed Sys.programPath on Windows giving the first 259 characters of an executable path longer than MAX_PATH as if it were the whole path: the path is now read into a buffer that grows until it fits (libhxcpp #354, HaxeFoundation/hxcpp#1352)
+* Fixed FileSystem.readDirectory returning the entries read so far, as if they were all of them, when the directory failed to read part way through: readdir's NULL, and FindNextFileW failing on Windows, were taken as the end. It now throws "Error reading directory" unless errno, or GetLastError's ERROR_NO_MORE_FILES on Windows, says the end was reached, after closing the directory (libhxcpp #348)
 
 libhxcpp 6.0.0-rc.1
 ------------------------------------------------------------

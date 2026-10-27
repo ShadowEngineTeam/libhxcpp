@@ -760,6 +760,9 @@ double _hx_std_sys_cpu_time()
 Array<String> _hx_std_sys_read_dir( String p )
 {
    Array<String> result = Array_obj<String>::__new();
+   // An enumeration that fails part way throws, where it gave the entries
+   // read so far as if they were all of them
+   bool failed = false;
 
 #if defined(NEKO_WINDOWS)
    // Sized to the path: a fixed MAX_PATH buffer threw for a longer one,
@@ -794,7 +797,10 @@ Array<String> _hx_std_sys_read_dir( String p )
          hx::EnterGCFreeZone();
       }
       if( !FindNextFileW(handle,&d) )
+      {
+         failed = GetLastError() != ERROR_NO_MORE_FILES;
          break;
+      }
    }
    FindClose(handle);
 #elif !defined(EPPC)
@@ -808,9 +814,15 @@ Array<String> _hx_std_sys_read_dir( String p )
    }
    while( true )
    {
+      // Only errno tells the end from a failure, and the push below can
+      // change it, so it is cleared before each read
+      errno = 0;
       struct dirent *e = readdir(d);
       if( e == NULL )
+      {
+         failed = errno != 0;
          break;
+      }
       // skip magic dirs
       if( e->d_name[0] == '.' && (e->d_name[1] == 0 || (e->d_name[1] == '.' && e->d_name[2] == 0)) )
          continue;
@@ -821,6 +833,8 @@ Array<String> _hx_std_sys_read_dir( String p )
    closedir(d);
 #endif
    hx::ExitGCFreeZone();
+   if( failed )
+      hx::Throw(HX_CSTRING("Error reading directory"));
 
    return result;
 }
