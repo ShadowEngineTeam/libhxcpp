@@ -6149,8 +6149,13 @@ public:
       if (full)
       {
          bool doRelease = false;
+         // Only Gc.compact() gives everything back, as without the moving
+         //  collector below: Gc.run(true) and the allocator's collection when
+         //  its free list is full also compact, and releasing the whole heap
+         //  then shrank it to what was live, so it never grew (#230, #231)
+         bool releaseAll = inForceCompact && inMajor && sReleaseAllRequests.load() > 0;
 
-         if (inForceCompact)
+         if (releaseAll)
             doRelease = true;
          else
          {
@@ -6176,7 +6181,7 @@ public:
 
 
          bool isFragged = stats.fragScore > mAllBlocks.size()*FRAG_THRESH;
-         if (doRelease || isFragged || hx::gAlwaysMove)
+         if (doRelease || isFragged || hx::gAlwaysMove || inForceCompact)
          {
             if (isFragged && sgTimeToNextTableUpdate>3)
                sgTimeToNextTableUpdate = 3;
@@ -6210,7 +6215,7 @@ public:
                   size_t targetMem = std::max( mem + targetFree, hx::sgMinimumWorkingMemory) +
                                         (2<<(IMMIX_BLOCK_GROUP_BITS+IMMIX_BLOCK_BITS));
 
-                  if (inForceCompact)
+                  if (releaseAll)
                      targetMem = 0;
                   size_t have = GetWorkingMemory();
                   if (targetMem<have)
