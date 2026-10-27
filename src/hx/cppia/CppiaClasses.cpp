@@ -2097,6 +2097,14 @@ void  linkCppiaClass(hx::Class_obj *inClass, CppiaModule &cppia, String inName)
 }
 
 
+// The script class a class object stands for, or 0 for a host class or any
+// other object
+CppiaClassInfo *getScriptClassInfo(hx::Object *inClass)
+{
+   CppiaClass *cls = dynamic_cast<CppiaClass *>(inClass);
+   return cls ? cls->info : 0;
+}
+
 int getScriptId(hx::Class inClass)
 {
    hx::Class_obj *ptr = inClass.mPtr;

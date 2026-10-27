@@ -46,3 +46,23 @@ Repeated reloads do not grow memory: each generation is freed once the host has 
 Release a module after its UI, callbacks and worker activity have been detached from the host. Release does not stop code that is running; it only makes the module's statics and names unreachable from now on. Objects from the old generation that the host still holds are not freed by release; they are collected once the host drops them, like any other object, and the module's code goes with the last of them.
 
 `__scriptable_cppia_live_modules()` returns the number of modules whose code has not been freed yet, loaded or released, for hosts and tests that want to check that reloads are freed.
+
+## Finding what keeps a released module loaded
+
+`__scriptable_cppia_retained()` runs a full collection, then returns one row for each released module still loaded after it:
+
+```haxe
+for (row in (untyped __global__.__scriptable_cppia_retained() : Array<Dynamic>)) {
+	trace('module ${row.module}: ${row.closures.count} closures, ${row.closures.bytes} bytes');
+	for (i in (row.instances : Array<Dynamic>))
+		trace('  ${i.name}: ${i.count} instances, ${i.bytes} bytes');
+}
+```
+
+- `module` numbers the module in load order, from 1.
+- `instances` lists the live instances of the module's classes by class, with counts and bytes, most bytes first.
+- `closures` counts the live bound methods of its functions and its closures that hold an object or captured variables.
+
+It works in release builds, like `__hxcpp_gc_census()`, on which it builds. Not counted, since the module holds them itself while it is loaded: its `Class` objects, its enum values, and its static functions used as values. A host holding one of those keeps the module loaded too. Code of the module still running on a thread, and stale pointers to it left on a stack (see Limitations), keep it loaded without anything being counted.
+
+To find what holds the instances of a class, build the host with `-debug` and call `cpp.vm.Gc.trace` with that class, kept from before the release, since `Type.resolveClass` no longer finds it: it prints the path from a root to each instance.

@@ -203,6 +203,10 @@ void __scriptable_load_neko_bytes(Array<unsigned char> inBytes);
 void __scriptable_load_abc(Array<unsigned char> inBytes);
 // Modules whose native memory has not been freed yet
 int __scriptable_cppia_live_modules();
+// Collects, then lists each released module still loaded, with what of it is
+// still live: { module, instances: [{ name, count, bytes }], closures: { count,
+// bytes } }. docs/CppiaModuleRelease.md says what each counts
+Array<Dynamic> __scriptable_cppia_retained();
 // Whether modules loaded now are compiled by the JIT: it is built in, enabled
 // with cpp.cppia.Host.enableJit, and can get executable memory on this platform
 bool __scriptable_cppia_jit_active();

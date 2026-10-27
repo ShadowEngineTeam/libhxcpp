@@ -5,6 +5,7 @@
 #include <atomic>
 #include <mutex>
 #include <new>
+#include <algorithm>
 
 
 namespace hx
@@ -1025,6 +1026,145 @@ void __hxcpp_dbg_getScriptableClasses( Array< ::String> ioClasses )
 int __scriptable_cppia_live_modules()
 {
    return hx::sLiveModules;
+}
+
+
+namespace hx
+{
+extern void (*gCensusVisitor)(hx::Object *inObj, size_t inBytes);
+
+struct RetainedTally
+{
+   size_t count;
+   size_t bytes;
+   RetainedTally() : count(0), bytes(0) { }
+};
+
+// What one census found of each released module. Filled while the census
+// collection marks, on one thread, so it allocates nothing from the collector
+struct RetainedModule
+{
+   CppiaModule *module;
+   std::map<CppiaClassInfo *, RetainedTally> instances;
+   RetainedTally closures;
+};
+static std::vector<RetainedModule> *sRetained = 0;
+
+static RetainedModule *retainedFor(CppiaModule *inModule)
+{
+   for(size_t i=0;i<sRetained->size();i++)
+      if ((*sRetained)[i].module==inModule)
+         return &(*sRetained)[i];
+   return 0;
+}
+
+static void retainedVisit(hx::Object *inObj, size_t inBytes)
+{
+   // A module marks its own Class objects and enum values, so those are not
+   // told apart from what the host holds
+   if (getScriptClassInfo(inObj))
+      return;
+   if (ScriptCallable *function = getClosureFunction(inObj))
+   {
+      for(size_t i=0;i<sRetained->size();i++)
+         if ((*sRetained)[i].module->ownsMemory(function))
+         {
+            (*sRetained)[i].closures.count++;
+            (*sRetained)[i].closures.bytes += inBytes;
+            break;
+         }
+      return;
+   }
+   hx::Class cls = inObj->__GetClass();
+   CppiaClassInfo *info = getScriptClassInfo(cls.mPtr);
+   if (info && !info->isEnum)
+      if (RetainedModule *retained = retainedFor(&info->cppia))
+      {
+         RetainedTally &tally = retained->instances[info];
+         tally.count++;
+         tally.bytes += inBytes;
+      }
+}
+
+static hx::Anon retainedRow(const char *inName, const RetainedTally &inTally)
+{
+   hx::Anon row = hx::Anon_obj::Create();
+   if (inName)
+      row->__SetField(HX_CSTRING("name"), String::create(inName), hx::paccDynamic);
+   row->__SetField(HX_CSTRING("count"), (int)std::min(inTally.count, (size_t)0x7fffffff), hx::paccDynamic);
+   row->__SetField(HX_CSTRING("bytes"), (Float)inTally.bytes, hx::paccDynamic);
+   return row;
+}
+
+} // end namespace hx
+
+// Collects, then reports each released module that is still loaded: its
+// number, the live instances of its classes by class, and the bound methods
+// and closures of its functions
+Array<Dynamic> __scriptable_cppia_retained()
+{
+   std::vector<hx::RetainedModule> retained;
+   {
+      std::lock_guard<std::mutex> lock(hx::sModuleLock);
+      std::vector<hx::CppiaModule *> &modules = hx::allModules();
+      for(size_t i=0;i<modules.size();i++)
+         if (modules[i]->released)
+         {
+            hx::RetainedModule entry;
+            entry.module = modules[i];
+            retained.push_back(entry);
+         }
+   }
+
+   hx::sRetained = &retained;
+   hx::gCensusVisitor = hx::retainedVisit;
+   __hxcpp_gc_census();
+   hx::gCensusVisitor = 0;
+   hx::sRetained = 0;
+
+   // Copied out under the lock, and turned into Haxe values after it: a
+   // collection while allocating them marks the modules, which takes the lock
+   struct Report
+   {
+      int module;
+      std::vector< std::pair<std::string, hx::RetainedTally> > instances;
+      hx::RetainedTally closures;
+   };
+   std::vector<Report> reports;
+   {
+      std::lock_guard<std::mutex> lock(hx::sModuleLock);
+      std::vector<hx::CppiaModule *> &modules = hx::allModules();
+      for(size_t r=0;r<retained.size();r++)
+      {
+         // The census collection frees the modules nothing reaches
+         if (std::find(modules.begin(), modules.end(), retained[r].module)==modules.end())
+            continue;
+         Report report;
+         report.module = retained[r].module->scriptId;
+         for(std::map<hx::CppiaClassInfo *, hx::RetainedTally>::iterator i=retained[r].instances.begin(); i!=retained[r].instances.end(); ++i)
+            report.instances.push_back(std::make_pair(i->first->name, i->second));
+         report.closures = retained[r].closures;
+         reports.push_back(report);
+      }
+   }
+
+   Array<Dynamic> result = Array_obj<Dynamic>::__new(0,(int)reports.size());
+   for(size_t r=0;r<reports.size();r++)
+   {
+      std::vector< std::pair<std::string, hx::RetainedTally> > &sorted = reports[r].instances;
+      std::sort(sorted.begin(), sorted.end(), [](const std::pair<std::string, hx::RetainedTally> &a, const std::pair<std::string, hx::RetainedTally> &b)
+         { return a.second.bytes > b.second.bytes; });
+      Array<Dynamic> instances = Array_obj<Dynamic>::__new(0,(int)sorted.size());
+      for(size_t i=0;i<sorted.size();i++)
+         instances->push( hx::retainedRow(sorted[i].first.c_str(), sorted[i].second) );
+
+      hx::Anon row = hx::Anon_obj::Create();
+      row->__SetField(HX_CSTRING("module"), reports[r].module, hx::paccDynamic);
+      row->__SetField(HX_CSTRING("instances"), instances, hx::paccDynamic);
+      row->__SetField(HX_CSTRING("closures"), hx::retainedRow(0, reports[r].closures), hx::paccDynamic);
+      result->push(row);
+   }
+   return result;
 }
 
 String __scriptable_host_fingerprint()

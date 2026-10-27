@@ -335,6 +335,12 @@ static std::unordered_map<hx::Class_obj *,CensusEntry> *sgCensusCounts = 0;
 // Stack values a census collection could not tell from raw memory, with whether
 // each is a large allocation; they are marked after the precise marking
 static std::vector< std::pair<void *,bool> > *sgCensusDeferred = 0;
+namespace hx
+{
+// When set, called with each object a census counts: cppia attributes them to
+// the released modules they keep loaded
+void (*gCensusVisitor)(hx::Object *inObj, size_t inBytes) = 0;
+}
 
 #ifdef HXCPP_DEBUG
 static hx::Object *gCollectTrace = 0;
@@ -2364,6 +2370,8 @@ static void CensusCount(hx::Object *inPtr, unsigned int inFlags)
    CensusEntry &entry = (*sgCensusCounts)[ inPtr->__GetClass().GetPtr() ];
    entry.count++;
    entry.bytes += size;
+   if (hx::gCensusVisitor)
+      hx::gCensusVisitor(inPtr, size);
 }
 
 void MarkObjectAllocUnchecked(hx::Object *inPtr,hx::MarkContext *__inCtx)

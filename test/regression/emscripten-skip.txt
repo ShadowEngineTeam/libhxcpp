@@ -13,6 +13,7 @@ CppiaBreakpoints: threads
 CppiaHostArgs: processes
 CppiaHostMismatch: checks jitted code, and Emscripten has no cppia JIT
 CppiaModuleFree: threads
+CppiaModuleRetained: threads
 ExitWithBusyWorker: processes and threads
 FinalizersAcrossFreeZones: threads
 GcHeapGrows: expects the desktop 20 MB working target; other platforms, Emscripten included, use 8 MB
