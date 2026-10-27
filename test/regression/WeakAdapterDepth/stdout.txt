@@ -1,0 +1,7 @@
+live receiver preserves adapter depth 0: true
+live receiver preserves adapter depth 1: true
+live receiver preserves adapter depth 15: true
+live receiver preserves adapter depth 16: true
+live receiver preserves adapter depth 32: true
+unreachable adapter cycle is cleared: true
+callbacks clear after receiver release: true

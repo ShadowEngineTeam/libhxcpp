@@ -2,6 +2,13 @@
 libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
+* Fixed a copy of an hx::Ref not keeping its object alive: copying one of the same type shared the original's GC root, so once the original went the collector could free the object the copy still held (libhxcpp #355)
+* Fixed hx::Ref::setPtr leaving its GC root at the old offset when it moved to another interface of the same object, so the collector could free the object while the reference still held it (libhxcpp #361)
+* Fixed an exception thrown by a finalizer leaving the collector paused: it unwound out of the collection with every other thread still stopped. The collection now finishes, running the other finalizers, and the first exception is thrown to the code that started it (libhxcpp #358)
+* Fixed Gc.trace missing old instances with HXCPP_GC_GENERATIONAL: it could run a minor collection, which does not mark them again, so a retained class could count none (libhxcpp #359)
+* Fixed GCChangeManagedMemory with a delta near the top of the Int range raising the large-allocation allowance to nearly the whole address space, so large allocations stopped starting collections long after the memory was released (libhxcpp #362)
+* Fixed weak references to a callback behind 16 or more adapters being cleared while the receiver lived: the walk to the receiver stopped after 16 hops. It now follows any chain, and still clears a cycle of dead adapters (libhxcpp #364)
+* Fixed a large object held only on the stack keeping itself alive but not what it held: the stack scan set its mark without marking its members, so they could be freed while it still referenced them. One of the conservative-scan misses of the kind HaxeFoundation/hxcpp#945 reports (libhxcpp #366)
 * Emscripten programs let memory grow and get a 5 MB stack by default. They linked with Emscripten's fixed 16 MB of memory, which aborts with "Aborted(OOM)" as soon as a program holds more, and since Emscripten 3.1.27 a 64 KB stack, which Haxe recursion and the pointers that spill-pointers keeps on the stack soon overflow. HXCPP_LINK_NO_MEMORY_GROWTH and HXCPP_LINK_NO_STACK_SIZE restore Emscripten's settings, and HXCPP_LINK_STACK_SIZE sets another size
 * Fixed converting a long or a size_t to Dynamic failing to compile on Emscripten, where long is 32 bits but not int, as an Int default of -2147483648 does (HaxeFoundation/hxcpp#621)
 * Fixed cppia hosts built with HXCPP_DEBUGGER failing to compile on Emscripten, which has no cppia JIT: the debugger's frame reader asked whether a function was jitted through a field that only exists with the JIT

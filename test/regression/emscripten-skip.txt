@@ -12,16 +12,20 @@ CppiaArrayAccess: its host is the first --next section, which -D emscripten does
 CppiaBreakpoints: threads
 CppiaModuleFree: threads
 ExitWithBusyWorker: processes and threads
+FinalizerExceptionState: threads (std::thread, which needs a pthreads build)
 FinalizersAcrossFreeZones: threads
 GcHeapGrows: expects the desktop 20 MB working target; other platforms, Emscripten included, use 8 MB
+GcNativePressureBoundary: threads (std::thread, which needs a pthreads build)
 GcReleaseEmptyBlocks: threads
 GcRunKeepsHeap: expects the desktop 20 MB working target; other platforms, Emscripten included, use 8 MB
 GcScopeOwnership: counts thread attachments, which single-threaded Emscripten builds do not make
+GcStackLargeContainer: threads (std::thread, which needs a pthreads build)
 GcWeakMapChain: threads
 GenerationalArrayYoungLog: threads
 GenerationalBlockAccounting: threads (std::thread, which needs a pthreads build)
 GenerationalFinalizerLifecycle: threads (std::thread, which needs a pthreads build)
 GenerationalLargeBufferLifecycle: threads (std::thread, which needs a pthreads build)
+GenerationalTraceCounts: threads (std::thread, which needs a pthreads build)
 GenerationalWeakRefLifecycle: threads (std::thread, which needs a pthreads build)
 Int64DivisionBoundary: processes (runs itself)
 IntBoxesAcrossThreads: threads
@@ -29,6 +33,8 @@ Issue1063: needs a file creation time, which Emscripten's stat does not have, so
 Issue971: threads
 LargeAllocThreads: threads
 LargeAllowanceDecays: threads
+NativeRefCopyRoot: threads (std::thread, which needs a pthreads build)
+NativeRefInterfaceRetarget: threads (std::thread, which needs a pthreads build)
 PollFailedConnect: sockets
 PollSocketLifetime: sockets
 PollingSafePoint: threads (std::thread, which needs a pthreads build)
@@ -58,4 +64,5 @@ ThreadEndsAtExitDebugger: threads
 ThreadEndsWhileCollecting: threads
 ThreadWaitTimeouts: threads
 TimerStampFirstCall: threads
+WeakAdapterDepth: threads (std::thread, which needs a pthreads build)
 WeakMapSparseCapacity: threads (std::thread, which needs a pthreads build)

@@ -187,6 +187,9 @@ namespace hx
 
       Ref() : ptr(0) { }
       Ref(const T &inT) : ptr(0) { setPtr(inT); }
+      // Each copy roots its own ptr: the generated copy would share the
+      //  original's root, which goes when the original does
+      Ref(const Ref &inRef) : ptr(0) { setPtr(inRef.ptr); }
       template<typename O>
       inline Ref(const Native<O> &inNative) : ptr(0) { setPtr(inNative.ptr); }
       template<typename O>
@@ -195,8 +198,9 @@ namespace hx
       ~Ref() { setPtr(0); }
       void setPtr(T inPtr)
       {
+         // The offset the root has now, from the view it was registered for
          hx::Object *old = ptr ? ptr->__GetRealObject() : 0;
-         int oldOffset = old ? (int)(size_t)((char *)inPtr - (char *)old) : 0;
+         int oldOffset = old ? (int)(size_t)((char *)ptr - (char *)old) : 0;
          hx::Object *next = inPtr ? inPtr->__GetRealObject() : 0;
          int nextOffset = next ? (int)(size_t)((char *)inPtr - (char *)next) : 0;
 
@@ -213,6 +217,7 @@ namespace hx
       }
 
       inline Ref &operator=(const T &inPtr) { setPtr(inPtr); return *this; }
+      inline Ref &operator=(const Ref &inRef) { setPtr(inRef.ptr); return *this; }
       template<typename O>
       inline Ref &operator=(const Native<O> &inNative) { setPtr(inNative.ptr); return *this; }
       template<typename O>

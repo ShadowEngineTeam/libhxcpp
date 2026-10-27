@@ -1,0 +1,4 @@
+trace counts retained old instances: true
+trace counts old and young instances together: true
+retained contents remain correct: true
+trace excludes released instances: true

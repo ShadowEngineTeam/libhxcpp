@@ -15,6 +15,7 @@
 #include <atomic>
 #include <inttypes.h>
 #include <limits>
+#include <exception>
 
 #ifdef __EMSCRIPTEN__
    #include <emscripten/stack.h>
@@ -2840,30 +2841,37 @@ bool IsWeakRefValid(hx::Object *inPtr)
     // Special case of member closure - check if the 'this' pointer is still alive.
     // Adapters return the callable they wrap, so follow the chain to the receiver.
     bool isCurrent = mark==gByteMarkID;
+    // A chain of any length is followed: a limit of 16 hops cleared the
+    //  callbacks behind 16 adapters while their receiver lived (libhxcpp #364).
+    //  A second pointer follows at half speed, so a cycle of dead adapters
+    //  catches up with it and ends the walk.
     if ( !isCurrent && inPtr->__GetType()==vtFunction)
     {
-        enum { MAX_HOPS = 16 };
-        hx::Object *chain[MAX_HOPS];
-        int hops = 0;
         hx::Object *fn = inPtr;
-        while(hops<MAX_HOPS)
+        hx::Object *slow = inPtr;
+        bool moveSlow = false;
+        while(true)
         {
-            chain[hops++] = fn;
             hx::Object *thiz = (hx::Object *)fn->__GetHandle();
             if (!thiz)
                break;
             mark = ((unsigned char *)thiz)[HX_ENDIAN_MARK_ID_BYTE];
             if ( (((unsigned int *)thiz)[-1] & HX_GC_CONST_ALLOC_BIT) || mark==gByteMarkID)
             {
-               // The object is still alive, so mark the closures and continue
-               for(int i=0;i<hops;i++)
-                  MarkAlloc(chain[i],0);
+               // The object is still alive, so mark the closures that lead to it
+               for(hx::Object *link=inPtr; link!=thiz; link=(hx::Object *)link->__GetHandle())
+                  MarkAlloc(link,0);
                return true;
             }
             // A String's member closures hand back its characters, not an object
             if (!(((unsigned int *)thiz)[-1] & IMMIX_ALLOC_IS_CONTAINER) || thiz->__GetType()!=vtFunction)
                break;
             fn = thiz;
+            if (moveSlow)
+               slow = (hx::Object *)slow->__GetHandle();
+            moveSlow = !moveSlow;
+            if (fn==slow)
+               break;
         }
     }
     return isCurrent;
@@ -2928,6 +2936,43 @@ static int localAllocs;
 static int rootObjects;
 static int rootAllocs;
 
+// The first exception a finalizer threw in this collection. The collection
+//  goes on, running the other finalizers, and Collect throws it to its caller
+//  once the other threads are released: thrown straight out of the finalizer,
+//  it left the collector paused and the collection half done (libhxcpp #358)
+std::exception_ptr sFinalizerException;
+// The context of the thread whose collection it was, which alone throws it,
+//  set once the collection is over
+std::atomic<void *> sFinalizerExceptionOwner{ nullptr };
+
+// Throws what a finalizer threw in this thread's last collection. Collect
+//  calls it when it holds no lock; a collection made for an allocation, under
+//  the state lock, leaves it to the allocator once it has its block
+void ThrowFinalizerException()
+{
+   void *owner = sFinalizerExceptionOwner.load(std::memory_order_acquire);
+   if (!owner || owner!=(void *)hx::tlsStackContext)
+      return;
+   std::exception_ptr thrown = sFinalizerException;
+   sFinalizerException = nullptr;
+   sFinalizerExceptionOwner.store(nullptr, std::memory_order_relaxed);
+   std::rethrow_exception(thrown);
+}
+
+template<typename CALL>
+static void CallFinalizer(CALL inCall)
+{
+   try
+   {
+      inCall();
+   }
+   catch(...)
+   {
+      if (!sFinalizerException)
+         sFinalizerException = std::current_exception();
+   }
+}
+
 // Runs the finalizers in inList whose object died. With inOld, the survivors
 //  move there; without, they stay
 static void RunInternalFinalizers(FinalizerList &inList, FinalizerList *inOld)
@@ -2945,7 +2990,7 @@ static void RunInternalFinalizers(FinalizerList &inList, FinalizerList *inOld)
       {
          if (f->mFinalizer)
          {
-            f->mFinalizer(f->mObject);
+            CallFinalizer([&]{ f->mFinalizer(f->mObject); });
             finalizerCount++;
          }
          inList.qerase(idx);
@@ -2976,7 +3021,7 @@ static void RunFinalizables(FinalizableList &inList, FinalizableList *inOld)
          // A copy: run may register another, which can move the list
          Finalizable run = f;
          inList.qerase(idx);
-         run.run();
+         CallFinalizer([&]{ run.run(); });
       }
       else if (inOld)
       {
@@ -3070,7 +3115,7 @@ void RunFinalizers(bool inMinor)
       TakeDeadFinalizers(sOldFinalizerMap, (FinalizerMap *)0, sRunNativeFinalizers);
    TakeDeadFinalizers(sFinalizerMap, &sOldFinalizerMap, sRunNativeFinalizers);
    for(size_t run=0; run<sRunNativeFinalizers.size(); run++)
-      (*sRunNativeFinalizers[run].second)(sRunNativeFinalizers[run].first);
+      CallFinalizer([&]{ (*sRunNativeFinalizers[run].second)(sRunNativeFinalizers[run].first); });
    sRunNativeFinalizers.clear();
 
 
@@ -3080,7 +3125,7 @@ void RunFinalizers(bool inMinor)
       TakeDeadFinalizers(sOldHaxeFinalizerMap, (HaxeFinalizerMap *)0, sRunHaxeFinalizers);
    TakeDeadFinalizers(sHaxeFinalizerMap, &sOldHaxeFinalizerMap, sRunHaxeFinalizers);
    for(size_t run=0; run<sRunHaxeFinalizers.size(); run++)
-      (*sRunHaxeFinalizers[run].second)(sRunHaxeFinalizers[run].first);
+      CallFinalizer([&]{ (*sRunHaxeFinalizers[run].second)(sRunHaxeFinalizers[run].first); });
    sRunHaxeFinalizers.clear();
 
    MEM_STAMP(hx::tFinalizers);
@@ -3771,9 +3816,13 @@ public:
             CollectFromThisThread(false,false);
          }
 
-         int rounded = (inDelta +3) & ~3;
-   
-         growLargeAllocSpace((size_t)rounded<<1);
+         // In size_t, which holds any positive int rounded up: in int, a delta
+         //  near the top of its range overflowed to an allowance near the size_t
+         //  maximum, which the halving at each collection took far too long to
+         //  undo. Twice that is clamped for a 32-bit size_t.
+         size_t rounded = ((size_t)inDelta + 3) & ~(size_t)3;
+         const size_t maxSpace = std::numeric_limits<size_t>::max()/2;
+         growLargeAllocSpace(rounded > maxSpace ? maxSpace : rounded<<1);
       }
 
       #ifndef HXCPP_SINGLE_THREADED_APP
@@ -5883,6 +5932,8 @@ public:
 
       sgIsCollecting = false;
 
+      if (hx::sFinalizerException)
+         hx::sFinalizerExceptionOwner.store((void *)hx::tlsStackContext, std::memory_order_release);
 
       hx::gPauseForCollect = 0x00000000;
       #ifndef HXCPP_SINGLE_THREADED_APP
@@ -5905,6 +5956,9 @@ public:
 
 
       PROFILE_COLLECT_SUMMARY_END;
+
+      if (!inLocked)
+         hx::ThrowFinalizerException();
    }
 
    void reclaimBlocks(bool full, BlockDataStats &outStats)
@@ -6284,7 +6338,11 @@ void MarkConservative(int *inBottom, int *inTop,hx::MarkContext *__inCtx)
             if (mem==memLarge)
             {
                unsigned char& mark{ reinterpret_cast<unsigned char*>(potentialObject)[HX_ENDIAN_MARK_ID_BYTE] };
-               if (mark != gByteMarkID)
+               // A large object's members are marked as from any other root:
+               //  setting its mark kept the object but none of what it held
+               if (reinterpret_cast<unsigned int*>(potentialObject)[-1] & IMMIX_ALLOC_IS_CONTAINER)
+                  hx::MarkObjectAlloc(reinterpret_cast<hx::Object*>(potentialObject), __inCtx);
+               else if (mark != gByteMarkID)
                {
                   if (sgCensus)
                      sgCensusDeferred->push_back(std::make_pair(reinterpret_cast<void*>(potentialObject), true));
@@ -7029,6 +7087,9 @@ public:
             #endif
             mCurrentHole = 1;
             mMoreHoles = mCurrentHole<mCurrentHoles;
+
+            // From a collection GetFreeBlock made: the block is ours now
+            hx::ThrowFinalizerException();
          }
 
          // Other thread may have started collect, in which case we may just
@@ -7675,7 +7736,9 @@ int __hxcpp_gc_trace(hx::Class inClass,bool inPrint)
        gCollectTrace = inClass.GetPtr();
        gCollectTraceCount = 0;
        gCollectTraceDoPrint = inPrint;
-       hx::InternalCollect(false,false);
+       // Major, so that every live instance is marked and counted: a minor
+       //  collection skips the old ones, which are marked already
+       hx::InternalCollect(true,false);
        gCollectTrace = 0;
        return gCollectTraceCount;
     #endif
