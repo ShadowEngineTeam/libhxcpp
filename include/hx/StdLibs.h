@@ -777,7 +777,7 @@ HXCPP_EXTERN_CLASS_ATTRIBUTES Dynamic _hx_regexp_matched_pos(Dynamic handle, int
 HXCPP_EXTERN_CLASS_ATTRIBUTES int     _hx_regexp_matched_num(Dynamic handle);
 
 
-// haxe.zip.(Un)Compress.hx -> src/hx/libs/zlib/ZLib.cpp
+// haxe.zip.(Un)Compress.hx -> src/hx/zip/Zip.cpp
 HXCPP_EXTERN_CLASS_ATTRIBUTES Dynamic _hx_deflate_init(int level);
 HXCPP_EXTERN_CLASS_ATTRIBUTES int _hx_deflate_bound(Dynamic handle,int length);
 HXCPP_EXTERN_CLASS_ATTRIBUTES Dynamic _hx_deflate_buffer(Dynamic handle, Array<unsigned char> src, int srcPos, Array<unsigned char> dest, int destPos);
@@ -788,6 +788,9 @@ HXCPP_EXTERN_CLASS_ATTRIBUTES Dynamic _hx_inflate_buffer(Dynamic handle, Array<u
 HXCPP_EXTERN_CLASS_ATTRIBUTES void _hx_inflate_end(Dynamic handle);
 
 HXCPP_EXTERN_CLASS_ATTRIBUTES void _hx_zip_set_flush_mode(Dynamic handle, String flushMode);
+HXCPP_EXTERN_CLASS_ATTRIBUTES int _hx_zip_get_adler32(Dynamic handle);
+HXCPP_EXTERN_CLASS_ATTRIBUTES int _hx_zip_update_adler32(int adler, Array<unsigned char> src, int pos, int len);
+HXCPP_EXTERN_CLASS_ATTRIBUTES int _hx_zip_update_crc32(int crc, Array<unsigned char> src, int pos, int len);
 
 // sys.db.Mysql.hx -> src/hx/libs/mysql/Mysql.cpp
 HXCPP_EXTERN_CLASS_ATTRIBUTES Dynamic _hx_mysql_connect(Dynamic params);

@@ -10,10 +10,23 @@
 #include <hx/OS.h>
 #include <unordered_map>
 #include <mutex>
+#include <atomic>
+#include <algorithm>
 
 
 #if defined(HXCPP_CATCH_SEGV) && !defined(_MSC_VER)
 #include <signal.h>
+#endif
+
+// Where address space can be reserved, a script stack reserves its whole size
+//  and commits memory as frames reach it. Elsewhere it is allocated outright
+#ifdef HXCPP_SCRIPTABLE
+#if defined(HX_WINDOWS) && !defined(HX_WINRT)
+#define HX_RESERVE_SCRIPT_STACK
+#elif defined(__linux__) || defined(__APPLE__)
+#include <sys/mman.h>
+#define HX_RESERVE_SCRIPT_STACK
+#endif
 #endif
 
 
@@ -222,12 +235,7 @@ StackContext::StackContext()
    //  match from the start: left at 0 until the first collection, it took
    //  every nursery object for an old one
    byteMarkId = ::hx::gByteMarkID;
-   stack = new unsigned char[128*1024];
-   // Leave a 16K margin - argument pushes precede the callee's frame check
-   stackEnd = stack + 128*1024 - 16*1024;
-   pointer = &stack[0];
-   push((hx::Object *)0);
-   frame = pointer;
+   allocScriptStack();
    exception = 0;
    breakContReturn = 0;
    #endif
@@ -255,9 +263,134 @@ StackContext::~StackContext()
    #endif
 
    #ifdef HXCPP_SCRIPTABLE
-   delete [] stack;
+   freeScriptStack();
    #endif
 }
+
+#ifdef HXCPP_SCRIPTABLE
+
+#ifndef HXCPP_CPPIA_STACK_SIZE
+#define HXCPP_CPPIA_STACK_SIZE (128*1024)
+#endif
+
+// Argument pushes precede the callee's frame check, so stackEnd stays this far
+//  below the committed end
+static const size_t sScriptStackMargin = 16*1024;
+// Sizes and commits are whole steps, which are whole pages for 4K, 16K and 64K pages
+static const size_t sScriptStackStep = 64*1024;
+static const size_t sScriptStackMax = 0x7fff0000;
+// Committed when a stack is made, which is all of a stack of the default size
+static const size_t sScriptStackFirstCommit = 128*1024;
+
+// The size new script stacks get
+static std::atomic<int> sScriptStackSize( HXCPP_CPPIA_STACK_SIZE );
+
+static size_t scriptStackSize(int inBytes)
+{
+   size_t size = inBytes < (int)sScriptStackStep ? sScriptStackStep : (size_t)inBytes;
+   if (size > sScriptStackMax)
+      size = sScriptStackMax;
+   return (size + sScriptStackStep - 1) & ~(sScriptStackStep - 1);
+}
+
+#ifdef HX_RESERVE_SCRIPT_STACK
+static unsigned char *reserveScriptStack(size_t inSize)
+{
+   #ifdef HX_WINDOWS
+   return (unsigned char *)VirtualAlloc(0, inSize, MEM_RESERVE, PAGE_NOACCESS);
+   #else
+   void *result = mmap(0, inSize, PROT_NONE, MAP_PRIVATE | MAP_ANON, -1, 0);
+   return result==MAP_FAILED ? 0 : (unsigned char *)result;
+   #endif
+}
+
+static bool commitScriptStack(unsigned char *inStart, size_t inSize)
+{
+   #ifdef HX_WINDOWS
+   return VirtualAlloc(inStart, inSize, MEM_COMMIT, PAGE_READWRITE)!=0;
+   #else
+   return mprotect(inStart, inSize, PROT_READ | PROT_WRITE)==0;
+   #endif
+}
+
+static void releaseScriptStack(unsigned char *inStack, size_t inSize)
+{
+   #ifdef HX_WINDOWS
+   VirtualFree(inStack, 0, MEM_RELEASE);
+   #else
+   munmap(inStack, inSize);
+   #endif
+}
+#endif
+
+void StackContext::allocScriptStack()
+{
+   stackSize = scriptStackSize(sScriptStackSize.load(std::memory_order_relaxed));
+   stack = 0;
+   #ifdef HX_RESERVE_SCRIPT_STACK
+   stack = reserveScriptStack(stackSize);
+   stackCommitted = std::min(stackSize, sScriptStackFirstCommit);
+   if (stack && !commitScriptStack(stack, stackCommitted))
+   {
+      releaseScriptStack(stack, stackSize);
+      stack = 0;
+   }
+   #endif
+   stackReserved = stack!=0;
+   if (!stack)
+   {
+      stack = new unsigned char[stackSize];
+      stackCommitted = stackSize;
+   }
+   stackEnd = stack + stackCommitted - sScriptStackMargin;
+   pointer = stack;
+   push((hx::Object *)0);
+   frame = pointer;
+}
+
+void StackContext::freeScriptStack()
+{
+   #ifdef HX_RESERVE_SCRIPT_STACK
+   if (stackReserved)
+      releaseScriptStack(stack, stackSize);
+   else
+   #endif
+      delete [] stack;
+   stack = pointer = frame = stackEnd = 0;
+}
+
+bool StackContext::growScriptStack(int inBytes)
+{
+   size_t needed = (size_t)(pointer - stack) + inBytes + sScriptStackMargin;
+   if (needed > stackSize)
+      return false;
+   #ifdef HX_RESERVE_SCRIPT_STACK
+   if (needed > stackCommitted)
+   {
+      // Doubling keeps deep recursion to a few commits
+      size_t commit = std::max(needed, stackCommitted*2);
+      commit = std::min(stackSize, (commit + sScriptStackStep - 1) & ~(sScriptStackStep - 1));
+      if (!commitScriptStack(stack + stackCommitted, commit - stackCommitted))
+         return false;
+      stackCommitted = commit;
+      stackEnd = stack + stackCommitted - sScriptStackMargin;
+   }
+   #endif
+   return true;
+}
+
+void StackContext::resizeScriptStack()
+{
+   if (stackSize==scriptStackSize(sScriptStackSize.load(std::memory_order_relaxed)))
+      return;
+   // Only the bottom slot is in use when no script frame is
+   if (frame!=stack + sizeof(hx::Object *) || pointer!=frame)
+      return;
+   freeScriptStack();
+   allocScriptStack();
+}
+
+#endif
 
 void StackContext::onThreadAttach()
 {
@@ -293,6 +426,11 @@ void StackContext::onThreadAttach()
       #else
       mOldSignalFunc = signal( SIGSEGV, hxSignalFunction );
       #endif
+   #endif
+
+   #ifdef HXCPP_SCRIPTABLE
+   // A pooled context keeps the stack an earlier thread had
+   resizeScriptStack();
    #endif
 }
 
@@ -508,6 +646,22 @@ HXCPP_EXTERN_CLASS_ATTRIBUTES void NullReference(const char *type, bool allowFix
 
 #ifndef HXCPP_DEBUGGER
 void __hxcpp_execution_trace(int inLevel) { }
+#endif
+
+#ifdef HXCPP_SCRIPTABLE
+void __scriptable_cppia_set_stack_size(int inBytes)
+{
+   hx::sScriptStackSize.store(inBytes, std::memory_order_relaxed);
+   hx::StackContext *ctx = hx::StackContext::getCurrent();
+   if (ctx)
+      ctx->resizeScriptStack();
+}
+
+int __scriptable_cppia_stack_size()
+{
+   hx::StackContext *ctx = hx::StackContext::getCurrent();
+   return ctx ? (int)ctx->stackSize : 0;
+}
 #endif
 
 

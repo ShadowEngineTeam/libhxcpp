@@ -103,6 +103,27 @@ Haxe's TLS (`sys.ssl`, and `haxe.Http` with https) runs on mbedTLS, which libhxc
 
 A host that loads replacement cppia code in a running process can release the module it replaces with `untyped module.release()`. Its classes, statics and resources are let go at once, and its code is freed once nothing from it is still in use, so repeated reloads do not grow memory. [docs/CppiaModuleRelease.md](docs/CppiaModuleRelease.md) describes the contract and its limitations: profiler and telemetry builds keep released modules loaded.
 
+## Loading other script formats
+
+A host can teach the cppia loader a script format of its own, such as another language's bytecode that it translates to cppia. It registers the format's magic with a function that is given a script starting with it, as bytes, and returns the cppia to load in its place, a String of text cppia or bytes of text or binary cppia:
+
+```haxe
+extern class CppiaFormats {
+	@:native("__scriptable_cppia_register_format")
+	static function register(magic:String, translate:Null<(script:haxe.io.BytesData) -> Dynamic>):Void;
+}
+
+class MyFormat {
+	static function __init__()
+		CppiaFormats.register("MYFMT", translate);
+
+	static function translate(script:haxe.io.BytesData):Dynamic
+		return MyCompiler.toCppia(haxe.io.Bytes.ofData(script));
+}
+```
+
+`cpp.cppia.Module.fromData` and `fromString`, and so `Host.runFile`, then load such scripts, interpreted or with the JIT. Registered in `__init__`, as here, the format is there before `main`, so a host built from `cpp.cppia.Host` with the class compiled in runs `Cppia script.myfmt` as it runs a `.cppia` file. Scripts that start with `CPPIA` or `CPPIB` are never translated, and a null translator removes a format.
+
 ## Compatibility
 
 libhxcpp keeps hxcpp's build XML, defines and API, and works with the code Haxe 4.2 and later generates for hxcpp. A few fixes deliberately change behaviour to match the other Haxe targets, for example how `Std.string` formats floats, NaN and Infinity, and TLS connections now require TLS 1.2 or newer. Changes.md describes each one.

@@ -71,9 +71,11 @@ neko_value gNekoFalse = 0;
 
 namespace
 {
+// Strings are Haxe Strings only once neko_init gives their constructor. null,
+//  true and false are neko's own from the start
 void CheckInitDynamicNekoLoader()
 {
-   if (!gNekoNull)
+   if (!gNeko2HaxeString)
    {
       printf("Haxe code is missing a call to cpp.Prime.nekoInit().\n");
    }
@@ -107,6 +109,7 @@ typedef neko_value (*alloc_array_func)(unsigned int);
 typedef void (*val_gc_func)(neko_value,void *);
 typedef void (*val_ocall1_func)(neko_value,int,neko_value);
 typedef neko_value (*alloc_empty_string_func)(int);
+typedef neko_value (*alloc_int32_func)(int);
 
 static alloc_object_func dyn_alloc_object = 0;
 static alloc_string_func dyn_alloc_string = 0;
@@ -128,6 +131,7 @@ static alloc_array_func dyn_alloc_array = 0;
 static val_gc_func dyn_val_gc = 0;
 static val_ocall1_func dyn_val_ocall1 = 0;
 static alloc_empty_string_func dyn_alloc_empty_string = 0;
+static alloc_int32_func dyn_alloc_int32 = 0;
 
 
 neko_value api_alloc_string(const char *inString)
@@ -162,13 +166,27 @@ neko_value api_alloc_raw_string(int inLength)
 void * api_empty() { return 0; }
 
 bool api_val_bool(neko_value  arg1) { return arg1==gNekoTrue; }
-int api_val_int(neko_value  arg1) { return neko_val_int(arg1); }
+int api_val_int(neko_value  arg1) { return neko_val_is_int32(arg1) ? neko_val_int32(arg1) : neko_val_int(arg1); }
 double api_val_float(neko_value  arg1) { return *(double *)( ((char *)arg1) + 4 ); }
-double api_val_number(neko_value  arg1) { return neko_val_is_int(arg1) ? neko_val_int(arg1) : api_val_float(arg1); }
+double api_val_number(neko_value  arg1)
+{
+   if (neko_val_is_int(arg1))
+      return neko_val_int(arg1);
+   if (neko_val_is_int32(arg1))
+      return neko_val_int32(arg1);
+   return api_val_float(arg1);
+}
 
 
-neko_value api_alloc_bool(bool arg1) { CheckInitDynamicNekoLoader(); return arg1 ? gNekoTrue : gNekoFalse; }
-neko_value api_alloc_int(int arg1) { return neko_alloc_int(arg1); }
+neko_value api_alloc_bool(bool arg1) { return arg1 ? gNekoTrue : gNekoFalse; }
+neko_value api_alloc_int(int arg1)
+{
+   // neko 2 has an Int beyond 31 bits as a value of its own, where neko 1.8
+   //  kept 31 bits
+   if (dyn_alloc_int32 && neko_need_32_bits(arg1))
+      return dyn_alloc_int32(arg1);
+   return neko_alloc_int(arg1);
+}
 neko_value api_alloc_empty_object()
 {
    return dyn_alloc_object(gNekoNull);
@@ -385,6 +403,8 @@ int api_val_type(neko_value  arg1)
 		if (neko_val_is_string(__s))
 			return valtString;
 	}
+	if (t==VAL_INT32)
+		return valtInt;
 	if (t<7)
 		return (hxValueType)t;
 	if (t==VAL_ABSTRACT)
@@ -421,7 +441,6 @@ int api_alloc_kind()
 }
 neko_value api_alloc_null()
 {
-   CheckInitDynamicNekoLoader();
    return gNekoNull;
 }
 
@@ -682,6 +701,23 @@ ResolveProc InitDynamicNekoLoader()
       dyn_val_gc = (val_gc_func)LoadNekoFunc("neko_val_gc");
       dyn_val_ocall1 = (val_ocall1_func)LoadNekoFunc("neko_val_ocall1");
       dyn_alloc_empty_string = (alloc_empty_string_func)LoadNekoFunc("neko_alloc_empty_string");
+      // Nothing neko_init is given says which neko this is, and it may not be
+      //  called at all. neko 2, which keeps lengths above 4 tag bits, has Ints
+      //  beyond 31 bits as values and exports alloc_int32 to make them; neko 1.8
+      //  made them abstracts, with a macro
+      dyn_alloc_int32 = (alloc_int32_func)LoadNekoFunc("neko_alloc_int32");
+      neko_tag_bits = dyn_alloc_int32 ? 4 : 3;
+      // neko's null, true and false, which neko exports as data, for an ndll
+      //  run before neko_init or without it. neko_init is given the same values
+      neko_value *nekoNull = (neko_value *)LoadNekoFunc("val_null");
+      neko_value *nekoTrue = (neko_value *)LoadNekoFunc("val_true");
+      neko_value *nekoFalse = (neko_value *)LoadNekoFunc("val_false");
+      if (nekoNull && nekoTrue && nekoFalse)
+      {
+         gNekoNull = *nekoNull;
+         gNekoTrue = *nekoTrue;
+         gNekoFalse = *nekoFalse;
+      }
       init = true;
    }
 

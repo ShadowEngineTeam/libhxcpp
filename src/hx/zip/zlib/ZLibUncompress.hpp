@@ -19,6 +19,7 @@ namespace hx
 
 				Result execute(cpp::marshal::View<uint8_t> src, cpp::marshal::View<uint8_t> dst) override;
 				void setFlushMode(Flush mode) override;
+				int getAdler32() override;
 				void close() override;
 			};
 		}

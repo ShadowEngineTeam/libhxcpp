@@ -1,0 +1,5 @@
+--main Program
+--neko bin/program.n
+--next
+-m Main
+--cpp bin

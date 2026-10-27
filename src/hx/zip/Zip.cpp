@@ -104,6 +104,34 @@ void _hx_zip_set_flush_mode(Dynamic handle, String flushMode)
     handle.StaticCast<Zip>()->setFlushMode(flush);
 }
 
+/**
+   get_adler32 : 'stream -> 'int32
+   <doc>Returns the adler32 value of the stream: the checksum of the data so
+   far, or the id of the preset dictionary an inflate stream asks for</doc>
+**/
+int _hx_zip_get_adler32(Dynamic handle)
+{
+    return handle.StaticCast<Zip>()->getAdler32();
+}
+
+/**
+   update_adler32 : adler:'int32 -> src:string -> pos:int -> len:int -> 'int32
+   <doc>Update an adler32 value with a substring</doc>
+**/
+int _hx_zip_update_adler32(int adler, Array<unsigned char> src, int pos, int len)
+{
+    return Zip_obj::updateAdler32(adler, View<uint8_t>(src->getBase(), src->length).slice(pos, len));
+}
+
+/**
+   update_crc32 : crc:'int32 -> src:string -> pos:int -> len:int -> 'int32
+   <doc>Update a CRC32 value with a substring</doc>
+**/
+int _hx_zip_update_crc32(int crc, Array<unsigned char> src, int pos, int len)
+{
+    return Zip_obj::updateCrc32(crc, View<uint8_t>(src->getBase(), src->length).slice(pos, len));
+}
+
 
 
 

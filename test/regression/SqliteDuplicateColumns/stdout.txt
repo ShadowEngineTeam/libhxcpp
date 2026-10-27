@@ -1,0 +1,6 @@
+a column name used twice is refused: true
+the connection still runs requests: true
+the connection closes after the refused request: true
+a join repeating a column name is refused: true
+the result before it still reads: true
+the connection closes after the refused join: true

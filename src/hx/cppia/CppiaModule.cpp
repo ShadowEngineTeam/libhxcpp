@@ -496,7 +496,7 @@ public:
             }
             if (ctx->exception)
             {
-               hx::Object *e = ctx->exception;
+               hx::Object *e = fromPendingException(ctx->exception);
                ctx->exception = 0;
                hx::Throw( Dynamic(e) );
             }
@@ -886,6 +886,95 @@ CppiaLoadedModule LoadCppia(const unsigned char *inData, int inDataLength)
 }
 
 
+// --- Script formats ----
+
+// A format a host registered with __scriptable_cppia_register_format. There are
+// few, kept for the life of the program, so a node is never freed and its
+// translator slot is a GC root from the start
+struct CppiaFormat
+{
+   std::string magic;
+   hx::Object *translate;
+   CppiaFormat *next;
+};
+
+// Held only to read or change the list, so whoever holds it never allocates GC
+// memory or reaches a safe point
+static std::mutex &sFormatLock = *new std::mutex();
+static CppiaFormat *sFormats = 0;
+
+static void registerFormat(String inMagic, Dynamic inTranslate)
+{
+   const char *magic = inMagic.raw_ptr() ? inMagic.utf8_str() : 0;
+   if (!magic || !*magic)
+      hx::Throw(HX_CSTRING("A cppia format needs a magic"));
+   std::string key(magic);
+
+   std::lock_guard<std::mutex> lock(sFormatLock);
+   for(CppiaFormat *f=sFormats; f; f=f->next)
+      if (f->magic==key)
+      {
+         f->translate = inTranslate.mPtr;
+         return;
+      }
+   if (!inTranslate.mPtr)
+      return;
+   CppiaFormat *format = new CppiaFormat();
+   format->magic = key;
+   format->translate = inTranslate.mPtr;
+   GCAddRoot(&format->translate);
+   format->next = sFormats;
+   sFormats = format;
+}
+
+// The translator for a script in a registered format, or null. Cppia, text or
+// binary, is never translated
+static Dynamic findFormat(const unsigned char *inData, int inLength)
+{
+   if (inLength>=5 && (!memcmp(inData,"CPPIA",5) || !memcmp(inData,"CPPIB",5)))
+      return null();
+   std::lock_guard<std::mutex> lock(sFormatLock);
+   for(CppiaFormat *f=sFormats; f; f=f->next)
+      if (f->translate && f->magic.size()<=(size_t)inLength &&
+            !memcmp(inData,f->magic.c_str(),f->magic.size()))
+         return f->translate;
+   return null();
+}
+
+// The bytes of cppia text held in a String
+static const unsigned char *codeOf(const String &inCode, int &outLength)
+{
+   const unsigned char *code = (const unsigned char *)inCode.raw_ptr();
+   outLength = inCode.length;
+   #ifdef HX_SMART_STRINGS
+   if (inCode.isUTF16Encoded())
+   {
+      code = (const unsigned char *)inCode.utf8_str();
+      outLength = strlen( (const char *)code );
+   }
+   #endif
+   return code;
+}
+
+// Loads what a format's translator gives for a script: cppia text as a String,
+// or text or binary cppia as bytes. It is not translated again
+static CppiaLoadedModule loadTranslated(Dynamic inTranslate, Array<unsigned char> inScript)
+{
+   Dynamic cppia = inTranslate(inScript);
+   if (cppia.mPtr && cppia->__GetType()==vtString)
+   {
+      String text = cppia;
+      int length = 0;
+      const unsigned char *code = codeOf(text,length);
+      return LoadCppia(code,length);
+   }
+   Array<unsigned char> data = cppia;
+   if (!data.mPtr)
+      hx::Throw(HX_CSTRING("A cppia format's translator returned neither a String nor bytes"));
+   return LoadCppia((unsigned char *)data->GetBase(),data->length);
+}
+
+
 
 
 
@@ -1011,15 +1100,17 @@ bool __scriptable_cppia_jit_active()
 
 ::hx::CppiaLoadedModule __scriptable_cppia_from_string(String inCode)
 {
-   const unsigned char *code = (const unsigned char *)inCode.raw_ptr();
-   int length = inCode.length;
-   #ifdef HX_SMART_STRINGS
-   if (inCode.isUTF16Encoded())
+   int length = 0;
+   const unsigned char *code = hx::codeOf(inCode,length);
+
+   Dynamic translate = hx::findFormat(code,length);
+   if (translate.mPtr)
    {
-      code = (const unsigned char *)inCode.utf8_str();
-      length = strlen( (const char *)code );
+      Array<unsigned char> script = Array_obj<unsigned char>::__new(length);
+      if (length)
+         memcpy(script->GetBase(),code,length);
+      return hx::loadTranslated(translate,script);
    }
-   #endif
 
    return hx::LoadCppia(code,length);
 }
@@ -1027,23 +1118,24 @@ bool __scriptable_cppia_jit_active()
 
 ::hx::CppiaLoadedModule __scriptable_cppia_from_data(Array<unsigned char> inCode)
 {
-   return hx::LoadCppia( (unsigned char *)inCode->GetBase() ,inCode->length);
+   const unsigned char *code = (unsigned char *)inCode->GetBase();
+   Dynamic translate = hx::findFormat(code,inCode->length);
+   if (translate.mPtr)
+      return hx::loadTranslated(translate,inCode);
+
+   return hx::LoadCppia(code,inCode->length);
+}
+
+
+void __scriptable_cppia_register_format(String inMagic, Dynamic inTranslate)
+{
+   hx::registerFormat(inMagic,inTranslate);
 }
 
 
 void __scriptable_load_cppia(String inCode)
 {
-   const unsigned char *code = (const unsigned char *)inCode.raw_ptr();
-   int length = inCode.length;
-   #ifdef HX_SMART_STRINGS
-   if (inCode.isUTF16Encoded())
-   {
-      code = (const unsigned char *)inCode.utf8_str();
-      length = strlen( (const char *)code );
-   }
-   #endif
-
-   ::hx::CppiaLoadedModule module = hx::LoadCppia(code,length);
+   ::hx::CppiaLoadedModule module = __scriptable_cppia_from_string(inCode);
 
    module->boot();
    module->run();
