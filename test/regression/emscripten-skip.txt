@@ -39,6 +39,7 @@ PollFailedConnect: sockets
 PollSocketLifetime: sockets
 PollingSafePoint: threads (std::thread, which needs a pthreads build)
 ProcessClosedParentStdin: processes
+ProcessConcurrentPipeInheritance: processes and threads
 ProcessCommunicate: processes and threads
 ProcessEmptyBuffer: processes
 ProcessExitCodeTwice: processes
