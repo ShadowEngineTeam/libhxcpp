@@ -230,6 +230,15 @@ void CppiaModule::compile()
    if (main)
       main->compile();
 }
+
+void CppiaModule::markLazy()
+{
+   for(int i=0;i<classes.size();i++)
+      classes[i]->markLazy();
+
+   if (main)
+      main->lazy = true;
+}
 #endif
 
 void addScriptableClass(String inName);
@@ -886,7 +895,12 @@ CppiaLoadedModule LoadCppia(const unsigned char *inData, int inDataLength)
          try
          {
             DBGLOG("Compile...\n");
-            cppia.compile();
+            // Each function compiles when it is first called, unless every
+            // one is to compile now
+            if (gLazyJit)
+               cppia.markLazy();
+            else
+               cppia.compile();
          }
          catch(const char *errorString)
          {

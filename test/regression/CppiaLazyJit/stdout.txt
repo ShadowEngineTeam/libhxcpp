@@ -1,0 +1,8 @@
+the JIT is on: true
+a compiled function calls one not compiled yet: true
+a function calls itself while it is first called: true
+virtual calls reach methods not compiled yet: true
+interface calls reach methods not compiled yet: true
+an exception leaves a function compiled on its first call: true
+the host calls a script function not compiled yet: true
+threads that first call one function at once each get its result: true

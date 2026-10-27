@@ -30,6 +30,13 @@ namespace hx
 //#define SJLJ_RETURN 1
 
 bool gEnableJit = false;
+// HXCPP_CPPIA_EAGER_JIT compiles all of a module's functions when it loads, as the JIT
+// did before it compiled each one on its first call
+#ifdef HXCPP_CPPIA_EAGER_JIT
+bool gLazyJit = false;
+#else
+bool gLazyJit = true;
+#endif
 
 // Outside the collected heap, and no value a script throws can be it
 hx::Object *const gThrownNull = new (hx::NewObjConst) hx::Object();
@@ -725,6 +732,29 @@ void genFunctionResult(CppiaCompiler *compiler,const JitVal &inDest, ExprType de
       }
 }
 
+// Compiles a function the JIT left to its first call, then calls it as compiled
+// code calls one, with its frame in place
+static void SLJIT_CALL callLazy(CppiaCtx *ctx, ScriptCallable *function)
+{
+   TRY_NATIVE
+   function->compileLazy();
+   CATCH_NATIVE
+   if (!ctx->exception)
+      function->compiled(ctx);
+}
+
+// Calls the compiled code in inCode, or when that is null, compiles the function in
+// inFunction first
+void genLazyCall(CppiaCompiler *compiler, const JitVal &inCode, const JitVal &inFunction)
+{
+   JumpId notCompiled = compiler->compare(cmpP_EQUAL, inCode.as(jtPointer), (void *)0);
+   compiler->call( inCode, sJitCtx );
+   JumpId done = compiler->jump();
+   compiler->comeFrom(notCompiled);
+   compiler->callNative( (void *)callLazy, sJitCtx, inFunction );
+   compiler->comeFrom(done);
+}
+
 void genFunctionCall(ScriptCallable *function, CppiaCompiler *compiler,
                      const JitVal &inDest, ExprType destType, bool isBoolReturn, ExprType returnType,
                      CppiaExpr *thisExpr,  Expressions &args, const JitVal &inThisVal )
@@ -743,6 +773,13 @@ void genFunctionCall(ScriptCallable *function, CppiaCompiler *compiler,
       if (function->compiled)
       {
          compiler->call( JitVal( (void *)(function->compiled)), sJitCtx );
+      }
+      else if (function->lazy)
+      {
+         // Compiled on its first call, which may be this one
+         compiler->move( sJitTemp1, JitVal((void *)&function->compiled) );
+         compiler->move( sJitTemp1, sJitTemp1.star() );
+         genLazyCall(compiler, sJitTemp1, JitVal((void *)function));
       }
       else
       {
@@ -2296,6 +2333,21 @@ static void SLJIT_CALL fixReturnType( hx::CppiaCtx *inCtx, int actualType)
 
 
 
+#ifdef CPPIA_JIT
+// A call through a script vtable, with the function in sJitTemp1: its compiled code,
+// compiled first under the lazy JIT when it has none yet
+static void genVTableCall(CppiaCompiler *compiler)
+{
+   if (gLazyJit)
+   {
+      compiler->move( sJitTemp2.as(jtPointer), sJitTemp1.star(jtPointer, offsetof(ScriptCallable,compiled)) );
+      genLazyCall(compiler, sJitTemp2, sJitTemp1.as(jtPointer));
+   }
+   else
+      compiler->call(sJitTemp1.star(jtPointer, offsetof(ScriptCallable,compiled)),sJitCtx );
+}
+#endif
+
 struct CallMemberVTable : public CppiaExpr
 {
    Expressions args;
@@ -2446,7 +2498,7 @@ struct CallMemberVTable : public CppiaExpr
          compiler->move(actualReturnType, sJitTemp1.star(jtInt, offsetof(ScriptCallable,returnType)) );
 
          // vtable[slot].compiled
-         compiler->call(sJitTemp1.star(jtPointer, offsetof(ScriptCallable,compiled)),sJitCtx );
+         genVTableCall(compiler);
          JumpId isEqual = compiler->compare(cmpI_EQUAL, actualReturnType, (int)returnType);
          // Must be int->Float
          if (returnType==etFloat)
@@ -2462,7 +2514,7 @@ struct CallMemberVTable : public CppiaExpr
       else
       {
          // vtable[slot].compiled
-         compiler->call(sJitTemp1.star(jtPointer, offsetof(ScriptCallable,compiled)),sJitCtx );
+         genVTableCall(compiler);
       }
 
       genFunctionResult(compiler, inDest, destType, returnType, isBoolReturn);

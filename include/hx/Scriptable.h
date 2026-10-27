@@ -13,6 +13,9 @@ namespace hx
 
 extern bool gEnableJit;
 inline void EnableJit(bool inEnable) { gEnableJit = inEnable; }
+// Whether the JIT compiles each script function when it is first called, rather than
+// all of a module's functions when it loads. -D HXCPP_CPPIA_EAGER_JIT turns it off
+extern bool gLazyJit;
 
 #define HXCPP_CPPIA_SUPER_ARG(x) , (x)
 

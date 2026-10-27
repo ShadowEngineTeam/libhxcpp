@@ -15,6 +15,7 @@ CppiaArrayAccess: its host is the first --next section, which -D emscripten does
 CppiaBreakpoints: threads
 CppiaHostArgs: processes
 CppiaHostMismatch: checks jitted code, and Emscripten has no cppia JIT
+CppiaLazyJit: threads, and Emscripten has no cppia JIT
 CppiaModuleFree: threads
 CppiaModuleRetained: threads
 CppiaJitThrowNull: its host is the first --next section, which -D emscripten does not reach
