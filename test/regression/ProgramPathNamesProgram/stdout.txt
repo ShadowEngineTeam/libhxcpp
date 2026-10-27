@@ -1,0 +1,4 @@
+program path is absolute: true
+program path is a file: true
+program is named Main: true
+program is in the test's bin: true
