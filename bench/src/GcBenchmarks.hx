@@ -140,6 +140,43 @@ class GcZombieReservations extends GcCollections {
 }
 
 /**
+	125,000 retained objects given finalizers again before each full
+	collection, which moves the registrations to the old table (libhxcpp #375).
+	Each latency is that collection; no finalizer runs.
+**/
+class GcFinalizerPromotion extends Benchmark {
+	static inline var N = 125000;
+	static inline var ROUNDS = 4;
+	static var finalized = 0;
+
+	final objects:Array<GcKey> = [];
+
+	public function new() {
+		super("gc_finalizer_promotion", "collections", ROUNDS, true);
+	}
+
+	static function finalize(o:GcKey):Void {
+		finalized++;
+	}
+
+	override public function setup() {
+		for (i in 0...N)
+			objects.push(new GcKey(i));
+	}
+
+	override public function run():Int {
+		for (r in 0...ROUNDS) {
+			for (o in objects)
+				cpp.vm.Gc.setFinalizer(o, cpp.Callable.fromStaticFunction(finalize));
+			var t0 = Timer.stamp();
+			cpp.vm.Gc.run(true);
+			latencies.push(Timer.stamp() - t0);
+		}
+		return finalized + objects[N - 1].id;
+	}
+}
+
+/**
 	65,536 retained 4 KB buffers, with twelve raw pointers into them on the stack
 	while the collections run, so the stack scan looks them up (libhxcpp #365).
 **/

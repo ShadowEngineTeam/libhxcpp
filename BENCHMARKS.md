@@ -113,6 +113,7 @@ These numbers are from one Windows machine; Linux and macOS results are still to
 | `gc_large_stack_roots` | Collections with 65,536 retained 4 KB buffers and twelve raw pointers into them on the stack |
 | `gc_regex_wait` | A collection that another thread asks for 5 ms into a match over a 32 MB subject; the latency is how long that request took |
 | `gc_zombie_reservations` | Collections with 250,000 retained objects that are each registered with `Gc.doNotKill` |
+| `gc_finalizer_promotion` | A full collection after 125,000 retained objects are given finalizers again, which moves the registrations to the old table; no finalizer runs |
 | `noop` | Starting the program and exiting at once (startup time, measured 20 times per runtime) |
 
 ### CPPIA

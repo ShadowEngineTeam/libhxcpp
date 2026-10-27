@@ -3093,13 +3093,20 @@ static void TakeDeadFinalizers(MAP &inMap, MAP *inOld, RUN &outRun)
          outRun.push_back( std::make_pair(obj, i->second) );
          i = inMap.erase(i);
       }
-      else if (inOld)
-      {
-         (*inOld)[obj] = i->second;
-         i = inMap.erase(i);
-      }
       else
          ++i;
+   }
+
+   // The two hold different objects, so the larger keeps its nodes and the
+   //  smaller is copied into it. Moving each survivor into the old map made a
+   //  node and freed one for every entry, which for a batch of new
+   //  registrations was most of a collection (libhxcpp #375)
+   if (inOld && !inMap.empty())
+   {
+      if (inMap.size() > inOld->size())
+         inMap.swap(*inOld);
+      inOld->insert(inMap.begin(), inMap.end());
+      inMap.clear();
    }
 }
 

@@ -16,6 +16,7 @@ FileFinalizerFlush: threads (std::thread, which needs a pthreads build)
 FinalizerExceptionState: threads (std::thread, which needs a pthreads build)
 FinalizersAcrossFreeZones: threads
 GcConcurrentCensus: threads (std::thread, which needs a pthreads build)
+GcFinalizerPromotion: threads (std::thread, which needs a pthreads build)
 GcHeapGrows: expects the desktop 20 MB working target; other platforms, Emscripten included, use 8 MB
 GcNativePressureBoundary: threads (std::thread, which needs a pthreads build)
 GcReleaseEmptyBlocks: threads
