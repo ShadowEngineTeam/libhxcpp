@@ -1851,6 +1851,34 @@ struct GlobalChunks
       release(inChunk);
    }
 
+   // Every chunk taken was kept for reuse, so a burst of remembered referrers
+   //  or marking left the free list at its peak for good: 8,000 chunks, 4 MB,
+   //  after one million old owners took a young child (libhxcpp #374). This
+   //  keeps inKeep and frees half of the rest, at most inMost, so a large
+   //  surplus decays over several collections rather than going in one pause,
+   //  and a workload that keeps needing it keeps most of it. Only while every
+   //  thread is stopped and no marking runs
+   void trimFree(int inKeep, int inMost)
+   {
+      MarkChunk *last = freeList;
+      for(int i=1;last && i<inKeep;i++)
+         last = last->next;
+      if (!last)
+         return;
+      int surplusCount = 0;
+      for(MarkChunk *c = last->next; c; c = c->next)
+         surplusCount++;
+      int toFree = std::min(inMost, surplusCount/2);
+      MarkChunk *surplus = last->next;
+      for(int i=0;surplus && i<toFree;i++)
+      {
+         MarkChunk *next = surplus->next;
+         delete surplus;
+         surplus = next;
+      }
+      last->next = surplus;
+   }
+
    inline MarkChunk *alloc()
    {
       int expected{ 0 };
@@ -6028,6 +6056,11 @@ public:
       #ifdef HXCPP_GC_VERIFY
       VerifyBlockOrder();
       #endif
+
+      // Minor collections leave the spare chunks to the next full one, so a
+      //  burst repeated between full collections does not make them again
+      if (!generational)
+         hx::sGlobalChunks.trimFree(256, 1024);
 
       for(int i=0;i<LOCAL_POOL_SIZE;i++)
       {

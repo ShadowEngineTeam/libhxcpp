@@ -1,0 +1,3 @@
+remembered burst preserves every child: true
+full collection preserves the retained graph: true
+collection after graph release completes: true

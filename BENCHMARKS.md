@@ -115,6 +115,7 @@ These numbers are from one Windows machine; Linux and macOS results are still to
 | `gc_zombie_reservations` | Collections with 250,000 retained objects that are each registered with `Gc.doNotKill` |
 | `gc_finalizer_promotion` | A full collection after 125,000 retained objects are given finalizers again, which moves the registrations to the old table; no finalizer runs |
 | `gc_idle_minor` | 2,000 collections of a heap of 128 retained objects, so that a minor collection has nothing to mark |
+| `gc_remembered_burst` | 250,000 retained objects each take a new child, then a collection: a burst of remembered referrers and marking in each round |
 | `noop` | Starting the program and exiting at once (startup time, measured 20 times per runtime) |
 
 ### CPPIA

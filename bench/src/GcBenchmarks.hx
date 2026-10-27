@@ -202,6 +202,50 @@ class GcIdleMinor extends GcCollections {
 	}
 }
 
+class GcHolder {
+	public var child:Dynamic = null;
+
+	public function new() {}
+}
+
+/**
+	250,000 retained old objects that each take a new child, then a
+	collection, so the remembered set and the marking take a burst of chunks
+	each round (libhxcpp #374). Each latency is that collection.
+**/
+class GcRememberedBurst extends Benchmark {
+	static inline var N = 250000;
+	static inline var ROUNDS = 4;
+
+	final holders:Array<GcHolder> = [];
+
+	public function new() {
+		super("gc_remembered_burst", "bursts", ROUNDS, true);
+	}
+
+	override public function setup() {
+		for (i in 0...N)
+			holders.push(new GcHolder());
+		var garbage = [for (i in 0...N * 4) new GcKey(i)];
+		if (garbage.length != N * 4)
+			throw "spare";
+	}
+
+	override public function run():Int {
+		var sum = 0;
+		for (r in 0...ROUNDS) {
+			for (i in 0...N)
+				holders[i].child = new GcKey(i + r);
+			var t0 = Timer.stamp();
+			cpp.vm.Gc.run(false);
+			latencies.push(Timer.stamp() - t0);
+			var c:GcKey = holders[N - 1].child;
+			sum = (sum * 31 + c.id) | 0;
+		}
+		return sum;
+	}
+}
+
 /**
 	65,536 retained 4 KB buffers, with twelve raw pointers into them on the stack
 	while the collections run, so the stack scan looks them up (libhxcpp #365).

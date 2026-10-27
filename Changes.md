@@ -2,6 +2,7 @@
 libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
+* The collector keeps 256 spare marking chunks and frees half of the rest in each full collection, at most 1,024, where it kept every chunk it ever made: after a million old objects each took a young child, about 9,600 chunks, 4.7 MB, stayed allocated for the rest of the process (libhxcpp #374)
 * A collection whose roots and stacks leave nothing to mark no longer wakes and joins every marking thread to find that out: an idle minor collection with HXCPP_GC_GENERATIONAL took about 0.02 ms, almost all of it the workers, and takes about 0.005 ms (libhxcpp #377)
 * A full or minor collection after many finalizers were registered no longer rebuilds each surviving registration's table entry to move it to the old table: the larger table keeps its entries and the smaller one is copied in. A full collection after 125,000 objects were given finalizers again took 34 to 42 ms, and takes 10 to 12 ms (libhxcpp #375)
 * Minor collections with HXCPP_GC_GENERATIONAL no longer walk every object given to Gc.doNotKill, only those given since the last collection: an old object cannot die in a minor collection. With 250,000 registered objects a minor collection took 9 to 15 ms, and takes under 0.1 ms (libhxcpp #383)
