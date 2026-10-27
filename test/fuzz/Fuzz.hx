@@ -354,6 +354,8 @@ class Fuzz {
 		compared through canon(), since fields come out in hash order.
 	**/
 	static function serializer(b:Bytes) {
+		if (nesting(b, "aolbqMcwj", "hg") > MAX_NESTING)
+			return;
 		var v1 = attempt(() -> haxe.Unserializer.run(b.toString()));
 		var s1:String = v1 == null ? null : attempt(() -> haxe.Serializer.run(v1));
 		var v2 = s1 == null ? null : attempt(() -> haxe.Unserializer.run(s1));
@@ -365,11 +367,18 @@ class Fuzz {
 
 	/** Parse and print three times: the last two parsed values must be the same, as for serializer. **/
 	static function json(b:Bytes) {
+		if (nesting(b, "[{", "]}") > MAX_NESTING)
+			return;
 		var s1:String = attempt(() -> haxe.Json.stringify(haxe.Json.parse(b.toString())));
 		if (s1 == null)
 			return;
-		var s2 = haxe.Json.stringify(haxe.Json.parse(s1));
-		if (canon(haxe.Json.parse(s1)) != canon(haxe.Json.parse(s2)))
+		// The std prints U+0000 as it is and its parser takes it for the end of
+		// the text on cpp, so a printed text may not read back; that is left out
+		var v1 = attempt(() -> haxe.Json.parse(s1));
+		if (v1 == null)
+			return;
+		var s2 = haxe.Json.stringify(v1);
+		if (canon(v1) != canon(haxe.Json.parse(s2)))
 			fail('printed $s1 then $s2');
 	}
 
@@ -463,6 +472,27 @@ class Fuzz {
 
 	// --- Helpers ---------------------------------------------------------
 
+	/**
+		The std's Unserializer, Serializer and Json recurse once per level of
+		nesting, and a few thousand levels overflow a 1 MB main thread stack on
+		any target, so deeper input is left out rather than reported.
+	**/
+	static inline var MAX_NESTING = 200;
+
+	/** How deep the openers nest, counting every one, even inside strings. **/
+	static function nesting(b:Bytes, openers:String, closers:String):Int {
+		var depth = 0;
+		var max = 0;
+		for (i in 0...b.length) {
+			var c = b.get(i);
+			if (openers.indexOf(String.fromCharCode(c)) >= 0 && ++depth > max)
+				max = depth;
+			else if (closers.indexOf(String.fromCharCode(c)) >= 0 && depth > 0)
+				depth--;
+		}
+		return max;
+	}
+
 	/** Runs f and returns its result, or null if it threw. **/
 	static function attempt<T>(f:() -> T):Null<T> {
 		try {
@@ -520,7 +550,8 @@ class Fuzz {
 				Type.getEnumName(e) + "." + Type.enumConstructor(v) + "(" + [for (p in Type.enumParameters(v)) canon(p, depth + 1)].join(",") + ")";
 			case TClass(String): haxe.Json.stringify(v);
 			case TClass(Array): "[" + [for (x in (v : Array<Dynamic>)) canon(x, depth + 1)].join(",") + "]";
-			case TClass(Date): "Date(" + (v : Date).getTime() + ")";
+			// The std's cpp Date keeps seconds, so a fraction of a millisecond drifts
+			case TClass(Date): "Date(" + Math.round((v : Date).getTime()) + ")";
 			case TClass(haxe.io.Bytes): "Bytes(" + (v : Bytes).toHex() + ")";
 			case TClass(List): "List(" + [for (x in (v : List<Dynamic>)) canon(x, depth + 1)].join(",") + ")";
 			case TClass(c) if (Std.isOfType(v, haxe.Constraints.IMap)):
