@@ -3621,36 +3621,47 @@ public:
 
    void FreeLarge(void *inLarge)
    {
-#ifdef HXCPP_TELEMETRY
-       __hxt_gc_free_large(inLarge);
-#endif
-
-      ((unsigned char *)inLarge)[HX_ENDIAN_MARK_ID_BYTE] = 0;
-      mLargeListLock.lock();
-      // With no room to recycle it, the sweep frees it instead, so the next
-      //  sweep must look at the old allocations too
-      if (!largeObjectRecycle.hasExtraCapacity(1))
-      {
-         mLargeOldReleased = true;
-         mLargeListLock.unlock();
-         return;
-      }
       unsigned int *blob = ((unsigned int *)inLarge) - 2;
-      unsigned int size = *blob;
-      takeLargeAllocated(size);
+      mLargeListLock.lock();
+      // Only an allocation on the large list is freed here. A block object can
+      // be as big: InternalNew rounds 3997 to 3999 bytes up to 4000 after
+      // choosing a block, and objects up to IMMIX_MAX_BLOCK_OBJECT_SIZE are
+      // allocated in blocks inline. Recycling one queued part of a block to be
+      // freed by the next collection (libhxcpp #257).
       // Search from the end - the realloc-growth path frees the buffer it
       // just allocated, which is the most recently pushed entry, so the
       // common case finds it immediately instead of scanning the whole
       // list (qerase does not preserve order, so direction is free)
+      int index = -1;
       for(int i=mLargeList.size()-1;i>=0;i--)
          if (mLargeList[i]==blob)
          {
-            eraseLarge(i);
+            index = i;
             break;
          }
-      largeObjectRecycle.push(blob);
-      mRecycleSize.store((int)largeObjectRecycle.size(), std::memory_order_relaxed);
+      if (index<0)
+      {
+         mLargeListLock.unlock();
+         return;
+      }
+
+      ((unsigned char *)inLarge)[HX_ENDIAN_MARK_ID_BYTE] = 0;
+      // With no room to recycle it, the sweep frees it instead, so the next
+      //  sweep must look at the old allocations too
+      if (!largeObjectRecycle.hasExtraCapacity(1))
+         mLargeOldReleased = true;
+      else
+      {
+         takeLargeAllocated(*blob);
+         eraseLarge(index);
+         largeObjectRecycle.push(blob);
+         mRecycleSize.store((int)largeObjectRecycle.size(), std::memory_order_relaxed);
+      }
       mLargeListLock.unlock();
+
+#ifdef HXCPP_TELEMETRY
+      __hxt_gc_free_large(inLarge);
+#endif
    }
 
    void *AllocLarge(size_t inSize, bool inClear, bool inContainer=false)
