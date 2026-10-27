@@ -1526,6 +1526,23 @@ void _hx_std_socket_poll_events(Dynamic pdata, double timeout)
    p->widx[0] = -1;
 
 #ifdef NEKO_WINDOWS
+   // Winsock's select fails at once with no sockets, which looked like an
+   // empty poll done: an event loop with nothing registered spun at full CPU.
+   // With nothing to wait for, wait out the timeout, as poll does elsewhere.
+   if (p->fdr->fd_count == 0 && p->fdw->fd_count == 0)
+   {
+      DWORD ms = INFINITE;
+      if (timeout >= 0)
+         ms = timeout * 1000 >= (double)(INFINITE - 1) ? INFINITE - 1 : (DWORD)ceil(timeout * 1000);
+      if (ms)
+      {
+         hx::EnterGCFreeZone();
+         Sleep(ms);
+         hx::ExitGCFreeZone();
+      }
+      return;
+   }
+
    memcpy(p->outr, p->fdr, FDSIZE(p->fdr->fd_count));
    memcpy(p->outw, p->fdw, FDSIZE(p->fdw->fd_count));
 

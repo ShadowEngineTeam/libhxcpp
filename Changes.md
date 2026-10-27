@@ -39,6 +39,7 @@ libhxcpp 6.0.0 (unreleased)
 * Fixed ObjectMap being about 15% slower than hxcpp 4.3 on Windows, along with everything else that takes an object id: the locks around the object id table, finalizer and weak map registration, the large allocation list and CFFI field ids had become std::mutex, which with MSVC costs about 40 ns per uncontended lock and unlock where hxcpp 4.3's critical section cost about 10 ns. They now use a slim reader/writer lock on Windows (std::mutex elsewhere, and with HXCPP_WINXP_COMPAT); looking up 200,000 object ids takes 4.5 ms instead of 11.5 ms, against hxcpp 4.3's 5 ms (libhxcpp #232)
 * Fixed sys.net.Socket.accept failing with "EOF" on an IPv6 listener on Windows: the peer address was given room for an IPv4 one, which Windows refuses for an IPv6 peer (libhxcpp #309)
 * Fixed Host.toString giving null for an IPv6 address on Windows when threads formatted their first addresses together: a thread could find the lookup of inet_ntop begun but not finished and take the function as missing. Parsing an IPv6 address with inet_pton had the same race (libhxcpp #310)
+* Fixed cpp.net.Poll.events returning at once on Windows when no sockets were registered, before any prepare or after one removed the last socket, so an idle event loop spun at full CPU: Winsock's select fails with no sockets, which looked like a finished empty poll. It now waits out the timeout, and with a negative one waits for good, as on other systems (libhxcpp #311)
 
 libhxcpp 6.0.0-rc.1
 ------------------------------------------------------------
