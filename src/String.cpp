@@ -448,9 +448,21 @@ char16_t *String::allocChar16Ptr(int len)
 {
    // See NewString - reserve a memoized-hash slot for longer strings
    bool hashSlot = len >= HX_GC_STRING_HASH_SLOT_MIN_LEN;
-   char16_t *result = (char16_t *)hx::InternalNew( (len+1)*2 + (hashSlot ? 4 : 0), false );
+   char16_t *result = (char16_t *)hx::InternalNewString( (len+1)*2 + (hashSlot ? 4 : 0) );
    ((unsigned int *)result)[-1] |= HX_GC_STRING_CHAR16_T | (hashSlot ? HX_GC_STRING_HASH_SLOT : 0);
    result[len] = 0;
+   return result;
+}
+
+// allocChar16Ptr for a string the caller fills in full, so a large one is
+//  not cleared first (libhxcpp #315)
+static char16_t *allocChar16PtrUncleared(int len)
+{
+   bool hashSlot = len >= HX_GC_STRING_HASH_SLOT_MIN_LEN;
+   char16_t *result = (char16_t *)hx::InternalNewString( (len+1)*2 + (hashSlot ? 4 : 0), false );
+   ((unsigned int *)result)[-1] |= HX_GC_STRING_CHAR16_T | (hashSlot ? HX_GC_STRING_HASH_SLOT : 0);
+   // The terminator and the hash slot
+   memset(result + len, 0, 2 + (hashSlot ? 4 : 0));
    return result;
 }
 
@@ -542,7 +554,7 @@ static const char *GCStringDup(const T *inStr,int inLen, int *outLen=0)
 
    if (sizeof(T)==1 || allAscii)
    {
-      char *result = hx::NewString( len );
+      char *result = hx::NewStringUncleared( len );
       if (sizeof(T)==1)
          memcpy(result,inStr,sizeof(char)*(len));
       else
@@ -552,7 +564,7 @@ static const char *GCStringDup(const T *inStr,int inLen, int *outLen=0)
    }
 
 
-   char16_t *result = String::allocChar16Ptr(len);
+   char16_t *result = allocChar16PtrUncleared(len);
    memcpy(result,inStr,2*len);
    return (const char *)result;
 }
@@ -1079,10 +1091,273 @@ static int hxTrimZeros(const char *inDigits, int inCount)
    return inCount;
 }
 
+// Grisu3, from Florian Loitsch's "Printing Floating-Point Numbers Quickly and
+// Accurately with Integers" (2010), as in double-conversion: the shortest
+// digits that read back, and the nearest of them, with 64-bit integers in
+// place of printf and strtod (libhxcpp #390). It declines a double when its
+// precision cannot decide, about 0.5% of them in the paper, and the search
+// below does those
+struct HxDiyFp
+{
+   unsigned long long f;
+   int e;
+};
+
+static inline HxDiyFp hxDiyFp(unsigned long long inF, int inE)
+{
+   HxDiyFp result;
+   result.f = inF;
+   result.e = inE;
+   return result;
+}
+
+// The upper 64 bits of the product, rounded
+static inline HxDiyFp hxDiyTimes(const HxDiyFp &inA, const HxDiyFp &inB)
+{
+   const unsigned long long M32 = 0xFFFFFFFFULL;
+   unsigned long long a = inA.f >> 32, b = inA.f & M32;
+   unsigned long long c = inB.f >> 32, d = inB.f & M32;
+   unsigned long long ac = a*c, bc = b*c, ad = a*d, bd = b*d;
+   unsigned long long tmp = (bd >> 32) + (ad & M32) + (bc & M32) + (1ULL << 31);
+   return hxDiyFp(ac + (ad >> 32) + (bc >> 32) + (tmp >> 32), inA.e + inB.e + 64);
+}
+
+static inline HxDiyFp hxDiyNormalize(HxDiyFp inV)
+{
+   while(!(inV.f & 0xFFC0000000000000ULL))
+   {
+      inV.f <<= 10;
+      inV.e -= 10;
+   }
+   while(!(inV.f & 0x8000000000000000ULL))
+   {
+      inV.f <<= 1;
+      inV.e--;
+   }
+   return inV;
+}
+
+struct HxCachedPower
+{
+   unsigned long long f;
+   short e;
+   short decimal;
+};
+
+// 10^decimal ~ f * 2^e, for every eighth power from 10^-348 to 10^340
+static const HxCachedPower sHxCachedPowers[] = {
+   { 0xfa8fd5a0081c0288ULL, -1220, -348 },
+   { 0xbaaee17fa23ebf76ULL, -1193, -340 },
+   { 0x8b16fb203055ac76ULL, -1166, -332 },
+   { 0xcf42894a5dce35eaULL, -1140, -324 },
+   { 0x9a6bb0aa55653b2dULL, -1113, -316 },
+   { 0xe61acf033d1a45dfULL, -1087, -308 },
+   { 0xab70fe17c79ac6caULL, -1060, -300 },
+   { 0xff77b1fcbebcdc4fULL, -1034, -292 },
+   { 0xbe5691ef416bd60cULL, -1007, -284 },
+   { 0x8dd01fad907ffc3cULL, -980, -276 },
+   { 0xd3515c2831559a83ULL, -954, -268 },
+   { 0x9d71ac8fada6c9b5ULL, -927, -260 },
+   { 0xea9c227723ee8bcbULL, -901, -252 },
+   { 0xaecc49914078536dULL, -874, -244 },
+   { 0x823c12795db6ce57ULL, -847, -236 },
+   { 0xc21094364dfb5637ULL, -821, -228 },
+   { 0x9096ea6f3848984fULL, -794, -220 },
+   { 0xd77485cb25823ac7ULL, -768, -212 },
+   { 0xa086cfcd97bf97f4ULL, -741, -204 },
+   { 0xef340a98172aace5ULL, -715, -196 },
+   { 0xb23867fb2a35b28eULL, -688, -188 },
+   { 0x84c8d4dfd2c63f3bULL, -661, -180 },
+   { 0xc5dd44271ad3cdbaULL, -635, -172 },
+   { 0x936b9fcebb25c996ULL, -608, -164 },
+   { 0xdbac6c247d62a584ULL, -582, -156 },
+   { 0xa3ab66580d5fdaf6ULL, -555, -148 },
+   { 0xf3e2f893dec3f126ULL, -529, -140 },
+   { 0xb5b5ada8aaff80b8ULL, -502, -132 },
+   { 0x87625f056c7c4a8bULL, -475, -124 },
+   { 0xc9bcff6034c13053ULL, -449, -116 },
+   { 0x964e858c91ba2655ULL, -422, -108 },
+   { 0xdff9772470297ebdULL, -396, -100 },
+   { 0xa6dfbd9fb8e5b88fULL, -369, -92 },
+   { 0xf8a95fcf88747d94ULL, -343, -84 },
+   { 0xb94470938fa89bcfULL, -316, -76 },
+   { 0x8a08f0f8bf0f156bULL, -289, -68 },
+   { 0xcdb02555653131b6ULL, -263, -60 },
+   { 0x993fe2c6d07b7facULL, -236, -52 },
+   { 0xe45c10c42a2b3b06ULL, -210, -44 },
+   { 0xaa242499697392d3ULL, -183, -36 },
+   { 0xfd87b5f28300ca0eULL, -157, -28 },
+   { 0xbce5086492111aebULL, -130, -20 },
+   { 0x8cbccc096f5088ccULL, -103, -12 },
+   { 0xd1b71758e219652cULL, -77, -4 },
+   { 0x9c40000000000000ULL, -50, 4 },
+   { 0xe8d4a51000000000ULL, -24, 12 },
+   { 0xad78ebc5ac620000ULL, 3, 20 },
+   { 0x813f3978f8940984ULL, 30, 28 },
+   { 0xc097ce7bc90715b3ULL, 56, 36 },
+   { 0x8f7e32ce7bea5c70ULL, 83, 44 },
+   { 0xd5d238a4abe98068ULL, 109, 52 },
+   { 0x9f4f2726179a2245ULL, 136, 60 },
+   { 0xed63a231d4c4fb27ULL, 162, 68 },
+   { 0xb0de65388cc8ada8ULL, 189, 76 },
+   { 0x83c7088e1aab65dbULL, 216, 84 },
+   { 0xc45d1df942711d9aULL, 242, 92 },
+   { 0x924d692ca61be758ULL, 269, 100 },
+   { 0xda01ee641a708deaULL, 295, 108 },
+   { 0xa26da3999aef774aULL, 322, 116 },
+   { 0xf209787bb47d6b85ULL, 348, 124 },
+   { 0xb454e4a179dd1877ULL, 375, 132 },
+   { 0x865b86925b9bc5c2ULL, 402, 140 },
+   { 0xc83553c5c8965d3dULL, 428, 148 },
+   { 0x952ab45cfa97a0b3ULL, 455, 156 },
+   { 0xde469fbd99a05fe3ULL, 481, 164 },
+   { 0xa59bc234db398c25ULL, 508, 172 },
+   { 0xf6c69a72a3989f5cULL, 534, 180 },
+   { 0xb7dcbf5354e9beceULL, 561, 188 },
+   { 0x88fcf317f22241e2ULL, 588, 196 },
+   { 0xcc20ce9bd35c78a5ULL, 614, 204 },
+   { 0x98165af37b2153dfULL, 641, 212 },
+   { 0xe2a0b5dc971f303aULL, 667, 220 },
+   { 0xa8d9d1535ce3b396ULL, 694, 228 },
+   { 0xfb9b7cd9a4a7443cULL, 720, 236 },
+   { 0xbb764c4ca7a44410ULL, 747, 244 },
+   { 0x8bab8eefb6409c1aULL, 774, 252 },
+   { 0xd01fef10a657842cULL, 800, 260 },
+   { 0x9b10a4e5e9913129ULL, 827, 268 },
+   { 0xe7109bfba19c0c9dULL, 853, 276 },
+   { 0xac2820d9623bf429ULL, 880, 284 },
+   { 0x80444b5e7aa7cf85ULL, 907, 292 },
+   { 0xbf21e44003acdd2dULL, 933, 300 },
+   { 0x8e679c2f5e44ff8fULL, 960, 308 },
+   { 0xd433179d9c8cb841ULL, 986, 316 },
+   { 0x9e19db92b4e31ba9ULL, 1013, 324 },
+   { 0xeb96bf6ebadf77d9ULL, 1039, 332 },
+   { 0xaf87023b9bf0ee6bULL, 1066, 340 },
+};
+
+static const unsigned int sHxSmallPowersOfTen[] = { 0, 1, 10, 100, 1000, 10000, 100000,
+   1000000, 10000000, 100000000, 1000000000 };
+
+// Moves the last digit towards w while that stays inside the interval, and
+// says whether the result is certainly the nearest and certainly inside
+static bool hxGrisuRoundWeed(char *ioDigits, int inLength, unsigned long long inDistanceTooHighW,
+                             unsigned long long inUnsafeInterval, unsigned long long inRest,
+                             unsigned long long inTenKappa, unsigned long long inUnit)
+{
+   unsigned long long smallDistance = inDistanceTooHighW - inUnit;
+   unsigned long long bigDistance = inDistanceTooHighW + inUnit;
+   while(inRest < smallDistance && inUnsafeInterval - inRest >= inTenKappa &&
+         (inRest + inTenKappa < smallDistance ||
+          smallDistance - inRest >= inRest + inTenKappa - smallDistance))
+   {
+      ioDigits[inLength-1]--;
+      inRest += inTenKappa;
+   }
+   if (inRest < bigDistance && inUnsafeInterval - inRest >= inTenKappa &&
+       (inRest + inTenKappa < bigDistance ||
+        bigDistance - inRest > inRest + inTenKappa - bigDistance))
+      return false;
+   return 2*inUnit <= inRest && inRest <= inUnsafeInterval - 4*inUnit;
+}
+
+static bool hxGrisuDigitGen(HxDiyFp inLow, HxDiyFp inW, HxDiyFp inHigh, char *outDigits,
+                            int &outLength, int &outKappa)
+{
+   unsigned long long unit = 1;
+   HxDiyFp tooLow = hxDiyFp(inLow.f - unit, inLow.e);
+   HxDiyFp tooHigh = hxDiyFp(inHigh.f + unit, inHigh.e);
+   unsigned long long unsafeInterval = tooHigh.f - tooLow.f;
+   int shift = -inW.e;
+   unsigned long long one = 1ULL << shift;
+   unsigned int integrals = (unsigned int)(tooHigh.f >> shift);
+   unsigned long long fractionals = tooHigh.f & (one - 1);
+
+   int bits = 64 - shift;
+   int kappa = ((bits + 1) * 1233 >> 12) + 1;
+   if (integrals < sHxSmallPowersOfTen[kappa])
+      kappa--;
+   unsigned int divisor = sHxSmallPowersOfTen[kappa];
+
+   outLength = 0;
+   while(kappa > 0)
+   {
+      outDigits[outLength++] = (char)('0' + integrals / divisor);
+      integrals %= divisor;
+      kappa--;
+      unsigned long long rest = ((unsigned long long)integrals << shift) + fractionals;
+      if (rest < unsafeInterval)
+      {
+         outKappa = kappa;
+         return hxGrisuRoundWeed(outDigits, outLength, tooHigh.f - inW.f, unsafeInterval, rest,
+                                 (unsigned long long)divisor << shift, unit);
+      }
+      divisor /= 10;
+   }
+   while(outLength < 18)
+   {
+      fractionals *= 10;
+      unit *= 10;
+      unsafeInterval *= 10;
+      outDigits[outLength++] = (char)('0' + (int)(fractionals >> shift));
+      fractionals &= one - 1;
+      kappa--;
+      if (fractionals < unsafeInterval)
+      {
+         outKappa = kappa;
+         return hxGrisuRoundWeed(outDigits, outLength, (tooHigh.f - inW.f) * unit, unsafeInterval,
+                                 fractionals, one, unit);
+      }
+   }
+   return false;
+}
+
+// For inValue finite and positive: false when Grisu3 cannot be sure
+static bool hxGrisuDigits(double inValue, char *outDigits, int &outCount, int &outExp)
+{
+   unsigned long long bits;
+   memcpy(&bits, &inValue, sizeof(bits));
+   unsigned long long mantissa = bits & 0x000FFFFFFFFFFFFFULL;
+   int biased = (int)((bits >> 52) & 0x7FF);
+   HxDiyFp v = biased ? hxDiyFp(mantissa | 0x0010000000000000ULL, biased - 1075) :
+                        hxDiyFp(mantissa, -1074);
+
+   // The midpoints to the doubles either side, the lower one nearer just
+   // above a power of two
+   HxDiyFp plus = hxDiyNormalize(hxDiyFp((v.f << 1) + 1, v.e - 1));
+   HxDiyFp minus = (mantissa==0 && biased>1) ? hxDiyFp((v.f << 2) - 1, v.e - 2) :
+                                               hxDiyFp((v.f << 1) - 1, v.e - 1);
+   minus.f <<= minus.e - plus.e;
+   minus.e = plus.e;
+   HxDiyFp w = hxDiyNormalize(v);
+
+   // A cached power that scales w to a binary exponent from -60 to -32
+   int minExponent = -60 - (w.e + 64);
+   int k = (int)ceil((minExponent + 63) * 0.30102999566398114);
+   const HxCachedPower &power = sHxCachedPowers[(348 + k - 1) / 8 + 1];
+   HxDiyFp tenMk = hxDiyFp(power.f, power.e);
+
+   char digits[18];
+   int length = 0;
+   int kappa = 0;
+   if (!hxGrisuDigitGen(hxDiyTimes(minus, tenMk), hxDiyTimes(w, tenMk), hxDiyTimes(plus, tenMk),
+                        digits, length, kappa) || length>17)
+      return false;
+   memcpy(outDigits, digits, length);
+   outCount = hxTrimZeros(outDigits, length);
+   outExp = length - 1 - power.decimal + kappa;
+   return true;
+}
+
 // The fewest significant digits that read back as inValue, which is finite
 // and positive, choosing the nearest such digits, like std::to_chars
 static int hxShortestDigits(double inValue, char *outDigits, int &outExp)
 {
+   int count = 0;
+   if (hxGrisuDigits(inValue,outDigits,count,outExp))
+      return count;
+
+   // Rounding with printf and reading back with strtod, which decides
+   HxCNumericScope cNumeric;
    int binExp;
    bool powerOfTwo = inValue>DBL_MIN && frexp(inValue,&binExp)==0.5;
    if (inValue>=DBL_MIN && !powerOfTwo)
@@ -1133,9 +1408,9 @@ String::String(const double &inRHS)
       return;
    }
    char buf[100];
-   HxCNumericScope cNumeric;
    if (HX_DOUBLE_PATTERN_CUSTOM)
    {
+      HxCNumericScope cNumeric;
       HX_SNPRINTF_C(buf,100,HX_DOUBLE_PATTERN,inRHS);
    }
    else
@@ -1675,16 +1950,27 @@ String String::createPermanent(const char *inUtf8, int length)
 
 
 // Two-Way search (Crochemore and Perrin): linear in the text whatever the
-// needle, for when first-unit candidates keep matching a long needle's start
-template<typename T>
-static int TMaxSuffix(const T *x, int m, int &outPeriod, bool inReverse)
+// needle, for when first-unit candidates keep matching a long needle's start.
+// Units are read through TTwoWayUnits, forwards for indexOf, or from the end
+// for lastIndexOf, where the first match in the reversed text is the last one.
+template<typename T, bool BACK>
+struct TTwoWayUnits
+{
+   typedef T Unit;
+   const T *ptr;
+   int len;
+   inline T operator[](int i) const { return BACK ? ptr[len-1-i] : ptr[i]; }
+};
+
+template<typename UNITS>
+static int TMaxSuffix(const UNITS &x, int m, int &outPeriod, bool inReverse)
 {
    int ms = -1, j = 0, k = 1;
    outPeriod = 1;
    while(j + k < m)
    {
-      T a = x[j + k];
-      T b = x[ms + k];
+      typename UNITS::Unit a = x[j + k];
+      typename UNITS::Unit b = x[ms + k];
       if (inReverse ? a > b : a < b)
       {
          j += k;
@@ -1711,18 +1997,28 @@ static int TMaxSuffix(const T *x, int m, int &outPeriod, bool inReverse)
    return ms;
 }
 
-template<typename T>
-static int TTwoWayIndexOf(int s, const T *str, int strLen, const T *x, int m)
+// The first match of the needle wholly inside str[inStart, inEnd), or with
+// BACK the last, as an index into str, or -1
+template<typename T, bool BACK>
+static int TTwoWaySearch(const T *str, int inStart, int inEnd, const T *sought, int m)
 {
-   const T *y = str + s;
-   int n = strLen - s;
+   int n = inEnd - inStart;
+   if (n < m)
+      return -1;
+   TTwoWayUnits<T,BACK> x = { sought, m };
+   TTwoWayUnits<T,BACK> y = { str + inStart, n };
    int p, q;
    int i = TMaxSuffix(x, m, p, false);
    int j = TMaxSuffix(x, m, q, true);
    int ell = i > j ? i : j;
    int per = i > j ? p : q;
 
-   if (!memcmp(x, x + per, (ell + 1)*sizeof(T)))
+   bool periodic = true;
+   for(int k=0; k<=ell && periodic; k++)
+      periodic = x[k]==x[k + per];
+
+   int found = -1;
+   if (periodic)
    {
       int pos = 0, memory = -1;
       while(pos <= n - m)
@@ -1736,7 +2032,10 @@ static int TTwoWayIndexOf(int s, const T *str, int strLen, const T *x, int m)
             while(i > memory && x[i] == y[i + pos])
                i--;
             if (i <= memory)
-               return s + pos;
+            {
+               found = pos;
+               break;
+            }
             pos += per;
             memory = m - per - 1;
          }
@@ -1762,14 +2061,56 @@ static int TTwoWayIndexOf(int s, const T *str, int strLen, const T *x, int m)
             while(i >= 0 && x[i] == y[i + pos])
                i--;
             if (i < 0)
-               return s + pos;
+            {
+               found = pos;
+               break;
+            }
             pos += per;
          }
          else
             pos += i - ell;
       }
    }
-   return -1;
+   if (found<0)
+      return -1;
+   return BACK ? inStart + n - found - m : inStart + found;
+}
+
+template<typename T>
+static int TTwoWayIndexOf(int s, const T *str, int strLen, const T *sought, int soughtLen)
+{
+   return TTwoWaySearch<T,false>(str, s, strLen, sought, soughtLen);
+}
+
+// lastIndexOf from start s, the last start it may return
+template<typename T>
+static int TTwoWayLastIndexOf(int s, const T *str, const T *sought, int soughtLen)
+{
+   return TTwoWaySearch<T,true>(str, 0, s + soughtLen, sought, soughtLen);
+}
+
+// Past twice the text scanned, a search whose candidates keep matching the
+// needle's start finishes with the Two-Way search
+static inline bool CandidatesTooCostly(long long inCompared, int inScanned, int inSoughtLen)
+{
+   return inSoughtLen>=32 && inCompared > 2LL*inScanned + 4096;
+}
+
+// A needle in one encoding converted to the haystack's other one, for the
+// Two-Way search. Across encodings only units up to 127 can be equal (see
+// StrMatch), so a needle with any other unit has no match: false.
+template<typename TO, typename FROM>
+static bool ConvertNeedle(const FROM *inNeedle, int inLen, std::vector<TO> &outNeedle)
+{
+   outNeedle.resize(inLen);
+   for(int i=0;i<inLen;i++)
+   {
+      int unit = sizeof(FROM)==1 ? (int)(signed char)inNeedle[i] : (int)inNeedle[i];
+      if (unit<0 || unit>127)
+         return false;
+      outNeedle[i] = (TO)unit;
+   }
+   return true;
 }
 
 template<typename T>
@@ -1813,7 +2154,7 @@ static int TIndexOf(int s, const T *str, int strLen, const T *sought, int sought
             // Candidates that keep matching the start cost a whole compare
             // each: past twice the text scanned, finish in linear time
             compared += soughtLen;
-            if (soughtLen>=32 && compared > 2LL*(s-start) + 4096)
+            if (CandidatesTooCostly(compared, s-start, soughtLen))
                return TTwoWayIndexOf(s, str, strLen, sought, soughtLen);
             s++;
          }
@@ -1833,7 +2174,7 @@ static int TIndexOf(int s, const T *str, int strLen, const T *sought, int sought
          if (!memcmp(str + s,sought,soughtLen*sizeof(T)))
             return s;
          compared += soughtLen;
-         if (soughtLen>=32 && compared > 2LL*(s-start) + 4096)
+         if (CandidatesTooCostly(compared, s-start, soughtLen))
             return TTwoWayIndexOf(s, str, strLen, sought, soughtLen);
          s++;
       }
@@ -1852,9 +2193,14 @@ static bool StrMatch(const char16_t *src0, const char *src1, int len)
 
 int String::indexOf(const String &inValue, Dynamic inStart) const
 {
+   return indexOf(inValue, inStart==null() ? 0 : inStart->__ToInt());
+}
+
+int String::indexOf(const String &inValue, int inStart) const
+{
    if (__s==0)
       return -1;
-   int s = inStart==null() ? 0 : inStart->__ToInt();
+   int s = inStart;
    // A negative start means "from the beginning" (matches other targets). Without
    // this clamp the search reads before the buffer (out-of-bounds) and can return
    // a bogus negative index.
@@ -1881,6 +2227,8 @@ int String::indexOf(const String &inValue, Dynamic inStart) const
          // never equal a char16_t unit, so skipping on the unsigned value
          // can only ever skip positions StrMatch would reject.
          char16_t first = (char16_t)(unsigned char)inValue.__s[0];
+         int start = s;
+         long long compared = 0;
          while(s+l<=length)
          {
             while(s+l<=length && __w[s]!=first)
@@ -1889,6 +2237,14 @@ int String::indexOf(const String &inValue, Dynamic inStart) const
                break;
             if (StrMatch(__w+s, inValue.__s, l))
                return s;
+            compared += l;
+            if (CandidatesTooCostly(compared, s-start, l))
+            {
+               std::vector<char16_t> sought;
+               if (!ConvertNeedle(inValue.__s, l, sought))
+                  return -1;
+               return TTwoWayIndexOf(s, __w, length, &sought[0], l);
+            }
             s++;
          }
          return -1;
@@ -1900,6 +2256,8 @@ int String::indexOf(const String &inValue, Dynamic inStart) const
       char16_t first = inValue.__w[0];
       if (first>127)
          return -1;
+      int start = s;
+      long long compared = 0;
       while(s+l<=length)
       {
          const char *cand = (const char *)memchr(__s+s, (char)first, length-l-s+1);
@@ -1908,6 +2266,14 @@ int String::indexOf(const String &inValue, Dynamic inStart) const
          s = (int)(cand-__s);
          if (StrMatch(inValue.__w, __s+s, l))
             return s;
+         compared += l;
+         if (CandidatesTooCostly(compared, s-start, l))
+         {
+            std::vector<char> sought;
+            if (!ConvertNeedle(inValue.__w, l, sought))
+               return -1;
+            return TTwoWayIndexOf(s, __s, length, &sought[0], l);
+         }
          s++;
       }
       return -1;
@@ -1934,10 +2300,18 @@ static int TLastIndexOf(int s, const T *str, int strLen, const T *sought, int so
    else
    {
       T first = *sought;
+      int start = s;
+      long long compared = 0;
       while(s>=0)
       {
-         if (str[s]==first && !memcmp(str + s,sought,soughtLen*sizeof(T)))
-            return s;
+         if (str[s]==first)
+         {
+            if (!memcmp(str + s,sought,soughtLen*sizeof(T)))
+               return s;
+            compared += soughtLen;
+            if (CandidatesTooCostly(compared, start-s, soughtLen))
+               return s>0 ? TTwoWayLastIndexOf(s-1, str, sought, soughtLen) : -1;
+         }
          --s;
       }
    }
@@ -1948,10 +2322,15 @@ static int TLastIndexOf(int s, const T *str, int strLen, const T *sought, int so
 
 int String::lastIndexOf(const String &inValue, Dynamic inStart) const
 {
+   return lastIndexOf(inValue, inStart==null() ? length : inStart->__ToInt());
+}
+
+int String::lastIndexOf(const String &inValue, int inStart) const
+{
    if (__s==0)
       return -1;
    int l = inValue.length;
-   int s = inStart==null() ? length : inStart->__ToInt();
+   int s = inStart;
    if (l==0) {
       return std::max(0, std::min(s, length));
    }
@@ -1974,6 +2353,8 @@ int String::lastIndexOf(const String &inValue, Dynamic inStart) const
          // Wide haystack, byte needle - skip backwards on the first unit
          // (see indexOf for why the unsigned conversion is safe)
          char16_t first = (char16_t)(unsigned char)inValue.__s[0];
+         int start = s;
+         long long compared = 0;
          while(s>=0)
          {
             while(s>=0 && __w[s]!=first)
@@ -1982,6 +2363,14 @@ int String::lastIndexOf(const String &inValue, Dynamic inStart) const
                break;
             if (StrMatch(__w+s, inValue.__s, l))
                return s;
+            compared += l;
+            if (CandidatesTooCostly(compared, start-s, l))
+            {
+               std::vector<char16_t> sought;
+               if (s==0 || !ConvertNeedle(inValue.__s, l, sought))
+                  return -1;
+               return TTwoWayLastIndexOf(s-1, __w, &sought[0], l);
+            }
             s--;
          }
          return -1;
@@ -1991,6 +2380,8 @@ int String::lastIndexOf(const String &inValue, Dynamic inStart) const
       char16_t first = inValue.__w[0];
       if (first>127)
          return -1;
+      int start = s;
+      long long compared = 0;
       while(s>=0)
       {
          while(s>=0 && __s[s]!=(char)first)
@@ -1999,6 +2390,14 @@ int String::lastIndexOf(const String &inValue, Dynamic inStart) const
             break;
          if (StrMatch(inValue.__w, __s+s, l))
             return s;
+         compared += l;
+         if (CandidatesTooCostly(compared, start-s, l))
+         {
+            std::vector<char> sought;
+            if (s==0 || !ConvertNeedle(inValue.__w, l, sought))
+               return -1;
+            return TTwoWayLastIndexOf(s-1, __s, &sought[0], l);
+         }
          s--;
       }
       return -1;
@@ -2176,7 +2575,7 @@ String _hx_utf8_to_utf16(const unsigned char *ptr, int inUtf8Len, bool addHash)
    int allocSize = 2*(char16Count+1);
    if (hashSlot)
       allocSize += sizeof(int);
-   char16_t *str = (char16_t *)NewGCPrivate(0,allocSize);
+   char16_t *str = (char16_t *)hx::InternalNewString(allocSize);
 
    u = ptr;
    char16_t *o = str;
@@ -2675,14 +3074,6 @@ bool my_wstrneq(const wchar_t *s1, const wchar_t *s2, int len)
 }
 #endif
 
-static bool isSame(const char16_t *a, const char *b, int count)
-{
-   for(int i=0;i<count;i++)
-      if (a[i]!=b[i])
-         return false;
-   return true;
-}
-
 Array<String> String::split(const String &inDelimiter) const
 {
    int len = inDelimiter.length;
@@ -2726,77 +3117,37 @@ Array<String> String::split(const String &inDelimiter) const
    }
 
 
+   // Each delimiter is found by indexOf's search, which stays linear in the
+   // text however much of a long delimiter each candidate matches
    Array<String> result(0,1);
    #if HX_SMART_STRINGS
    bool s0 = isUTF16Encoded();
-   bool s1 = inDelimiter.isUTF16Encoded();
-   if (s0 || s1)
+   if (s0!=inDelimiter.isUTF16Encoded())
    {
-      if (s0 && s1)
+      int found;
+      while( (found = indexOf(inDelimiter, pos))>=0 )
       {
-         // Skip to candidate positions on the first unit before paying for
-         // the full compare
-         char16_t c0 = inDelimiter.__w[0];
-         while(pos+len <=length )
-         {
-            while(pos+len<=length && __w[pos]!=c0)
-               pos++;
-            if (pos+len>length)
-               break;
-            if (len==1 || !memcmp(__w+pos+1,inDelimiter.__w+1,(len-1)*2))
-            {
-               result->push( substr(last,pos-last) );
-               pos += len;
-               last = pos;
-            }
-            else
-               pos++;
-         }
+         result->push( substr(last,found-last) );
+         pos = last = found + len;
       }
-      else if (s0)
-         while(pos+len <=length )
-            if (isSame(__w+pos,inDelimiter.__s,len))
-            {
-               result->push( substr(last,pos-last) );
-               pos += len;
-               last = pos;
-            }
-            else
-               pos++;
-      else
-         while(pos+len <=length )
-            if (isSame(inDelimiter.__w,__s+pos,len))
-            {
-               result->push( substr(last,pos-last) );
-               pos += len;
-               last = pos;
-            }
-            else
-               pos++;
+   }
+   else if (s0)
+   {
+      int found;
+      while( (found = TIndexOf(pos, __w, length, inDelimiter.__w, len))>=0 )
+      {
+         result->push( substr(last,found-last) );
+         pos = last = found + len;
+      }
    }
    else
    #endif
    {
-      // memchr candidate scan, like indexOf - far faster than a libc call
-      // per byte position, and memcmp does not stop at embedded NULs the
-      // way strncmp does (a delimiter containing \0 matched any \0)
-      const char *base = __s;
-      const char *del = inDelimiter.__s;
-      char c0 = del[0];
-      while(pos+len <=length )
+      int found;
+      while( (found = TIndexOf(pos, __s, length, inDelimiter.__s, len))>=0 )
       {
-         const char *found = (const char *)memchr(base+pos, c0, length-len-pos+1);
-         if (!found)
-            break;
-         pos = (int)(found-base);
-         if (len==1 || !memcmp(found+1,del+1,len-1))
-         {
-            result->push( substr(last,pos-last) );
-            pos += len;
-            last = pos;
-         }
-         else
-            pos++;
+         result->push( substr(last,found-last) );
+         pos = last = found + len;
       }
    }
 

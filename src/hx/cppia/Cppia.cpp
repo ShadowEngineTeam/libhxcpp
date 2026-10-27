@@ -30,6 +30,13 @@ namespace hx
 //#define SJLJ_RETURN 1
 
 bool gEnableJit = false;
+// HXCPP_CPPIA_EAGER_JIT compiles all of a module's functions when it loads, as the JIT
+// did before it compiled each one on its first call
+#ifdef HXCPP_CPPIA_EAGER_JIT
+bool gLazyJit = false;
+#else
+bool gLazyJit = true;
+#endif
 
 // Outside the collected heap, and no value a script throws can be it
 hx::Object *const gThrownNull = new (hx::NewObjConst) hx::Object();
@@ -227,7 +234,9 @@ CppiaExpr *createStaticAccess(CppiaExpr *inSrc, FieldStorage inType, void *inPtr
 
 static void ReadExpressions(Expressions &outExpressions, CppiaStream &stream,int inN=-1)
 {
-   int count = inN>=0 ? inN : stream.getInt();
+   // Every expression takes at least a byte, so a count past the data left is
+   // malformed, and would otherwise size the list before failing to fill it
+   int count = stream.checkCount(inN>=0 ? inN : stream.getInt());
    outExpressions.resize(count);
 
    for(int i=0;i<count;i++)
@@ -723,6 +732,29 @@ void genFunctionResult(CppiaCompiler *compiler,const JitVal &inDest, ExprType de
       }
 }
 
+// Compiles a function the JIT left to its first call, then calls it as compiled
+// code calls one, with its frame in place
+static void SLJIT_CALL callLazy(CppiaCtx *ctx, ScriptCallable *function)
+{
+   TRY_NATIVE
+   function->compileLazy();
+   CATCH_NATIVE
+   if (!ctx->exception)
+      function->compiled(ctx);
+}
+
+// Calls the compiled code in inCode, or when that is null, compiles the function in
+// inFunction first
+void genLazyCall(CppiaCompiler *compiler, const JitVal &inCode, const JitVal &inFunction)
+{
+   JumpId notCompiled = compiler->compare(cmpP_EQUAL, inCode.as(jtPointer), (void *)0);
+   compiler->call( inCode, sJitCtx );
+   JumpId done = compiler->jump();
+   compiler->comeFrom(notCompiled);
+   compiler->callNative( (void *)callLazy, sJitCtx, inFunction );
+   compiler->comeFrom(done);
+}
+
 void genFunctionCall(ScriptCallable *function, CppiaCompiler *compiler,
                      const JitVal &inDest, ExprType destType, bool isBoolReturn, ExprType returnType,
                      CppiaExpr *thisExpr,  Expressions &args, const JitVal &inThisVal )
@@ -741,6 +773,13 @@ void genFunctionCall(ScriptCallable *function, CppiaCompiler *compiler,
       if (function->compiled)
       {
          compiler->call( JitVal( (void *)(function->compiled)), sJitCtx );
+      }
+      else if (function->lazy)
+      {
+         // Compiled on its first call, which may be this one
+         compiler->move( sJitTemp1, JitVal((void *)&function->compiled) );
+         compiler->move( sJitTemp1, sJitTemp1.star() );
+         genLazyCall(compiler, sJitTemp1, JitVal((void *)function));
       }
       else
       {
@@ -1851,8 +1890,10 @@ struct CallHaxe : public CppiaExpr
    ExprType returnType;
    bool   isStatic;
    bool   isSuper;
+   // The class the script found the function on, to name it if it cannot link
+   String className;
 
-   CallHaxe(CppiaExpr *inSrc,ScriptNamedFunction inFunction, CppiaExpr *inThis, Expressions &ioArgs, bool inIsStatic=false, bool inIsSuper = false )
+   CallHaxe(CppiaExpr *inSrc,ScriptNamedFunction inFunction, CppiaExpr *inThis, Expressions &ioArgs, bool inIsStatic=false, bool inIsSuper = false, String inClassName = String() )
        : CppiaExpr(inSrc)
    {
       args.swap(ioArgs);
@@ -1860,12 +1901,28 @@ struct CallHaxe : public CppiaExpr
       function = inFunction;
       isStatic = inIsStatic;
       isSuper = inIsSuper;
+      className = inClassName;
    }
    ExprType getType() HXCPP_OVERRIDE { return returnType; }
    CppiaExpr *link(CppiaModule &inModule) HXCPP_OVERRIDE
    {
-      if (strlen(function.signature) != args.size()+1)
-         throw "CallHaxe: Invalid arg count";
+      int hostArgs = (int)strlen(function.signature) - 1;
+      if (hostArgs != args.size())
+      {
+         // A script built against another version of the host: name the
+         // function with the other things the module is missing
+         std::string what = isStatic ? "static function " : "";
+         if (className.raw_ptr())
+            what += std::string(className.utf8_str()) + ".";
+         what += function.name ? function.name : "?";
+         what += " with " + std::to_string(args.size()) + " argument" + (args.size()==1 ? "" : "s") +
+                 ": the host's takes " + std::to_string(hostArgs);
+         inModule.linkMiss(this, what);
+         if (thisExpr)
+            thisExpr = thisExpr->link(inModule);
+         LinkExpressions(args,inModule);
+         return this;
+      }
       for(int i=0;i<args.size()+1;i++)
       {
          switch(function.signature[i])
@@ -2088,7 +2145,7 @@ struct CallStatic : public CppiaExpr
          if (func.signature)
          {
             //CPPIALOG(" found function %s\n", func.signature );
-            replace = new CallHaxe( this, func, 0, args, true );
+            replace = new CallHaxe( this, func, 0, args, true, false, type->name );
          }
          else
          {
@@ -2125,9 +2182,14 @@ struct CallStatic : public CppiaExpr
 
 #ifdef CPPIA_JIT
 static hx::Object *nullException = 0;
+// HXCPP_CATCH_SEGV turns a null access into an exception thrown from the
+// fault handler, but that exception cannot unwind through jitted frames, which
+// have no unwind information: it ended the process, on macOS with "terminating
+// due to uncaught exception of type Dynamic". So jitted code checks for null
+// itself there too.
 void genNullReferenceExceptionCheck(CppiaCompiler *compiler, const JitVal &reg)
 {
-   #ifdef HXCPP_CHECK_POINTER
+   #if defined(HXCPP_CHECK_POINTER) || defined(HXCPP_CATCH_SEGV)
    if (!nullException)
       nullException = (HX_CSTRING("Null Object Reference")).makePermanentObject();
 
@@ -2270,6 +2332,21 @@ static void SLJIT_CALL fixReturnType( hx::CppiaCtx *inCtx, int actualType)
 #endif
 
 
+
+#ifdef CPPIA_JIT
+// A call through a script vtable, with the function in sJitTemp1: its compiled code,
+// compiled first under the lazy JIT when it has none yet
+static void genVTableCall(CppiaCompiler *compiler)
+{
+   if (gLazyJit)
+   {
+      compiler->move( sJitTemp2.as(jtPointer), sJitTemp1.star(jtPointer, offsetof(ScriptCallable,compiled)) );
+      genLazyCall(compiler, sJitTemp2, sJitTemp1.as(jtPointer));
+   }
+   else
+      compiler->call(sJitTemp1.star(jtPointer, offsetof(ScriptCallable,compiled)),sJitCtx );
+}
+#endif
 
 struct CallMemberVTable : public CppiaExpr
 {
@@ -2421,7 +2498,7 @@ struct CallMemberVTable : public CppiaExpr
          compiler->move(actualReturnType, sJitTemp1.star(jtInt, offsetof(ScriptCallable,returnType)) );
 
          // vtable[slot].compiled
-         compiler->call(sJitTemp1.star(jtPointer, offsetof(ScriptCallable,compiled)),sJitCtx );
+         genVTableCall(compiler);
          JumpId isEqual = compiler->compare(cmpI_EQUAL, actualReturnType, (int)returnType);
          // Must be int->Float
          if (returnType==etFloat)
@@ -2437,7 +2514,7 @@ struct CallMemberVTable : public CppiaExpr
       else
       {
          // vtable[slot].compiled
-         compiler->call(sJitTemp1.star(jtPointer, offsetof(ScriptCallable,compiled)),sJitCtx );
+         genVTableCall(compiler);
       }
 
       genFunctionResult(compiler, inDest, destType, returnType, isBoolReturn);
@@ -3539,7 +3616,7 @@ struct CallMember : public CppiaExpr
                if (!strcmp(nativeInterfaceFuncs[i]->name,field.utf8_str()))
                {
                   //CPPIALOG(" found native interface function %s\n", field.out_str() );
-                  replace = new CallHaxe( this, *nativeInterfaceFuncs[i], thisExpr, args );
+                  replace = new CallHaxe( this, *nativeInterfaceFuncs[i], thisExpr, args, false, false, type->name );
                   break;
                }
             }
@@ -3554,7 +3631,7 @@ struct CallMember : public CppiaExpr
                CPPIALOG("Warning - calling super host '%s' from cppia can lead to infinte recursion\n", field.utf8_str());
 
             //CPPIALOG(" found function %s\n", func.signature );
-            replace = new CallHaxe( this, func, thisExpr, args, false, callSuperField && func.superExecute);
+            replace = new CallHaxe( this, func, thisExpr, args, false, callSuperField && func.superExecute, type->name);
          }
       }
 
@@ -3564,7 +3641,7 @@ struct CallMember : public CppiaExpr
          if (func.signature)
          {
             //CPPIALOG(" found function %s\n", func.signature );
-            replace = new CallHaxe( this, func, thisExpr, args );
+            replace = new CallHaxe( this, func, thisExpr, args, false, false, type->name );
          }
       }
 
@@ -5226,7 +5303,7 @@ struct ObjectDef : public CppiaDynamicExpr
 
    ObjectDef(CppiaStream &stream)
    {
-      fieldCount = stream.getInt();
+      fieldCount = stream.checkCount(stream.getInt());
       data = 0;
       stringIds.resize(fieldCount);
       for(int i=0;i<fieldCount;i++)
@@ -5453,7 +5530,8 @@ struct ArrayDef : public CppiaDynamicExpr
                compiler->move(sJitTemp1.star(jtPointer)+i*sizeof(void *), sJitTemp0.as(jtPointer));
                #ifdef HXCPP_GC_GENERATIONAL
                compiler->move(sJitTemp2, array);
-               genWriteBarrier(compiler, sJitTemp2, sJitTemp0 );
+               // Typed, since the barrier cannot move an untyped register
+               genWriteBarrier(compiler, sJitTemp2, sJitTemp0.as(jtPointer) );
                #endif
                break;
             case arrBool:
@@ -6346,7 +6424,7 @@ struct TVars : public CppiaVoidExpr
 
    TVars(CppiaStream &stream)
    {
-      int count = stream.getInt();
+      int count = stream.checkCount(stream.getInt());
       vars.resize(count);
       for(int i=0;i<count;i++)
       {
@@ -6542,7 +6620,7 @@ struct SwitchExpr : public CppiaExpr
    SwitchExpr(CppiaStream &stream)
    {
       useConstIntCases = false;
-      caseCount = stream.getInt();
+      caseCount = stream.checkCount(stream.getInt());
       bool hasDefault = stream.getInt();
       condition = createCppiaExpr(stream);
       cases.resize(caseCount);
@@ -6795,7 +6873,7 @@ struct TryExpr : public CppiaVoidExpr
 
    TryExpr(CppiaStream &stream)
    {
-      catchCount = stream.getInt();
+      catchCount = stream.checkCount(stream.getInt());
       body = createCppiaExpr(stream);
       catches.resize(catchCount);
       for(int i=0;i<catchCount;i++)

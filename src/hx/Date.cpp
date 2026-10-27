@@ -41,7 +41,6 @@
 
 //#include <hxMacros.h>
 
-static double t0 = 0;
 double __hxcpp_time_stamp()
 {
 #ifdef HX_WINDOWS
@@ -77,20 +76,25 @@ double __hxcpp_time_stamp()
 #else
    #if defined(IPHONE) || defined(APPLETV)
       double t = CACurrentMediaTime();
+   #elif defined(USE_CLOCK_GETTIME)
+      // The collector's pause times and heap sizing take differences of these,
+      //  which a wall-clock correction made negative or a minute long when
+      //  gettimeofday came first (libhxcpp #347)
+      struct timespec ts;
+      if( clock_gettime(CLOCK_MONOTONIC, &ts) )
+         return 0;
+      double t =  ( ts.tv_sec + ((double)ts.tv_nsec)*1e-9  );
    #elif defined(USE_GETTIMEOFDAY)
       struct timeval tv;
       if( gettimeofday(&tv,NULL) )
          return 0;
       double t =  ( tv.tv_sec + ((double)tv.tv_usec) / 1000000.0 );
-   #elif defined(USE_CLOCK_GETTIME)
-      struct timespec ts;
-      clock_gettime(CLOCK_MONOTONIC, &ts);
-      double t =  ( ts.tv_sec + ((double)ts.tv_nsec)*1e-9  );
    #else
       double t = (double)clock() * (1.0 / CLOCKS_PER_SEC);
    #endif
-   if (t0==0) t0 = t;
-   return t-t0;
+   // Set once, by whichever thread calls first
+   static const double start = t;
+   return t-start;
 #endif
 }
 
@@ -275,6 +279,33 @@ static double hx_utc_from_local(long long inYear, long long inMonth, int inDay, 
    return naive - (double)hx_zone_offset(guess, &isDst);
 }
 
+// The zone the C library's last tzset left, which a cached local time is only
+// good for: Sys.putEnv("TZ") or a native extension calling tzset changes it
+// (libhxcpp #392). Read from the library's globals, without its lock.
+struct hx_zone_state
+{
+   long offset;
+   char names[2][64];
+};
+
+static void hx_read_zone(hx_zone_state *outState)
+{
+   memset(outState, 0, sizeof(*outState));
+   #if defined(HX_WINDOWS)
+   outState->offset = _timezone;
+   for(int i=0;i<2;i++)
+      if (_tzname[i])
+         strncpy(outState->names[i], _tzname[i], sizeof(outState->names[i])-1);
+   #elif !defined(__SNC__) && !defined(__ORBIS__)
+   #if defined(__GLIBC__) || defined(__ANDROID__)
+   outState->offset = timezone;
+   #endif
+   for(int i=0;i<2;i++)
+      if (tzname[i])
+         strncpy(outState->names[i], tzname[i], sizeof(outState->names[i])-1);
+   #endif
+}
+
 /*
  * for the provided Epoch time, fills the passed struct tm with date_time representation in local time zone
  */
@@ -286,8 +317,11 @@ void __internal_localtime(double inSeconds, struct tm* time)
    // per-thread cache collapses the repeated calls for one date into one.
    static thread_local double sLastSeconds = 0;
    static thread_local struct tm sLastTm;
+   static thread_local hx_zone_state sLastZone;
    static thread_local bool sValid = false;
-   if (sValid && sLastSeconds==inSeconds)
+   hx_zone_state zone;
+   hx_read_zone(&zone);
+   if (sValid && sLastSeconds==inSeconds && !memcmp(&zone, &sLastZone, sizeof(zone)))
    {
       *time = sLastTm;
       return;
@@ -307,6 +341,8 @@ void __internal_localtime(double inSeconds, struct tm* time)
    #endif
    sLastSeconds = inSeconds;
    sLastTm = *time;
+   // localtime can run tzset itself, so the zone is read again after it
+   hx_read_zone(&sLastZone);
    sValid = true;
 }
 

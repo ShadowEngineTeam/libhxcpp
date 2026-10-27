@@ -51,10 +51,11 @@ Defines affecting how the code is compiled.  These can be on the command line wh
 | *HXCPP_STACK_TRACE*     | Have valid function-level stack traces, even in release mode. |
 | *HXCPP_STACK_LINE*      | Include line information in stack traces, even in release mode. |
 | *HXCPP_CPPIA_STACK_SIZE* | The size in bytes of the stack each thread keeps cppia script frames on, default 131072 (128 KB). A script that recurses past it gets a "Stack Overflow" exception (docs/ThreadsAndStacks.md) |
+| *HXCPP_CPPIA_EAGER_JIT* | Have the cppia JIT compile all of a module's functions when the module loads, rather than each function when it is first called |
 | *HXCPP_CHECK_POINTER*   | Add null-pointer checks,even in release mode. |
 | *HXCPP_PROFILER*        | Add profiler support |
 | *HXCPP_TELEMETRY*       | Add telemetry support |
-| *HXCPP_SANITIZE*        | Build with the given gcc/clang sanitizers on Linux and macOS, eg "-D HXCPP_SANITIZE=address,undefined". With address, the runtime turns off ASan's use-after-return check by default, since the collector cannot see locals it moves off the stack; ASAN_OPTIONS can still turn it on |
+| *HXCPP_SANITIZE*        | Build with the given gcc/clang sanitizers on Linux and macOS, eg "-D HXCPP_SANITIZE=address,undefined". With MSVC, address and fuzzer (fuzzer-no-link works the same there). With address, the runtime turns off ASan's use-after-return check by default, since the collector cannot see locals it moves off the stack; ASAN_OPTIONS can still turn it on |
 | *HXCPP_SQLITE_FTS5*     | Build SQLite with the FTS5 full-text search extension. The JSON functions are always built in |
 | *HXCPP_C_STANDARD*      | Set default C standard |
 | *HXCPP_CXX_STANDARD*    | Set default C++ standard |
@@ -115,6 +116,7 @@ Defines affecting target architecture.
 | *HXCPP_LINK_NO_MEMORY_GROWTH* | Emscripten: link with fixed memory (HXCPP_LINK_TOTAL_MEMORY, else Emscripten's 16 MB) instead of letting it grow |
 | *HXCPP_LINK_STACK_SIZE* | Emscripten: the stack size, in bytes or with a suffix such as 1MB. Default 5MB |
 | *HXCPP_LINK_NO_STACK_SIZE* | Emscripten: leave the stack size to Emscripten, whose default is 64 KB |
+| *HXCPP_LINK_NO_EMBIND*  | Emscripten: link an executable without Embind (--bind), for one without JavaScript bindings. HXCPP_JS_PRIME keeps it |
 | *HXCPP_LINK_NODERAWFS*  | Emscripten: under node, use the host's files directly instead of an empty in-memory file system. The program then runs only under node |
 | *cygwin*                | Compile for windows using cygwin |
 | *linux*                 | (Cross) Compile for linux |

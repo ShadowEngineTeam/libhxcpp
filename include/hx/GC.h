@@ -119,6 +119,15 @@ namespace hx
 // inIsObject specifies whether "__Mark"  should be called on the resulting object
 void *InternalNew(size_t inSize,bool inIsObject);
 
+// InternalNew for data without object pointers that the caller writes in
+// full before anything can read it: a large allocation is not cleared first
+void *InternalNewUncleared(size_t inSize);
+
+// InternalNew for string data, which holds no atomics or doubles and so
+// need not start 8-byte aligned (libhxcpp #370). With inClear false, a large
+// allocation is not cleared first, as with InternalNewUncleared
+void *InternalNewString(size_t inSize,bool inClear=true);
+
 // Used internall - realloc array data
 void *InternalRealloc(size_t inFromSize, void *inData,size_t inSize,bool inAllowExpansion=false);
 
@@ -198,6 +207,9 @@ void GCRemoveRoot(hx::Object **inRoot);
 // It calls InternalNew, and takes care of null-terminating the result
 char *NewString(int inLen);
 
+// NewString for a string the caller fills in full
+char *NewStringUncleared(int inLen);
+
 // The concept of 'private' is from the old conservative Gc method.
 // Now with explicit marking, these functions do the same thing, which is
 //  to allocate some GC memory and optionally copy the 'inData' into those bytes
@@ -235,7 +247,9 @@ bool TryExitGCFreeZone();
 class HXCPP_EXTERN_CLASS_ATTRIBUTES AutoGCFreeZone
 {
 public:
-	AutoGCFreeZone() : locked(true) { EnterGCFreeZone(); }
+	// Leaves only a zone it entered, so a guard inside a zone its caller
+	// already entered keeps the caller's zone when it ends
+	AutoGCFreeZone() : locked(TryGCFreeZone()) { }
 	~AutoGCFreeZone() { if (locked) ExitGCFreeZone(); }
 	AutoGCFreeZone(const AutoGCFreeZone &) = delete;
 	AutoGCFreeZone &operator=(const AutoGCFreeZone &) = delete;
@@ -272,7 +286,7 @@ HXCPP_EXTERN_CLASS_ATTRIBUTES void MarkPopClass(hx::MarkContext *__inCtx);
 
 // Used by runtime if it is being paranoid about pointers.  It checks that the pointer is real and alive at last collect.
 void GCCheckPointer(void *);
-void GCOnNewPointer(void *);
+void GCOnNewPointer(void *, bool inAligned=true);
 
 
 // Called internally before and GC operations

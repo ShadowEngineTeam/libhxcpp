@@ -666,7 +666,7 @@ void buffer_append(buffer inBuffer,const char *inStr)
    ByteArray b = (ByteArray)inBuffer;
    int olen = b->length;
    int len = strlen(inStr);
-   b->__SetSize(olen+len);
+   b->EnsureAppendSize(olen+len);
    memcpy(b->GetBase()+olen,inStr,len);
 
 }
@@ -690,7 +690,7 @@ void buffer_append_sub(buffer inBuffer,const char *inStr,int inLen)
 {
    ByteArray b = (ByteArray)inBuffer;
    int olen = b->length;
-   b->__SetSize(olen+inLen);
+   b->EnsureAppendSize(olen+inLen);
    memcpy(b->GetBase()+olen,inStr,inLen);
 }
 
@@ -715,7 +715,13 @@ void val_buffer(buffer inBuffer,value inValue)
    hx::Object *obj = (hx::Object *)inValue;
    if (obj)
    {
-       buffer_append(inBuffer, obj->toString().__CStr());
+      // By byte count, so a NUL in the text does not end it. The length
+      //  goes in too: given 0, the UTF-16 conversion stops at the first NUL
+      String text = obj->toString();
+      int len = text.length;
+      const char *utf8 = text.utf8_str(0, false, &len);
+      if (utf8 && len>0)
+         buffer_append_sub(inBuffer, utf8, len);
    }
    else
    {

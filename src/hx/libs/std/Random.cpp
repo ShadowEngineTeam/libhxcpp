@@ -5,6 +5,7 @@
 
 #include <time.h>
 #include <string.h>
+#include <stdint.h>
 #ifdef HX_WINDOWS
 #   include <windows.h>
 #   include <process.h>
@@ -36,17 +37,19 @@ struct rnd  : public hx::Object
 {
    HX_IS_INSTANCE_OF enum { _hx_ClassId = hx::clsIdRandom };
 
-   unsigned long seeds[NSEEDS];
-   unsigned long cur;
+   // 32 bits wide everywhere: unsigned long is 64 bits on LP64 platforms,
+   //  where a negative seed set the high bits and the refresh shifted them in
+   uint32_t seeds[NSEEDS];
+   uint32_t cur;
 
    String toString() HXCPP_OVERRIDE { return HX_CSTRING("rand"); }
 };
 
-static unsigned long mag01[2]={ 
+static const uint32_t mag01[2]={ 
    0x0, 0x8ebfd028 // magic, don't change
 };
 
-static const unsigned long init_seeds[] = {
+static const uint32_t init_seeds[] = {
    0x95f24dab, 0x0b685215, 0xe76ccae7, 0xaf3ec239, 0x715fad23,
    0x24a590ad, 0x69e4b5ef, 0xbf456141, 0x96bc1b7b, 0xa7bdf825,
    0xc1de75b7, 0x8858a9c9, 0x2da87693, 0xb657f9dd, 0xffdc8a9f,
@@ -62,7 +65,7 @@ static void rnd_set_seed( rnd *r, int s )
    r->cur = 0;
    memcpy(r->seeds,init_seeds,sizeof(init_seeds));
    for(i=0;i<NSEEDS;i++)
-      r->seeds[i] ^= s;
+      r->seeds[i] ^= (uint32_t)s;
 }
 
 rnd *getRnd(Dynamic handle)

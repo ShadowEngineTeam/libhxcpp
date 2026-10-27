@@ -334,7 +334,15 @@ struct HxSemaphore
    }
    int TimedWait(const timespec &inDeadline)
    {
-      #ifdef __APPLE__
+      #if defined(__EMSCRIPTEN__) && !defined(__EMSCRIPTEN_PTHREADS__)
+      // Without pthreads, pthread_cond_timedwait returns 0 at once, which
+      // WaitSeconds took as a wakeup for ever. No other thread can signal
+      // the condition, so sleep to the deadline instead.
+      while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &inDeadline, 0) == EINTR)
+      {
+      }
+      return ETIMEDOUT;
+      #elif defined(__APPLE__)
       timespec now;
       Now(now);
       timespec left;

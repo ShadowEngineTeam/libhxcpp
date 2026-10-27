@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 #include <string>
 #include <vector>
 #include <time.h>
@@ -147,12 +148,17 @@ void _hx_std_put_env( String e, String v )
 
    // Convert before taking the lock - conversion can allocate, and an
    // allocation must not happen under it (see _hx_std_get_env)
+   // The C library reads TZ in tzset, and some of its local time calls never
+   //  run it again, so a new zone took effect only sometimes (libhxcpp #392)
+   bool zone = e.length==2 && toupper(e.cca(0))=='T' && toupper(e.cca(1))=='Z';
    #ifdef HX_SMART_STRINGS
    if (set.isUTF16Encoded())
    {
       const wchar_t *w = set.wchar_str();
       AutoLock lock(hxEnvMutex());
       _wputenv(w);
+      if (zone)
+         _tzset();
    }
    else
    #endif
@@ -160,6 +166,8 @@ void _hx_std_put_env( String e, String v )
       const char *u = set.utf8_str();
       AutoLock lock(hxEnvMutex());
       putenv(u);
+      if (zone)
+         _tzset();
    }
 #else
    const char *name = e.utf8_str();
@@ -169,6 +177,10 @@ void _hx_std_put_env( String e, String v )
       unsetenv(name);
    else
       setenv(name,value,1);
+   // The C library reads TZ in tzset, and localtime_r need not run it again,
+   //  so a new zone took effect only sometimes (libhxcpp #392)
+   if (!strcmp(name,"TZ"))
+      tzset();
 #endif
 }
 
@@ -865,6 +877,21 @@ String _hx_std_file_full_path( String path )
 #endif
 }
 
+#ifdef __EMSCRIPTEN__
+// Under node the program is the .js file node runs, so this gives its absolute
+// path, where /proc/self/exe names node itself on Linux. A browser has no file
+// to name, so there it gives null, as when the path cannot be found elsewhere
+EM_JS_DEPS(hx_sys_exe_path, "$stringToNewUTF8");
+EM_JS(char *, hx_emscripten_exe_path, (), {
+   if (typeof process != "object" || typeof process.versions != "object" || typeof process.versions.node != "string" || typeof require != "function")
+      return 0;
+   var file = typeof __filename == "string" ? __filename : process.argv[1];
+   if (!file)
+      return 0;
+   return stringToNewUTF8(require("path").resolve(file));
+});
+#endif
+
 /**
    sys_exe_path : void -> string
    <doc>Return the path of the executable</doc>
@@ -898,6 +925,13 @@ String _hx_std_sys_exe_path()
    return String::create(path);
 #elif defined(EPPC)
    return HX_CSTRING("");
+#elif defined(__EMSCRIPTEN__)
+   char *path = hx_emscripten_exe_path();
+   if (!path)
+      return null();
+   String result = String::create(path);
+   free(path);
+   return result;
 #else
    {
       char path[PATH_MAX];

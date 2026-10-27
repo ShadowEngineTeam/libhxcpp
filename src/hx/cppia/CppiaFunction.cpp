@@ -1,6 +1,8 @@
    #include <hxcpp.h>
 #include "Cppia.h"
 #include "CppiaStream.h"
+#include <atomic>
+#include <mutex>
 
 namespace hx
 {
@@ -31,7 +33,7 @@ ScriptCallable::ScriptCallable(CppiaStream &stream)
    returnTypeId = stream.getTypeId();
    returnType = etVoid;
    isBoolReturn = false;
-   argCount = stream.getInt();
+   argCount = stream.checkCount(stream.getInt());
    args.resize(argCount);
    hasDefault.resize(argCount);
    initVals.resize(argCount);
@@ -41,6 +43,7 @@ ScriptCallable::ScriptCallable(CppiaStream &stream)
    #ifdef CPPIA_JIT
    compiled = 0;
    ownsCompiled = false;
+   lazy = false;
    #endif
    for(int a=0;a<argCount;a++)
    {
@@ -69,6 +72,7 @@ ScriptCallable::ScriptCallable(CppiaExpr *inBody) : CppiaDynamicExpr(inBody)
    #ifdef CPPIA_JIT
    compiled = 0;
    ownsCompiled = false;
+   lazy = false;
    #endif
 }
 
@@ -145,6 +149,7 @@ ScriptCallable::ScriptCallable(CppiaModule &inModule,ScriptNamedFunction *inFunc
    // magically already compiled for us
    compiled = inFunction->execute;
    ownsCompiled = false;
+   lazy = false;
    #endif
 }
 
@@ -579,6 +584,8 @@ void ScriptCallable::runFunction(CppiaCtx *ctx)
 {
 
    #ifdef CPPIA_JIT
+   if (lazy && !compiled)
+      compileLazy();
    if (compiled)
    {
       {
@@ -628,6 +635,8 @@ void ScriptCallable::runFunction(CppiaCtx *ctx)
 void ScriptCallable::runFunctionClosure(CppiaCtx *ctx)
 {
    #ifdef CPPIA_JIT
+   if (lazy && !compiled)
+      compileLazy();
    if (compiled)
    {
       {
@@ -799,11 +808,35 @@ void ScriptCallable::compile()
 
       body->genCode(compiler);
 
-      compiled = compiler->finishGeneration();
+      CppiaFunc code = compiler->finishGeneration();
+      // Another thread can find the code through compiled as soon as it is set
+      std::atomic_thread_fence(std::memory_order_release);
+      compiled = code;
       ownsCompiled = true;
 
       delete compiler;
    }
+}
+
+// One function compiles at a time, and a thread that waits for another's to finish
+// lets the collector run meanwhile, as compiling can allocate
+static std::mutex &sLazyCompileLock = *new std::mutex();
+
+void ScriptCallable::compileLazy()
+{
+   hx::EnterGCFreeZone();
+   sLazyCompileLock.lock();
+   hx::ExitGCFreeZone();
+   std::lock_guard<std::mutex> hold(sLazyCompileLock, std::adopt_lock);
+   if (!compiled)
+      compile();
+}
+
+void CppiaFunction::markLazy()
+{
+   ScriptCallable *callable = dynamic_cast<ScriptCallable *>((CppiaExpr *)funExpr);
+   if (callable)
+      callable->lazy = true;
 }
 #endif
 
@@ -867,6 +900,8 @@ public:
       }
 
       #ifdef CPPIA_JIT
+      if (function->lazy && !function->compiled)
+         function->compileLazy();
       if (function->compiled)
       {
          {
@@ -1086,6 +1121,20 @@ hx::Object *createMemberClosure(hx::Object *inThis, ScriptCallable *inFunction)
    return new (sizeof(hx::Object *)) CppiaClosure(inThis,inFunction);
 }
 
+// The script function a bound method, or a closure with an object or captured
+// variables, runs; 0 for any other object. A static function used as a value
+// is left out: the module keeps one of those for each, so it says nothing about
+// what else holds the module
+ScriptCallable *getClosureFunction(hx::Object *inObj)
+{
+   CppiaClosure *closure = dynamic_cast<CppiaClosure *>(inObj);
+   // The captured area always holds this, so a closure with nothing else in it
+   // and a null this is a static function
+   if (!closure || (!*closure->getThis() && closure->function->captureSize <= (int)sizeof(hx::Object *)))
+      return 0;
+   return closure->function;
+}
+
 
 
 
@@ -1106,7 +1155,7 @@ void CppiaFunction::load(CppiaStream &stream,bool inExpectBody)
    name = cppia.strings[ nameId ].utf8_str();
    stream.module->creatingFunction = name.c_str();
    returnType = stream.getTypeId();
-   argCount = stream.getInt();
+   argCount = stream.checkCount(stream.getInt());
    DBGLOG("  Function %s(%d) : %s %s%s\n", name.c_str(), argCount, cppia.typeStr(returnType), isStatic?"static":"instance", isDynamic ? " DYNAMIC": "");
    args.resize(argCount);
    for(int a=0;a<argCount;a++)

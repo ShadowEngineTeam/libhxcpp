@@ -1,4 +1,5 @@
--main cpp.cppia.Host
+-cp cppia
+-main Cppia
 -D scriptable
 -D dll_export=
 -dce no

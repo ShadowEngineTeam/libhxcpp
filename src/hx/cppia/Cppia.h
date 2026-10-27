@@ -314,6 +314,8 @@ struct ScriptCallable : public CppiaDynamicExpr
    #ifdef CPPIA_JIT
    CppiaFunc compiled;
    bool ownsCompiled;
+   // Compiled when it is first called rather than when its module loads
+   bool lazy;
    #endif
 
    #ifdef HXCPP_STACK_SCRIPTABLE
@@ -346,6 +348,7 @@ struct ScriptCallable : public CppiaDynamicExpr
 
    #ifdef CPPIA_JIT
    void compile();
+   void compileLazy();
    void genDefaults(CppiaCompiler *compiler);
    #ifdef HXCPP_DEBUGGER
    void genZeroLocals(CppiaCompiler *compiler);
@@ -385,6 +388,8 @@ CppiaExpr *createStaticAccess(CppiaExpr *inSrc, ExprType inType, void *inPtr);
 CppiaExpr *createStaticAccess(CppiaExpr *inSrc, FieldStorage inType, void *inPtr);
 hx::Object * CPPIA_CALL createClosure(CppiaCtx *ctx, ScriptCallable *inFunction);
 hx::Object *createMemberClosure(hx::Object *, ScriptCallable *inFunction);
+ScriptCallable *getClosureFunction(hx::Object *inObj);
+CppiaClassInfo *getScriptClassInfo(hx::Object *inClass);
 hx::Object *createEnumClosure(struct CppiaEnumConstructor &inContructor);
 
 hx::Object *DynamicToArrayType(hx::Object *obj, ArrayType arrayType);
@@ -455,6 +460,7 @@ public:
 
    void link();
    void compile();
+   void markLazy();
    void setDebug(CppiaExpr *outExpr, int inFileId, int inLine);
    void boot(CppiaCtx *ctx);
    void where(CppiaExpr *e);
@@ -516,6 +522,7 @@ struct CppiaFunction : public CppiaOwned<CppiaFunction>
    void load(CppiaStream &stream,bool inExpectBody);
    void link( );
    void compile();
+   void markLazy();
 };
 
 
@@ -566,6 +573,7 @@ void LinkExpressions(Expressions &ioExpressions, CppiaModule &data);
 
 CppiaExpr *createEnumField(CppiaStream &stream,bool inWithArgs);
 
+int TypeAlignment(ExprType type);
 void AlignOffset(ExprType type, int &ioOffset);
 
 struct CppiaVar : public CppiaOwned<CppiaVar>
@@ -610,6 +618,7 @@ struct CppiaVar : public CppiaOwned<CppiaVar>
    Dynamic setStaticValue(Dynamic inValue);
    CppiaExpr *createAccess(CppiaExpr *inSrc);
    void linkVarTypes(CppiaModule &cppia, int &ioOffset);
+   int fieldAlignment(CppiaModule &cppia);
    void createDynamic(hx::Object *inBase);
    Dynamic getValue(hx::Object *inThis);
    Dynamic setValue(hx::Object *inThis, Dynamic inValue);
@@ -668,6 +677,7 @@ public:
    static HaxeNativeClass *findClass(const std::string &inName);
    static HaxeNativeClass *hxObject();
    static void link();
+   static const std::string &hostFingerprint();
 #ifndef NATIVE_CLASS_OVERRIDES_MARKED
 private:
    void addVtableEntries( std::vector<std::string> &outVtable, std::unordered_set<std::string> &outMethodsSet);
@@ -782,6 +792,7 @@ public:
 
    #ifdef CPPIA_JIT
    void compile();
+   void markLazy();
    #endif
 
    void link();

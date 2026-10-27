@@ -42,6 +42,73 @@ value val_field(value inObject, int inIndex) { return inObject[sIdKeys[inIndex]]
 void alloc_field(value inObject, int inIndex, value inValue) { inObject.set(sIdKeys[inIndex],inValue); }
 
 
+// Strings are UTF-8, or UTF-32 for wchar_t. val_string and val_wstring copy
+// the text into memory freed when the primitive that asked returns (see
+// HxJsPrimeStringScope in CFFI.h). null gives an empty string, and anything
+// else what JavaScript's String gives for it.
+static std::vector<void *> sStrings;
+
+int hx_js_prime_strings_mark() { return (int)sStrings.size(); }
+
+void hx_js_prime_strings_release(int inMark)
+{
+   while ((int)sStrings.size() > inMark)
+   {
+      free(sStrings.back());
+      sStrings.pop_back();
+   }
+}
+
+static value js_prime_string(value inValue)
+{
+   if (inValue.isString())
+      return inValue;
+   if (inValue.isNull() || inValue.isUndefined())
+      return value("");
+   return value::global("String")(inValue);
+}
+
+static void *js_prime_keep(const void *inData, size_t inBytes)
+{
+   void *result = malloc(inBytes);
+   memcpy(result, inData, inBytes);
+   sStrings.push_back(result);
+   return result;
+}
+
+// Bytes of UTF-8, so alloc_string_len(val_string(v), val_strlen(v)) gives v back
+int val_strlen(value inValue) { return (int)js_prime_string(inValue).as<std::string>().size(); }
+
+const char *val_string(value inValue)
+{
+   std::string s = js_prime_string(inValue).as<std::string>();
+   return (const char *)js_prime_keep(s.c_str(), s.size() + 1);
+}
+
+const wchar_t *val_wstring(value inValue)
+{
+   std::wstring s = js_prime_string(inValue).as<std::wstring>();
+   return (const wchar_t *)js_prime_keep(s.c_str(), (s.size() + 1) * sizeof(wchar_t));
+}
+
+char *val_dup_string(value inValue) { return (char *)val_string(inValue); }
+wchar_t *val_dup_wstring(value inValue) { return (wchar_t *)val_wstring(inValue); }
+
+value alloc_string_len(const char *inStr, int inLen)
+{
+   if (!inStr)
+      return alloc_null();
+   return value(std::string(inStr, inLen));
+}
+
+value alloc_wstring_len(const wchar_t *inStr, int inLen)
+{
+   if (!inStr)
+      return alloc_null();
+   return value(std::wstring(inStr, inLen));
+}
+
+
 
 /*
 DEFFUNC_1(void,val_throw,value)
@@ -67,14 +134,7 @@ DEFFUNC_3(value,create_abstract,vkind,int,hxFinalizer)
 DEFFUNC_1(void,free_abstract,value)
 
 // String access
-DEFFUNC_1(int,val_strlen,value)
-DEFFUNC_1(const wchar_t *,val_wstring,value)
-DEFFUNC_1(const char *,val_string,value)
-DEFFUNC_1(wchar_t *,val_dup_wstring,value)
-DEFFUNC_1(char *,val_dup_string,value)
 DEFFUNC_2(char *,alloc_string_data,const char *,int)
-DEFFUNC_2(value,alloc_string_len,const char *,int)
-DEFFUNC_2(value,alloc_wstring_len,const wchar_t *,int)
 
 // Array access - generic
 DEFFUNC_1(value,alloc_array,int)

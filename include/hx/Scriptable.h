@@ -13,6 +13,9 @@ namespace hx
 
 extern bool gEnableJit;
 inline void EnableJit(bool inEnable) { gEnableJit = inEnable; }
+// Whether the JIT compiles each script function when it is first called, rather than
+// all of a module's functions when it loads. -D HXCPP_CPPIA_EAGER_JIT turns it off
+extern bool gLazyJit;
 
 #define HXCPP_CPPIA_SUPER_ARG(x) , (x)
 
@@ -211,9 +214,17 @@ void __scriptable_load_neko_bytes(Array<unsigned char> inBytes);
 void __scriptable_load_abc(Array<unsigned char> inBytes);
 // Modules whose native memory has not been freed yet
 int __scriptable_cppia_live_modules();
+// Collects, then lists each released module still loaded, with what of it is
+// still live: { module, instances: [{ name, count, bytes }], closures: { count,
+// bytes } }. docs/CppiaModuleRelease.md says what each counts
+Array<Dynamic> __scriptable_cppia_retained();
 // Whether modules loaded now are compiled by the JIT: it is built in, enabled
 // with cpp.cppia.Host.enableJit, and can get executable memory on this platform
 bool __scriptable_cppia_jit_active();
+// 16 hex digits standing for the classes, functions and fields this host gives
+// scripts. A module with a "__cppia_host" resource loads only into the host
+// whose fingerprint that resource holds
+String __scriptable_host_fingerprint();
 // Sets the size in bytes of the script stack, which holds script frames, for
 // threads that attach from now on and for the calling thread if no script frame
 // is on it (docs/ThreadsAndStacks.md). The size starts at HXCPP_CPPIA_STACK_SIZE,

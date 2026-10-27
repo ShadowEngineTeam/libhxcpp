@@ -368,6 +368,7 @@ public:
 #endif
 
    void Realloc(int inLen) const;
+   void ReallocGrow(int inLen) const;
 
    inline void EnsureSize(int inLen) const
    {
@@ -375,6 +376,19 @@ public:
       {
          if (inLen<0 || inLen>mAlloc)
             Realloc(inLen);
+         length = inLen;
+      }
+   }
+
+   // EnsureSize for appending a chunk of unknown total length, such as a
+   // stream read in pieces: the capacity grows as push grows it, not to
+   // the exact length, so the array is not copied again for every chunk
+   inline void EnsureAppendSize(int inLen) const
+   {
+      if ((unsigned int)inLen>(unsigned int)length)
+      {
+         if (inLen<0 || inLen>mAlloc)
+            ReallocGrow(inLen);
          length = inLen;
       }
    }
@@ -389,6 +403,9 @@ public:
    void Slice(hx::ArrayBase *outResult,int inPos,int inEnd);
 
    void Concat(hx::ArrayBase *outResult,const char *inEnd, int inLen);
+
+   // Gives an empty array a copy of inCount elements
+   void InitCopy(const char *inData, int inCount);
 
 
    void reserve(int inN) const;
@@ -866,10 +883,17 @@ public:
    }
 
 
+   // An Int start, as generated code passes it, is taken without boxing it;
+   // null() matches its own overload, since it converts to both
    int indexOf(ELEM_ inValue, Dynamic fromIndex = null())
    {
+      return indexOf(inValue, fromIndex==null() ? 0 : fromIndex->__ToInt());
+   }
+   int indexOf(ELEM_ inValue, const null &) { return indexOf(inValue, 0); }
+   int indexOf(ELEM_ inValue, int fromIndex)
+   {
       int len = length;
-      int i = fromIndex==null() ? 0 : fromIndex->__ToInt();
+      int i = fromIndex;
       ELEM_ *e = (ELEM_ *)mBase;
       if (i < 0)
       {
@@ -887,8 +911,13 @@ public:
 
    int lastIndexOf(ELEM_ inValue, Dynamic fromIndex = null())
    {
+      return lastIndexOf(inValue, fromIndex==null() ? (int)length-1 : fromIndex->__ToInt());
+   }
+   int lastIndexOf(ELEM_ inValue, const null &) { return lastIndexOf(inValue, (int)length-1); }
+   int lastIndexOf(ELEM_ inValue, int fromIndex)
+   {
       int len = length;
-      int i = fromIndex==null() ? len-1 : fromIndex->__ToInt();
+      int i = fromIndex;
       ELEM_ *e = (ELEM_ *)mBase;
       if (i >= len)
          i = len - 1;
@@ -1024,10 +1053,23 @@ public:
       }
    };
 
+   // The most values sort boxes at one time (see sortValues)
+   enum { SORT_BOX_RUN = 16384 };
+
+   static inline bool boxedLess(SorterFunc &inFunc, const Dynamic &inA, const Dynamic &inB)
+   {
+#if (HXCPP_API_LEVEL>=500)
+      return inFunc(inA, inB) < 0;
+#else
+      return inFunc(inA, inB)->__ToInt() < 0;
+#endif
+   }
+
    // Defined after class Array below - the body uses Array<Dynamic>, which
    // is incomplete here and gcc/clang check that at template definition
    // time (msvc does not)
    void sort(SorterFunc inSorter);
+   void sortValues(ELEM_ *ioData, int inFrom, int inTo, ELEM_ *ioBuffer, Array<Dynamic> &ioBoxed, int *ioIndex, SorterFunc inSorter);
 
    Dynamic iterator() { return new hx::ArrayIterator<ELEM_,ELEM_>(this); }
    Dynamic keyValueIterator() { return new hx::ArrayKeyValueIterator<ELEM_,ELEM_>(this); }
@@ -1290,6 +1332,84 @@ Array<ELEM_> Array_obj<ELEM_>::__new(int inSize,int inReserve)
  { return  Array<ELEM_>(new Array_obj(inSize,inReserve)); }
 
 
+// Sorts plain values [inFrom,inTo) of ioData.  The comparator takes Dynamic
+// arguments, so comparing raw values directly boxes two of them per
+// comparison - n log n boxes.  A range of up to SORT_BOX_RUN values boxes each
+// once into ioBoxed, sorts an index through the boxes and permutes the values
+// to match.  A longer range sorts its halves and merges them, boxing each
+// value as the merge reaches it, so the boxes live at one time are those of
+// one run, not one for every element of the array (libhxcpp #256).  ioBuffer
+// holds half the range, and ioIndex one run.
+template<typename ELEM_>
+void Array_obj<ELEM_>::sortValues(ELEM_ *ioData, int inFrom, int inTo, ELEM_ *ioBuffer, Array<Dynamic> &ioBoxed, int *ioIndex, SorterFunc inSorter)
+{
+   const int n = inTo-inFrom;
+   if (n<=SORT_BOX_RUN)
+   {
+      for(int i=0;i<n;i++)
+      {
+         ioBoxed->init(i, Dynamic(ioData[inFrom+i]));
+         ioIndex[i] = i;
+      }
+      BoxedSorter sorter(ioBoxed.mPtr, inSorter);
+      hx::StableSort(ioIndex, n, sorter);
+
+      // Apply the permutation with cycle-following swaps (see SafeSorter)
+      ELEM_ *e = ioData + inFrom;
+      for(int i=0;i<n;i++)
+      {
+         int from = ioIndex[i];
+         while (from < i)
+            from = ioIndex[from];
+         if (from != i)
+         {
+            std::swap(e[i], e[from]);
+            ioIndex[i] = from;
+         }
+      }
+      return;
+   }
+
+   int mid = inFrom + (n>>1);
+   sortValues(ioData, inFrom, mid, ioBuffer, ioBoxed, ioIndex, inSorter);
+   sortValues(ioData, mid, inTo, ioBuffer, ioBoxed, ioIndex, inSorter);
+
+   // As StableSortRange: take the right value only when it is less, so
+   // equal values keep their order
+   Dynamic right = Dynamic(ioData[mid]);
+   Dynamic left = Dynamic(ioData[mid-1]);
+   if (!boxedLess(inSorter, right, left))
+      return;
+
+   int leftLength = mid-inFrom;
+   for(int i=0;i<leftLength;i++)
+      ioBuffer[i] = ioData[inFrom+i];
+   int l = 0;
+   int r = mid;
+   int out = inFrom;
+   left = Dynamic(ioBuffer[0]);
+   while(true)
+   {
+      if (boxedLess(inSorter, right, left))
+      {
+         ioData[out++] = ioData[r++];
+         if (r==inTo)
+            break;
+         right = Dynamic(ioData[r]);
+      }
+      else
+      {
+         ioData[out++] = ioBuffer[l++];
+         if (l==leftLength)
+            break;
+         left = Dynamic(ioBuffer[l]);
+      }
+   }
+   while(l<leftLength)
+      ioData[out++] = ioBuffer[l++];
+}
+
+
 template<typename ELEM_>
 void Array_obj<ELEM_>::sort(SorterFunc inSorter)
 {
@@ -1299,49 +1419,27 @@ void Array_obj<ELEM_>::sort(SorterFunc inSorter)
       // bool/byte/short arrays through safeSort, which reinterprets the
       // buffer as Dynamic[] and reads out of bounds.)
       //
-      // The comparator takes Dynamic arguments, so comparing raw values
-      // directly boxes two of them per comparison - n log n boxes.  Box
-      // each element once, sort an index through the boxed values, then
-      // permute the raw values into place.  The sorter holds the boxed
-      // array for the whole sort.  'boxed' itself is dead once the sort
-      // starts, so an optimised build may keep no copy of it, and with
-      // only a pointer into its buffer a collection in the comparator
-      // freed the boxes.
+      // They are sorted in a copy, since the comparator may run user code
+      // that changes the array.  If that code changed the length, the copy
+      // describes values that are gone: leave the array as the comparator
+      // left it.  The boxed array is held by this frame and by the sorter
+      // for the whole sort: with only a pointer into its buffer, a
+      // collection in the comparator freed the boxes.
       const int n = length;
       if (n<2)
          return;
-      Array<Dynamic> boxed(n, n);
-      {
-         ELEM_ *e = (ELEM_ *)mBase;
-         for(int i=0;i<n;i++)
-            boxed->init(i, Dynamic(e[i]));
-      }
+      const int run = n<SORT_BOX_RUN ? n : SORT_BOX_RUN;
+      std::unique_ptr<ELEM_[]> data(new ELEM_[n]);
+      ::memcpy(data.get(), mBase, n*sizeof(ELEM_));
+      std::unique_ptr<ELEM_[]> buffer(n>run ? new ELEM_[n/2] : nullptr);
+      std::unique_ptr<int[]> index(new int[run]);
+      Array<Dynamic> boxed(run, run);
 
-      auto index = std::vector<int>(n);
-      for(int i=0;i<n;i++)
-         index[i] = i;
+      sortValues(data.get(), 0, n, buffer.get(), boxed, index.get(), inSorter);
 
-      BoxedSorter sorter(boxed.mPtr, inSorter);
-      hx::StableSort(index.data(), n, sorter);
-
-      // Apply the permutation with cycle-following swaps (see SafeSorter).
-      // The comparator may have run user code, so re-read mBase.  If that
-      // code changed the length, the index describes values that are gone:
-      // leave the array as the comparator left it.
       if (length!=n)
          return;
-      ELEM_ *e = (ELEM_ *)mBase;
-      for(int i=0;i<n;i++)
-      {
-         int from = index[i];
-         while (from < i)
-            from = index[from];
-         if (from != i)
-         {
-            std::swap(e[i], e[from]);
-            index[i] = from;
-         }
-      }
+      ::memcpy(mBase, data.get(), n*sizeof(ELEM_));
    }
    else
    {
@@ -1364,9 +1462,8 @@ Array<ELEM_> Array_obj<ELEM_>::__newConstWrapper(ELEM_ *inData,int inSize)
 template<typename ELEM_>
 Array<ELEM_> Array_obj<ELEM_>::fromData(const ELEM_ *inData,int inCount)
 {
-   Array<ELEM_> result = new Array_obj(inCount,inCount);
-   if (inCount)
-       result->memcpy(0, inData, inCount);
+   Array<ELEM_> result = new Array_obj(0,0);
+   result->InitCopy((const char *)inData, inCount);
    return result;
 }
 
@@ -1388,9 +1485,8 @@ Array<ELEM_> Array_obj<ELEM_>::concat( Array<ELEM_> inTail )
 template<typename ELEM_>
 Array<ELEM_> Array_obj<ELEM_>::copy( )
 {
-   Array_obj *result = new Array_obj((int)length,0);
-   if (length)
-      ::memcpy(result->GetBase(),GetBase(),length*sizeof(ELEM_));
+   Array_obj *result = new Array_obj(0,0);
+   result->InitCopy(GetBase(),(int)length);
    return result;
 }
 

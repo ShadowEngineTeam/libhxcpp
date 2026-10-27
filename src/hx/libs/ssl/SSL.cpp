@@ -46,12 +46,65 @@ typedef size_t socket_int;
 #include "mbedtls/debug.h"
 #include "psa/crypto.h"
 
-#define val_ssl(o)	((sslctx*)o.mPtr)
-#define val_conf(o)	((sslconf*)o.mPtr)
-#define val_cert(o) ((sslcert*)o.mPtr)
-#define val_pkey(o) ((sslpkey*)o.mPtr)
+// Handles from Haxe are checked before use: a socket that has not connected
+// passes null, and a closed context or configuration keeps its wrapper with
+// the native pointer cleared. These were unchecked casts, so either crashed
+// the process instead of throwing. See the functions after the structs.
+#define val_ssl(o)	ssl_open_handle(o)
+#define val_conf(o)	ssl_open_conf(o)
+#define val_cert(o) ssl_open_cert(o)
+#define val_pkey(o) ssl_open_pkey(o)
 
 size_t _hx_std_socket_handle(Dynamic inSocket);
+int _hx_std_socket_take_handed(size_t inSocket, unsigned char *outBytes, int inLen);
+
+#ifndef HXCPP_MBEDTLS_PROVIDER
+// In project/thirdparty/config/mbedtls/memory_count.c, the allocator hxcpp
+// builds mbedTLS with: sets the counter this thread's mbedTLS allocations
+// and frees change from now on, or none, and returns the one set before.
+extern "C" ptrdiff_t *hxcpp_mbedtls_count_into(ptrdiff_t *counter);
+#endif
+
+// The bytes mbedTLS allocates less those it frees on this thread, from
+// construction to take(). mbedTLS has one allocator for the whole process,
+// so a context's memory is found as what the calls on it allocate. A count
+// started inside another, or a pause, which counts nothing, suspends the
+// outer one until it ends: the frees of a finalizer that runs inside a call,
+// from the SNI callback, are not taken from that call. A provider's mbedTLS
+// keeps its own allocator, and there nothing is counted.
+struct SslCount
+{
+	ptrdiff_t bytes;
+	ptrdiff_t *outer;
+	bool counting;
+
+	explicit SslCount( bool inPause = false ) : bytes(0), outer(0), counting(true)
+	{
+#ifndef HXCPP_MBEDTLS_PROVIDER
+		outer = hxcpp_mbedtls_count_into( inPause ? 0 : &bytes );
+#endif
+	}
+
+	ptrdiff_t take()
+	{
+#ifndef HXCPP_MBEDTLS_PROVIDER
+		if( counting )
+			hxcpp_mbedtls_count_into( outer );
+#endif
+		counting = false;
+		return bytes;
+	}
+
+	~SslCount() { take(); }
+};
+
+#ifdef HXCPP_MBEDTLS_PROVIDER
+// What a context is counted for by mbedtls_ssl_setup with a provider's
+// mbedTLS: its record buffers, most of what it holds.
+static const ptrdiff_t SSL_SETUP_ESTIMATE = MBEDTLS_SSL_IN_CONTENT_LEN + MBEDTLS_SSL_OUT_CONTENT_LEN;
+#else
+static const ptrdiff_t SSL_SETUP_ESTIMATE = 0;
+#endif
 
 // A configuration's mbedTLS state, owned jointly by its handle and by every
 // context set up on it. mbedTLS keeps a pointer to the configuration in each
@@ -110,6 +163,7 @@ static void sslconf_shared_release( sslconf_shared *shared )
 {
 	if( shared->refs.fetch_sub( 1, std::memory_order_acq_rel ) != 1 )
 		return;
+	SslCount pause( true );
 	mbedtls_ssl_config_free( &shared->config );
 #ifndef HXCPP_SSL_NO_TICKETS
 	if( shared->ticket )
@@ -129,23 +183,53 @@ struct sslctx : public hx::Object
 	mbedtls_ssl_context *s;
 	// The configuration s was set up on, held until s is freed.
 	sslconf_shared *conf;
+	// The native memory s holds, which the collector counts towards
+	// collection pressure: s itself, and what the calls on it have allocated
+	// less what they have freed. Configurations, which contexts share, are
+	// not counted in it.
+	size_t live;
+	size_t reported;
 
 	void create()
 	{
 		s = (mbedtls_ssl_context *)malloc(sizeof(mbedtls_ssl_context));
 		mbedtls_ssl_init(s);
 		conf = 0;
+		live = sizeof(mbedtls_ssl_context);
+		reported = 0;
 		_hx_set_finalizer(this, finalize);
 	}
 
+	// Adds what a call on s allocated less what it freed, and reports the
+	// change. Outside mbedTLS and GC-free zones only: growth can start a
+	// collection
+	void count( ptrdiff_t inBytes )
+	{
+		if( inBytes < 0 && (size_t)-inBytes > live )
+			live = 0;
+		else
+			live += inBytes;
+		size_t was = reported;
+		reported = live;
+		if( live > was )
+			hx::GCChangeManagedMemory( static_cast<int>(live - was), "ssl" );
+		else if( live < was )
+			hx::GCReleaseManagedMemory( was - live );
+	}
+
+	// Safe in a finalizer
 	void destroy()
 	{
+		SslCount pause( true );
 		if( s )
 		{
 			mbedtls_ssl_free( s );
 			free(s);
 			s = 0;
 		}
+		hx::GCReleaseManagedMemory( reported );
+		reported = 0;
+		live = 0;
 		// After the context: freeing it reads the configuration
 		if( conf )
 		{
@@ -257,6 +341,7 @@ struct sslcert : public hx::Object
 
 	void destroy()
 	{
+		SslCount pause( true );
 		if( c && head )
 		{
 			mbedtls_x509_crt_free( c );
@@ -294,6 +379,7 @@ struct sslpkey : public hx::Object
 
 	void destroy()
 	{
+		SslCount pause( true );
 		if( k )
 		{
 			mbedtls_pk_free(k);
@@ -309,6 +395,58 @@ struct sslpkey : public hx::Object
 
 	String toString() HXCPP_OVERRIDE { return HX_CSTRING("sslpkey"); }
 };
+
+template<typename T>
+static T *ssl_handle_of( const Dynamic &o )
+{
+	hx::Object *obj = o.mPtr;
+	return obj && obj->_hx_isInstanceOf(T::_hx_ClassId) ? (T *)obj : 0;
+}
+
+static sslctx *ssl_open_handle( const Dynamic &o )
+{
+	sslctx *ssl = ssl_handle_of<sslctx>( o );
+	if( !ssl )
+		hx::Throw( HX_CSTRING("Invalid ssl handle") );
+	if( !ssl->s )
+		hx::Throw( HX_CSTRING("ssl: the context is closed") );
+	return ssl;
+}
+
+static sslconf *ssl_open_conf( const Dynamic &o )
+{
+	sslconf *conf = ssl_handle_of<sslconf>( o );
+	if( !conf )
+		hx::Throw( HX_CSTRING("Invalid ssl configuration") );
+	if( !conf->c )
+		hx::Throw( HX_CSTRING("ssl: the configuration is closed") );
+	return conf;
+}
+
+static sslcert *ssl_open_cert( const Dynamic &o )
+{
+	sslcert *cert = ssl_handle_of<sslcert>( o );
+	if( !cert || !cert->c )
+		hx::Throw( HX_CSTRING("Invalid certificate") );
+	return cert;
+}
+
+static sslpkey *ssl_open_pkey( const Dynamic &o )
+{
+	sslpkey *pk = ssl_handle_of<sslpkey>( o );
+	if( !pk || !pk->k )
+		hx::Throw( HX_CSTRING("Invalid key") );
+	return pk;
+}
+
+// The bytes of a Haxe byte array, read only. &buf[0] resized an empty array
+// to hold the element it named, so hashing an empty Bytes grew its storage,
+// and, with the length read in the same call, could hash a byte.
+static const unsigned char *bytes_data( const Array<unsigned char> &buf )
+{
+	static const unsigned char none = 0;
+	return buf->length ? (const unsigned char *)buf->GetBase() : &none;
+}
 
 static mbedtls_entropy_context entropy;
 static mbedtls_ctr_drbg_context ctr_drbg;
@@ -334,24 +472,43 @@ static void ssl_error( int ret ){
 	hx::Throw( String(buf) );
 }
 
+// Makes inCall, a call on ssl's context, and counts what it allocates as the
+// context's
+template<typename CALL>
+static int ssl_counted( sslctx *ssl, CALL inCall ) {
+	SslCount count;
+	int r = inCall();
+	ssl->count( count.take() );
+	return r;
+}
+
 Dynamic _hx_ssl_new( Dynamic hconf ) {
 	int ret;
-	sslconf *conf = val_conf(hconf);
+	sslconf *conf = ssl_handle_of<sslconf>(hconf);
+	if( !conf )
+		hx::Throw( HX_CSTRING("Invalid ssl configuration") );
 	// mbedtls_ssl_setup with a closed configuration's null crashed
 	if( !conf->shared )
 		hx::Throw( HX_CSTRING("ssl_new: the configuration is closed") );
 	sslctx *ssl = new sslctx();
 	ssl->create();
-	if( (ret = mbedtls_ssl_setup(ssl->s, conf->c)) != 0 ){
+	SslCount count;
+	ret = mbedtls_ssl_setup(ssl->s, conf->c);
+	ptrdiff_t bytes = count.take();
+	if( ret != 0 ){
 		ssl->destroy();
 		ssl_error(ret);
 	}
 	ssl->conf = sslconf_shared_retain( conf->shared );
+	ssl->count( bytes + SSL_SETUP_ESTIMATE );
 	return ssl;
 }
 
+// Closing again does nothing
 void _hx_ssl_close( Dynamic hssl ) {
-	sslctx *ssl = val_ssl(hssl);
+	sslctx *ssl = ssl_handle_of<sslctx>(hssl);
+	if( !ssl )
+		hx::Throw( HX_CSTRING("Invalid ssl handle") );
 	ssl->destroy();
 }
 
@@ -363,7 +520,7 @@ void _hx_ssl_handshake( Dynamic hssl ) {
 	int r;
 	sslctx *ssl = val_ssl(hssl);
 	POSIX_LABEL(handshake_again);
-	r = mbedtls_ssl_handshake( ssl->s );
+	r = ssl_counted( ssl, [&]{ return mbedtls_ssl_handshake( ssl->s ); } );
 	if ( is_ssl_blocking(r) ) {
 		HANDLE_EINTR(handshake_again);
 		hx::Throw(HX_CSTRING("Blocking"));
@@ -375,6 +532,10 @@ void _hx_ssl_handshake( Dynamic hssl ) {
 }
 
 int net_read( void *fd, unsigned char *buf, size_t len ){
+	// What the socket read ahead before it was handed over comes first
+	int handed = _hx_std_socket_take_handed( (size_t)fd, buf, len > 0x7fffffff ? 0x7fffffff : (int)len );
+	if( handed > 0 )
+		return handed;
 	hx::EnterGCFreeZone();
 	int r = recv((SOCKET)(socket_int)fd, (char *)buf, len, 0);
  	if( r == SOCKET_ERROR && is_block_error() )
@@ -401,12 +562,17 @@ void _hx_ssl_set_hostname( Dynamic hssl, String hostname ){
 	int ret;
 	sslctx *ssl = val_ssl(hssl);
 	hx::strbuf buf;
-	if( (ret = mbedtls_ssl_set_hostname(ssl->s, hostname.utf8_str(&buf))) != 0 )
+	const char *name = hostname.utf8_str(&buf);
+	if( (ret = ssl_counted( ssl, [&]{ return mbedtls_ssl_set_hostname(ssl->s, name); } )) != 0 )
 		ssl_error(ret);
 }
 
 Dynamic _hx_ssl_get_peer_certificate( Dynamic hssl ){
-	sslctx *ssl = val_ssl(hssl);
+	// No context yet, or a closed one, has no session and so no peer
+	sslctx *ssl = ssl_handle_of<sslctx>(hssl);
+	if( !hssl.mPtr || (ssl && !ssl->s) )
+		return null();
+	ssl = val_ssl(hssl);
 	const mbedtls_x509_crt *crt = mbedtls_ssl_get_peer_cert(ssl->s);
 	if( crt == NULL )
 		return null();
@@ -441,7 +607,7 @@ void _hx_ssl_send_char( Dynamic hssl, int c ) {
 	// Check the result like every other write path - dropping it loses the
 	// byte silently on would-block or error and desyncs the stream
 	POSIX_LABEL(send_char_again);
-	int r = mbedtls_ssl_write( ssl->s, &cc, 1 );
+	int r = ssl_counted( ssl, [&]{ return mbedtls_ssl_write( ssl->s, &cc, 1 ); } );
 	if( is_ssl_blocking(r) ) {
 		HANDLE_EINTR(send_char_again);
 		hx::Throw(HX_CSTRING("Blocking"));
@@ -463,11 +629,9 @@ int _hx_ssl_send( Dynamic hssl, Array<unsigned char> buf, int p, int l ) {
 	unsigned char tmp[16384];
 	if( l > (int)sizeof(tmp) )
 		l = (int)sizeof(tmp);
-	// GetBase, not &buf[0], which grows an empty array to one byte
-	if( l > 0 )
-		memcpy( tmp, buf->GetBase() + p, l );
+	memcpy( tmp, bytes_data(buf) + p, l );
 	POSIX_LABEL(send_again);
-	dlen = mbedtls_ssl_write( ssl->s, tmp, l );
+	dlen = ssl_counted( ssl, [&]{ return mbedtls_ssl_write( ssl->s, tmp, l ); } );
 	if ( is_ssl_blocking(dlen) ) {
 		HANDLE_EINTR(send_again);
 		hx::Throw(HX_CSTRING("Blocking"));
@@ -489,9 +653,9 @@ void _hx_ssl_write( Dynamic hssl, Array<unsigned char> buf ) {
 		// Re-fetch the array data each chunk and copy to the stack - see
 		// _hx_ssl_send: no GC pointer may live across the mbedtls call
 		int chunk = len > (int)sizeof(tmp) ? (int)sizeof(tmp) : len;
-		memcpy( tmp, buf->GetBase() + pos, chunk );
+		memcpy( tmp, bytes_data(buf) + pos, chunk );
 		POSIX_LABEL( write_again );
-		int slen = mbedtls_ssl_write( ssl->s, tmp, chunk );
+		int slen = ssl_counted( ssl, [&]{ return mbedtls_ssl_write( ssl->s, tmp, chunk ); } );
 		if ( is_ssl_blocking(slen) ) {
 			HANDLE_EINTR( write_again );
 			hx::Throw(HX_CSTRING("Blocking"));
@@ -512,7 +676,7 @@ int _hx_ssl_recv_char( Dynamic hssl ) {
 	// Mirror _hx_ssl_recv - a would-block read is "Blocking", not a fatal
 	// error that the input wrapper turns into a spurious Eof
 	POSIX_LABEL(recv_char_again);
-	int r = mbedtls_ssl_read( ssl->s, &cc, 1 );
+	int r = ssl_counted( ssl, [&]{ return mbedtls_ssl_read( ssl->s, &cc, 1 ); } );
 	if( is_ssl_blocking(r) ) {
 		HANDLE_EINTR(recv_char_again);
 		hx::Throw(HX_CSTRING("Blocking"));
@@ -535,7 +699,7 @@ int _hx_ssl_recv( Dynamic hssl, Array<unsigned char> buf, int p, int l ) {
 	if( l > (int)sizeof(tmp) )
 		l = (int)sizeof(tmp);
 	POSIX_LABEL(recv_again);
-	dlen = mbedtls_ssl_read( ssl->s, tmp, l );
+	dlen = ssl_counted( ssl, [&]{ return mbedtls_ssl_read( ssl->s, tmp, l ); } );
 	if ( is_ssl_blocking(dlen) ) {
 		HANDLE_EINTR(recv_again);
 		hx::Throw(HX_CSTRING("Blocking"));
@@ -564,7 +728,7 @@ Array<unsigned char> _hx_ssl_read( Dynamic hssl ) {
 
 	while( true ) {
 		POSIX_LABEL(read_again);
-		int len = mbedtls_ssl_read( ssl->s, buf, sizeof(buf) );
+		int len = ssl_counted( ssl, [&]{ return mbedtls_ssl_read( ssl->s, buf, sizeof(buf) ); } );
 		if ( is_ssl_blocking(len) ) {
 			HANDLE_EINTR(read_again);
 			hx::Throw(HX_CSTRING("Blocking"));
@@ -580,7 +744,9 @@ Array<unsigned char> _hx_ssl_read( Dynamic hssl ) {
 			break;
 		if( len < 0 )
 			ssl_error( len );
-		result->memcpy(result->length, buf, len);
+		int olen = result->length;
+		result->EnsureAppendSize(olen+len);
+		::memcpy(result->GetBase()+olen, buf, len);
 	}
 	return result;
 }
@@ -744,8 +910,11 @@ Dynamic _hx_ssl_conf_new( bool server ) {
 	return conf;
 }
 
+// Closing again does nothing
 void _hx_ssl_conf_close( Dynamic hconf ) {
-	sslconf *conf = val_conf(hconf);
+	sslconf *conf = ssl_handle_of<sslconf>(hconf);
+	if( !conf )
+		hx::Throw( HX_CSTRING("Invalid ssl configuration") );
 	conf->destroy();
 }
 
@@ -802,10 +971,11 @@ static int sni_callback( void *arg, mbedtls_ssl_context *ctx, const unsigned cha
 			// TODO authmode and ca
 			Dynamic hcert = ret->__Field(HX_CSTRING("cert"), hx::paccDynamic);
 			Dynamic hpkey = ret->__Field(HX_CSTRING("key"), hx::paccDynamic);
-			if( !hcert.mPtr || !hpkey.mPtr )
+			// No throwing here, inside mbedtls: a bad pair fails the handshake
+			sslcert *cert = ssl_handle_of<sslcert>(hcert);
+			sslpkey *pk = ssl_handle_of<sslpkey>(hpkey);
+			if( !cert || !cert->c || !pk || !pk->k )
 				return -1;
-			sslcert *cert = val_cert(hcert);
-			sslpkey *pk = val_pkey(hpkey);
 
 			return mbedtls_ssl_set_hs_own_cert( ctx, cert->c, pk->k );
 		}
@@ -1029,7 +1199,8 @@ Dynamic _hx_ssl_cert_add_pem( Dynamic hcert, String data ){
    if (data.isUTF16Encoded())
 		hx::Throw( HX_CSTRING("Invalid data encoding") );
    #endif
-	sslcert *cert = val_cert(hcert);
+	// A null certificate starts a new chain
+	sslcert *cert = hcert.mPtr ? val_cert(hcert) : 0;
 	int r;
 	bool isnew = 0;
 	if( !cert ){
@@ -1053,12 +1224,9 @@ Dynamic _hx_ssl_cert_add_pem( Dynamic hcert, String data ){
 // The bytes of a Haxe buffer for mbedTLS to read. &buf[0] grew an empty array
 //  to one zero byte, which an empty message was then hashed as, and changed
 //  the caller's Bytes; an empty array gives a null pointer, with length 0
-static const unsigned char *bytesOf( Array<unsigned char> buf ){
-	return (const unsigned char *)buf->GetBase();
-}
-
 Dynamic _hx_ssl_cert_add_der( Dynamic hcert, Array<unsigned char> buf ){
-	sslcert *cert = val_cert(hcert);
+	// A null certificate starts a new chain
+	sslcert *cert = hcert.mPtr ? val_cert(hcert) : 0;
 	int r;
 	bool isnew = 0;
 	if( !cert ){
@@ -1066,7 +1234,7 @@ Dynamic _hx_ssl_cert_add_der( Dynamic hcert, Array<unsigned char> buf ){
 		cert->create( NULL );
 		isnew = 1;
 	}
-	if( (r = mbedtls_x509_crt_parse_der( cert->c, bytesOf(buf), buf->length)) < 0 ){
+	if( (r = mbedtls_x509_crt_parse_der( cert->c, bytes_data(buf), buf->length)) < 0 ){
 		if( isnew )
 			cert->destroy();
 		ssl_error(r);
@@ -1079,9 +1247,9 @@ Dynamic _hx_ssl_key_from_der( Array<unsigned char> buf, bool pub ){
 	pk->create();
 	int r;
 	if( pub )
-		r = mbedtls_pk_parse_public_key( pk->k, bytesOf(buf), buf->length );
+		r = mbedtls_pk_parse_public_key( pk->k, bytes_data(buf), buf->length );
 	else
-		r = mbedtls_pk_parse_key( pk->k, bytesOf(buf), buf->length, NULL, 0, mbedtls_ctr_drbg_random, &ctr_drbg );
+		r = mbedtls_pk_parse_key( pk->k, bytes_data(buf), buf->length, NULL, 0, mbedtls_ctr_drbg_random, &ctr_drbg );
 	if( r != 0 ){
 		pk->destroy();
 		ssl_error(r);
@@ -1126,7 +1294,7 @@ Array<unsigned char> _hx_ssl_dgst_make( Array<unsigned char> buf, String alg ){
 	int size = mbedtls_md_get_size(md);
 	Array<unsigned char> out = Array_obj<unsigned char>::__new(size,size);
 	int r = -1;
-	if( (r = mbedtls_md( md, bytesOf(buf), buf->length, &out[0] )) != 0 )
+	if( (r = mbedtls_md( md, bytes_data(buf), buf->length, &out[0] )) != 0 )
 		ssl_error(r);
 
 	return out;
@@ -1145,7 +1313,7 @@ Array<unsigned char> _hx_ssl_dgst_sign( Array<unsigned char> buf, Dynamic hpkey,
 	if( md == NULL )
 		hx::Throw( HX_CSTRING("Invalid hash algorithm") );
 
-	if( (r = mbedtls_md( md, bytesOf(buf), buf->length, hash )) != 0 )
+	if( (r = mbedtls_md( md, bytes_data(buf), buf->length, hash )) != 0 )
 		ssl_error(r);
 
 	Array<unsigned char> result = Array_obj<unsigned char>::__new(MBEDTLS_PK_SIGNATURE_MAX_SIZE,MBEDTLS_PK_SIGNATURE_MAX_SIZE);
@@ -1167,10 +1335,10 @@ bool _hx_ssl_dgst_verify( Array<unsigned char> buf, Array<unsigned char> sign, D
 	if( md == NULL )
 		hx::Throw( HX_CSTRING("Invalid hash algorithm") );
 
-	if( (r = mbedtls_md( md, bytesOf(buf), buf->length, hash )) != 0 )
+	if( (r = mbedtls_md( md, bytes_data(buf), buf->length, hash )) != 0 )
 		ssl_error(r);
 
-	if( (r = mbedtls_pk_verify( pk->k, mbedtls_md_get_type(md), hash, 0, bytesOf(sign), sign->length )) != 0 )
+	if( (r = mbedtls_pk_verify( pk->k, mbedtls_md_get_type(md), hash, 0, bytes_data(sign), sign->length )) != 0 )
 		return false;
 
 	return true;

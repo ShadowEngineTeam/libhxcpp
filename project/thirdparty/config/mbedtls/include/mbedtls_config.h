@@ -7,6 +7,24 @@
 
 #define MBEDTLS_THREADING_C
 
+// The allocator, in ../memory_count.c: calloc and free, which also count
+// the memory a thread's mbedTLS calls hold, so hxcpp's SSL can report a TLS
+// context's to the collector. As macros, there is no
+// mbedtls_platform_set_calloc_free to put another allocator in its place
+// under blocks it has already allocated.
+#define MBEDTLS_PLATFORM_MEMORY
+#define MBEDTLS_PLATFORM_CALLOC_MACRO hxcpp_mbedtls_calloc
+#define MBEDTLS_PLATFORM_FREE_MACRO hxcpp_mbedtls_free
+#include <stddef.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
+void *hxcpp_mbedtls_calloc(size_t n, size_t size);
+void hxcpp_mbedtls_free(void *ptr);
+#ifdef __cplusplus
+}
+#endif
+
 #if defined(MBEDTLS_THREADING_ALT) && defined(_MSC_VER)
 // Every object built against this configuration -- mbedTLS's own, hxcpp's
 // SSL, a native extension, a static Lime's curl -- pulls into the link the

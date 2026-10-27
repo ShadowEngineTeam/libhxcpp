@@ -46,6 +46,11 @@
       Specify HXCPP_LINK_STACK_SIZE (eg 1MB) to change it, or HXCPP_LINK_NO_STACK_SIZE to leave it to Emscripten.
       The STACK_SIZE setting needs Emscripten 3.1.25 or later: use HXCPP_LINK_NO_STACK_SIZE with older ones.
 
+  Embind:
+    Executables link with Embind (--bind), for HXCPP_JS_PRIME and native code with EMSCRIPTEN_BINDINGS.
+      Specify HXCPP_LINK_NO_EMBIND to leave it out of an executable without JavaScript bindings, which makes
+      the .js file about 11KB smaller. HXCPP_JS_PRIME keeps it.
+
 
 -->
 
@@ -233,7 +238,9 @@
      <flag value="BINARYEN_METHOD='${BINARYEN_METHOD}'" />
   </section>
 
-  <flag value="--bind" />
+  <!-- Embind, which HXCPP_JS_PRIME and EMSCRIPTEN_BINDINGS need, unless HXCPP_LINK_NO_EMBIND -->
+  <flag value="--bind" unless="HXCPP_LINK_NO_EMBIND" />
+  <flag value="--bind" if="HXCPP_LINK_NO_EMBIND HXCPP_JS_PRIME" />
 
   <!-- <lib name="-ldl"/> -->
   <ext value="${HXCPP_LINK_EMSCRIPTEN_EXT}"/>

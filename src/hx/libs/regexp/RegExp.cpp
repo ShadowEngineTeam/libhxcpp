@@ -1,6 +1,10 @@
 #include <hxcpp.h>
 #include <string.h>
 
+#include <cstdlib>
+#include <limits>
+#include <memory>
+
 #define PCRE2_STATIC
 #define PCRE2_CODE_UNIT_WIDTH 0
 
@@ -8,19 +12,122 @@
 
 #define PCRE(o)      ((pcredata*)o.mPtr)
 
+// The native memory an expression's compiled patterns hold, so the collector
+// can count it towards collection pressure. A pattern keeps the allocator of
+// the context it was compiled with, and its match data, with the frames a
+// match leaves in it, takes the pattern's.
+struct RegexpMemory
+{
+   size_t live;
+   size_t reported;
+
+   RegexpMemory() : live(0), reported(0) { }
+
+   static void *alloc(size_t inBytes, void *inMemory)
+   {
+      if (inBytes > std::numeric_limits<size_t>::max() - sizeof(size_t)*2)
+         return 0;
+      // Two words before the data keep malloc's alignment
+      size_t *block = static_cast<size_t *>(std::malloc(inBytes + sizeof(size_t)*2));
+      if (!block)
+         return 0;
+      block[0] = inBytes;
+      static_cast<RegexpMemory *>(inMemory)->live += inBytes;
+      return block + 2;
+   }
+
+   static void free(void *inData, void *inMemory)
+   {
+      if (!inData)
+         return;
+      size_t *block = static_cast<size_t *>(inData) - 2;
+      static_cast<RegexpMemory *>(inMemory)->live -= block[0];
+      std::free(block);
+   }
+
+   // Outside PCRE2 only: growth can start a collection
+   void report()
+   {
+      size_t now = live;
+      if (now > reported)
+         hx::GCChangeManagedMemory(static_cast<int>(now - reported), "regexp");
+      else if (now < reported)
+         hx::GCReleaseManagedMemory(reported - now);
+      reported = now;
+   }
+
+   // Safe in a finalizer
+   void release()
+   {
+      hx::GCReleaseManagedMemory(reported);
+      reported = 0;
+   }
+};
+
 // The PCRE2 JIT is opt-in (-D HXCPP_PCRE_JIT, see Build.xml).  Jitted code
 // runs on a small fixed stack, so a long subject can fail with
 // PCRE2_ERROR_JIT_STACKLIMIT where the interpreter succeeds; such a match is
 // run again by the interpreter, so turning the JIT on never changes a result.
 template<typename CODE>
-static inline void regexp_jit_compile(CODE *inCode, int (*inCompile)(CODE *, uint32_t))
+static inline void regexp_jit_compile(CODE *inCode, int (*inCompile)(CODE *, uint32_t),
+                                      int (*inInfo)(const CODE *, uint32_t, void *), RegexpMemory *inMemory)
 {
    #ifdef HXCPP_PCRE_JIT
    // Best effort - matching falls back to the interpreter when jit
    // compilation is unavailable or fails
-   inCompile(inCode, PCRE2_JIT_COMPLETE);
+   if (inCompile(inCode, PCRE2_JIT_COMPLETE)==0)
+   {
+      // The machine code comes from the JIT's own executable allocator, not
+      // the pattern's, and lives as long as the pattern
+      size_t size = 0;
+      inInfo(inCode, PCRE2_INFO_JITSIZE, &size);
+      inMemory->live += size;
+   }
    #endif
 }
+
+// Compiles with an allocator that counts the pattern's memory in inMemory
+static pcre2_code_8 *regexp_compile_8(RegexpMemory *inMemory, PCRE2_SPTR8 inPattern, size_t inLength,
+                                      uint32_t inFlags, int *outError, size_t *outOffset)
+{
+   pcre2_code_8 *code = 0;
+   pcre2_general_context_8 *general = pcre2_general_context_create_8(RegexpMemory::alloc, RegexpMemory::free, inMemory);
+   pcre2_compile_context_8 *context = general ? pcre2_compile_context_create_8(general) : 0;
+   if (context)
+      code = pcre2_compile_8(inPattern, inLength, inFlags, outError, outOffset, context);
+   else
+   {
+      *outError = PCRE2_ERROR_NOMEMORY;
+      *outOffset = 0;
+   }
+   pcre2_compile_context_free_8(context);
+   pcre2_general_context_free_8(general);
+   if (code)
+      regexp_jit_compile(code, pcre2_jit_compile_8, pcre2_pattern_info_8, inMemory);
+   return code;
+}
+
+#ifdef HX_SMART_STRINGS
+static pcre2_code_16 *regexp_compile_16(RegexpMemory *inMemory, PCRE2_SPTR16 inPattern, size_t inLength,
+                                        uint32_t inFlags, int *outError, size_t *outOffset)
+{
+   pcre2_code_16 *code = 0;
+   pcre2_general_context_16 *general = pcre2_general_context_create_16(RegexpMemory::alloc, RegexpMemory::free, inMemory);
+   pcre2_compile_context_16 *context = general ? pcre2_compile_context_create_16(general) : 0;
+   if (context)
+      code = pcre2_compile_16(inPattern, inLength, inFlags, outError, outOffset, context);
+   else
+   {
+      *outError = PCRE2_ERROR_NOMEMORY;
+      *outOffset = 0;
+   }
+   pcre2_compile_context_free_16(context);
+   pcre2_general_context_free_16(general);
+   if (code)
+      regexp_jit_compile(code, pcre2_jit_compile_16, pcre2_pattern_info_16, inMemory);
+   return code;
+}
+#endif
 
 static inline bool regexp_retry_without_jit(int inResult)
 {
@@ -29,6 +136,34 @@ static inline bool regexp_retry_without_jit(int inResult)
    #else
    return false;
    #endif
+}
+
+// A match over a span this long or longer runs in a GC-free zone, so that a
+// collection another thread asks for does not wait for it to finish, which for
+// a long subject added the whole match to every thread's pause (libhxcpp
+// #330). Entering the zone costs about as much as a match over a few dozen
+// characters, so shorter spans match as before.
+static const int REGEXP_FREE_ZONE_SPAN = 1024;
+
+// The subject and the expression object stay alive while the collector runs
+// beside the match through these copies in this frame, which it scans
+// conservatively, and under HXCPP_GC_MOVING stay where they are. The match
+// data and the compiled code are malloc'd and owned by the expression.
+template<typename MATCH>
+static int regexp_match_span(int inSpan, const void *inSubject, const void *inOwner, MATCH inMatch)
+{
+   if (inSpan<REGEXP_FREE_ZONE_SPAN)
+      return inMatch();
+   const void * volatile subject = inSubject;
+   const void * volatile owner = inOwner;
+   int result;
+   {
+      hx::AutoGCFreeZone zone;
+      result = inMatch();
+   }
+   (void)subject;
+   (void)owner;
+   return result;
 }
 
 static void regexp_compilation_error(String pattern, int error_code, size_t error_offset) {
@@ -53,6 +188,8 @@ struct pcredata : public hx::Object
    #endif
 
    unsigned int flags;
+   // Counts the native memory of both widths' patterns and match data
+   RegexpMemory *memory;
    String string;
    String expr;
 
@@ -109,10 +246,27 @@ struct pcredata : public hx::Object
       }
       return safeSubject.raw_wptr();
    }
+
+   // After a failed match nothing reads the subject, but the cache kept it,
+   // and its sanitized copy, for as long as the regex lived. Up to 1 MiB is
+   // kept, so a failed matchSub between others on the same subject need not
+   // check it again; a larger one is let go.
+   void releaseLargeSubject()
+   {
+      size_t bytes = (size_t)checkedSubject.length * sizeof(char16_t);
+      if (safeSubject.raw_ptr() != checkedSubject.raw_ptr())
+         bytes *= 2;
+      if (bytes > 1024 * 1024)
+      {
+         checkedSubject = String();
+         safeSubject = String();
+      }
+   }
    #endif
 
-   void create8(pcre2_code_8 *inR, String inExpr, int inFlags)
+   void create8(pcre2_code_8 *inR, RegexpMemory *inMemory, String inExpr, int inFlags)
    {
+      memory = inMemory;
       rUtf8 = inR;
       #ifdef HX_SMART_STRINGS
       rUtf16 = 0;
@@ -130,11 +284,13 @@ struct pcredata : public hx::Object
       #endif
 
       _hx_set_finalizer(this, finalize);
+      memory->report();
    }
 
    #ifdef HX_SMART_STRINGS
-   void create16(pcre2_code_16 *inR, String inExpr, int inFlags)
+   void create16(pcre2_code_16 *inR, RegexpMemory *inMemory, String inExpr, int inFlags)
    {
+      memory = inMemory;
       rUtf8 = 0;
       rUtf16 = inR;
       expr = inExpr;
@@ -148,6 +304,7 @@ struct pcredata : public hx::Object
       match_data16 = pcre2_match_data_create_from_pattern_16(rUtf16, NULL);
 
       _hx_set_finalizer(this, finalize);
+      memory->report();
    }
    #endif
 
@@ -176,19 +333,25 @@ struct pcredata : public hx::Object
             hx::strbuf buf;
             int utf16Length = 0;
             PCRE2_SPTR16 utf16 = (PCRE2_SPTR16)expr.wc_str(&buf, &utf16Length);
-            rUtf16 = pcre2_compile_16(utf16,utf16Length,flags,&error_code,&error_offset,NULL);
+            rUtf16 = regexp_compile_16(memory,utf16,utf16Length,flags,&error_code,&error_offset);
             if (!rUtf16) {
                regexp_compilation_error(expr,error_code,error_offset);
             }
-            regexp_jit_compile(rUtf16, pcre2_jit_compile_16);
             match_data16 = pcre2_match_data_create_from_pattern_16(rUtf16, NULL);
          }
 
          // Valid utf16 (see utf16Subject), so PCRE2_NO_UTF_CHECK is safe
          PCRE2_SPTR16 subject = (PCRE2_SPTR16)utf16Subject(string);
-         int n = pcre2_match_16(rUtf16,subject,pos+len,pos,PCRE2_NO_UTF_CHECK,match_data16,NULL);
-         if (regexp_retry_without_jit(n))
-            n = pcre2_match_16(rUtf16,subject,pos+len,pos,PCRE2_NO_UTF_CHECK|PCRE2_NO_JIT,match_data16,NULL);
+         pcre2_code_16 *code = rUtf16;
+         pcre2_match_data_16 *data = match_data16;
+         int n = regexp_match_span(len, subject, this, [=]() {
+            int n = pcre2_match_16(code,subject,pos+len,pos,PCRE2_NO_UTF_CHECK,data,NULL);
+            if (regexp_retry_without_jit(n))
+               n = pcre2_match_16(code,subject,pos+len,pos,PCRE2_NO_UTF_CHECK|PCRE2_NO_JIT,data,NULL);
+            return n;
+         });
+         // The compilation above, and the frames the match keeps in its data
+         memory->report();
          return checkMatch(n);
       }
 
@@ -198,11 +361,10 @@ struct pcredata : public hx::Object
          size_t error_offset;
          int utf8Length = 0;
          PCRE2_SPTR8 utf8 = (PCRE2_SPTR8)expr.utf8_str(NULL, true, &utf8Length);
-         rUtf8 = pcre2_compile_8(utf8, utf8Length, flags, &error_code, &error_offset, NULL);
+         rUtf8 = regexp_compile_8(memory, utf8, utf8Length, flags, &error_code, &error_offset);
          if (!rUtf8) {
             regexp_compilation_error(expr,error_code,error_offset);
          }
-         regexp_jit_compile(rUtf8, pcre2_jit_compile_8);
          match_data8 = pcre2_match_data_create_from_pattern_8(rUtf8, NULL);
       }
 
@@ -216,9 +378,15 @@ struct pcredata : public hx::Object
       // The 8-bit subject comes from utf8_str(), which validates, so
       // PCRE2_NO_UTF_CHECK is safe here
       PCRE2_SPTR8 subject = (PCRE2_SPTR8)string.utf8_str();
-      int n = pcre2_match_8(rUtf8,subject,pos+len,pos,PCRE2_NO_UTF_CHECK,match_data8,NULL);
-      if (regexp_retry_without_jit(n))
-         n = pcre2_match_8(rUtf8,subject,pos+len,pos,PCRE2_NO_UTF_CHECK|PCRE2_NO_JIT,match_data8,NULL);
+      pcre2_code_8 *code = rUtf8;
+      pcre2_match_data_8 *data = match_data8;
+      int n = regexp_match_span(len, subject, this, [=]() {
+         int n = pcre2_match_8(code,subject,pos+len,pos,PCRE2_NO_UTF_CHECK,data,NULL);
+         if (regexp_retry_without_jit(n))
+            n = pcre2_match_8(code,subject,pos+len,pos,PCRE2_NO_UTF_CHECK|PCRE2_NO_JIT,data,NULL);
+         return n;
+      });
+      memory->report();
       return checkMatch(n);
    }
 
@@ -240,6 +408,10 @@ struct pcredata : public hx::Object
       pcre2_code_free_16( rUtf16 );
       pcre2_match_data_free_16( match_data16 );
       #endif
+
+      // After the patterns: freeing them goes through it
+      memory->release();
+      delete memory;
    }
 
    void __Mark(hx::MarkContext *__inCtx) HXCPP_OVERRIDE
@@ -314,18 +486,18 @@ Dynamic _hx_regexp_new_options(String s, String opt)
       }
    }
 
+   auto memory = std::unique_ptr<RegexpMemory>(new RegexpMemory());
    #ifdef HX_SMART_STRINGS
    if (s.isUTF16Encoded())
    {
       int error_code;
       size_t error_offset;
-      pcre2_code_16 *p = pcre2_compile_16((PCRE2_SPTR16)s.raw_wptr(),s.length,options,&error_code,&error_offset,NULL);
+      pcre2_code_16 *p = regexp_compile_16(memory.get(),(PCRE2_SPTR16)s.raw_wptr(),s.length,options,&error_code,&error_offset);
       if( !p ) {
          regexp_compilation_error(s,error_code,error_offset);
       }
-      regexp_jit_compile(p, pcre2_jit_compile_16);
       pcredata *pdata = new pcredata;
-      pdata->create16(p,s,options);
+      pdata->create16(p,memory.release(),s,options);
       return pdata;
    }
    else
@@ -333,13 +505,12 @@ Dynamic _hx_regexp_new_options(String s, String opt)
    {
       int error_code = 0;
       size_t error_offset;
-      pcre2_code_8 *p =  pcre2_compile_8((PCRE2_SPTR8)s.utf8_str(),s.length,options,&error_code,&error_offset,NULL);
+      pcre2_code_8 *p =  regexp_compile_8(memory.get(),(PCRE2_SPTR8)s.utf8_str(),s.length,options,&error_code,&error_offset);
       if( !p ) {
          regexp_compilation_error(s,error_code,error_offset);
       }
-      regexp_jit_compile(p, pcre2_jit_compile_8);
       pcredata *pdata = new pcredata;
-      pdata->create8(p,s,options);
+      pdata->create8(p,memory.release(),s,options);
       return pdata;
    }
 }
@@ -361,6 +532,9 @@ bool _hx_regexp_match(Dynamic handle, String string, int pos, int len)
    else
    {
       d->string = String();
+      #ifdef HX_SMART_STRINGS
+      d->releaseLargeSubject();
+      #endif
       return false;
    }
 }

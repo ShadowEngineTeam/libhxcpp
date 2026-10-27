@@ -24,7 +24,10 @@
   </section>
 
   <section unless="windows||apple||linux||android">
-    <file name="src/hx/thread/CountingSemaphore.unsupported.cpp"/>
+    <!-- Single-threaded, as emscripten-toolchain.xml sets HXCPP_SINGLE_THREADED_APP, which is not set yet here -->
+    <file name="src/hx/thread/CountingSemaphore.singlethreaded.cpp" if="emscripten" unless="HXCPP_MULTI_THREADED_APP"/>
+    <file name="src/hx/thread/CountingSemaphore.unsupported.cpp" unless="emscripten" />
+    <file name="src/hx/thread/CountingSemaphore.unsupported.cpp" if="emscripten HXCPP_MULTI_THREADED_APP"/>
     <file name="src/hx/thread/ThreadImpl.noop.cpp"/>
   </section>
 

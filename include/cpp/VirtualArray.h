@@ -62,8 +62,11 @@ public:
    typedef hx::Object super;
    ArrayStore  store;
    ArrayBase   *base;
+   // Capacity reserved while the array is empty and has no storage yet,
+   // given to the storage its first element chooses
+   mutable int pendingReserve;
 
-   VirtualArray_obj(ArrayBase *inBase=0, bool inFixed=false) : base(inBase)
+   VirtualArray_obj(ArrayBase *inBase=0, bool inFixed=false) : base(inBase), pendingReserve(0)
    {
       mArrayConvertId = hx::aciVirtualArray;
       store = inFixed && inBase ? hx::arrayFixed : base ? base->getStoreType() : hx::arrayEmpty;
@@ -73,7 +76,7 @@ public:
       #endif
    }
 
-   VirtualArray_obj(ArrayStore inStore)
+   VirtualArray_obj(ArrayStore inStore) : base(0), pendingReserve(0)
    {
       mArrayConvertId = hx::aciVirtualArray;
       store = inStore;
@@ -364,13 +367,22 @@ public:
    {
       if (base)
          base->reserve(inSize);
+      else if (inSize>pendingReserve)
+         pendingReserve = inSize;
    }
 
    inline int capacity()
    {
       if (base)
          return base->capacity();
-      return 0;
+      return pendingReserve;
+   }
+
+   inline int takePendingReserve()
+   {
+      int result = pendingReserve;
+      pendingReserve = 0;
+      return result;
    }
 
    void resize(int inLen)
@@ -419,7 +431,7 @@ public:
    inline int push(const T &inVal)
    {
       if (store!=hx::arrayFixed) EnsureStorage(inVal);
-      return base->__push(Dynamic(inVal));
+      return append(inVal);
    }
 
 
@@ -427,8 +439,26 @@ public:
    inline VirtualArray_obj *Add(const T &inVal)
    {
       if (store!=hx::arrayFixed) EnsureStorage(inVal);
-      base->__push(Dynamic(inVal));
+      append(inVal);
       return this;
+   }
+
+   // Numbers and strings are appended through the typed set, as an indexed
+   // write is, instead of being boxed for __push and unboxed again
+   template<typename T>
+   inline int append(const T &inVal) { return base->__push(Dynamic(inVal)); }
+   inline int append(const bool &inVal) { return appendVariant(inVal); }
+   inline int append(const int &inVal) { return appendVariant(inVal); }
+   inline int append(const double &inVal) { return appendVariant(inVal); }
+   inline int append(const float &inVal) { return appendVariant((double)inVal); }
+   inline int append(const cpp::Int64 &inVal) { return appendVariant(inVal); }
+   inline int append(const cpp::UInt64 &inVal) { return appendVariant(inVal); }
+   inline int append(const String &inVal) { return appendVariant(inVal); }
+   inline int appendVariant(const cpp::Variant &inVal)
+   {
+      int len = base->length;
+      base->set(len, inVal);
+      return len+1;
    }
 
    inline Dynamic pop() { checkBase(); return store==hx::arrayEmpty ? null() : base->__pop(); }

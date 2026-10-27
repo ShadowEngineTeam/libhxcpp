@@ -944,7 +944,7 @@ bool CppiaClassInfo::load(CppiaStream &inStream)
     mClass.mPtr = createCppiaClass(this);
 
     superId = isEnum ? 0 : inStream.getTypeId();
-    int implementCount = isEnum ? 0 : inStream.getInt();
+    int implementCount = isEnum ? 0 : inStream.checkCount(inStream.getInt());
     implements.resize(implementCount);
     for(int i=0;i<implementCount;i++)
        implements[i] = inStream.getTypeId();
@@ -1078,6 +1078,13 @@ void CppiaClassInfo::linkTypes()
       return;
    isLinked = true;
 
+   // A malformed file can make a class its own ancestor, and the walks up the
+   // chain below would then never end (libhxcpp #257)
+   int ancestors = 0;
+   for(int id = superId; id && cppia.types[id]->cppiaClass; id = cppia.types[id]->cppiaClass->superId)
+      if (++ancestors > (int)cppia.classes.size())
+         throw "Class extends itself";
+
    type = cppia.types[typeId];
    mClass->mName = type->name;
    superType = superId ? cppia.types[ superId ] : 0;
@@ -1093,7 +1100,8 @@ void CppiaClassInfo::linkTypes()
 
 
    // Add super interfaces ...
-   TypeData *extraInterfaces = cppia.types[ superId ];
+   // A super id of 0 means no super class, not the first type
+   TypeData *extraInterfaces = superId ? cppia.types[ superId ] : 0;
    while(extraInterfaces)
    {
       if (extraInterfaces->cppiaClass)
@@ -1108,7 +1116,7 @@ void CppiaClassInfo::linkTypes()
             if (!found)
                implements.push_back(impl[i]);
          }
-         extraInterfaces = cppia.types[ parent.superId ];
+         extraInterfaces = parent.superId ? cppia.types[ parent.superId ] : 0;
       }
       else
       {
@@ -1232,39 +1240,50 @@ void CppiaClassInfo::linkTypes()
    {
       // Calculate table offsets...
       DBGLOG("  base haxe size %s = %d\n", haxeBase->name.c_str(), classSize);
-      for(int i=0;i<memberVars.size();i++)
+      // Fields are aligned to their types, so they are laid out from the
+      // widest alignment down: in declaration order an Int between two
+      // pointers would leave a gap after it, and make the object larger
+      int widest = std::max( TypeAlignment(etFloat), TypeAlignment(etString) );
+      widest = std::max( widest, TypeAlignment(etObject) );
+      for(int align=widest;align>0;align>>=1)
       {
-         if (memberVars[i]->offset)
+         for(int i=0;i<memberVars.size();i++)
          {
-            DBGLOG("   super var %s @ %d\n", cppia.identStr(memberVars[i]->nameId), memberVars[i]->offset);
+            if (memberVars[i]->offset)
+            {
+               if (align==widest)
+                  DBGLOG("   super var %s @ %d\n", cppia.identStr(memberVars[i]->nameId), memberVars[i]->offset);
+            }
+            else if (memberVars[i]->fieldAlignment(cppia)==align ||
+                     (align==widest && memberVars[i]->fieldAlignment(cppia)==0))
+            {
+               DBGLOG("   link var %s @ %d\n", cppia.identStr(memberVars[i]->nameId), classSize);
+               memberVars[i]->linkVarTypes(cppia,classSize);
+               containsPointers = containsPointers || memberVars[i]->hasPointer();
+            }
          }
-         else
+         for(int i=0;i<dynamicFunctions.size();i++)
          {
-            DBGLOG("   link var %s @ %d\n", cppia.identStr(memberVars[i]->nameId), classSize);
-            memberVars[i]->linkVarTypes(cppia,classSize);
-            containsPointers = containsPointers || memberVars[i]->hasPointer();
+            containsPointers = true;
+            if (dynamicFunctions[i]->offset)
+            {
+               if (align==widest)
+                  DBGLOG("   super dynamic function %s @ %d\n", cppia.identStr(dynamicFunctions[i]->nameId), dynamicFunctions[i]->offset);
+            }
+            else if (dynamicFunctions[i]->fieldAlignment(cppia)==align)
+            {
+               DBGLOG("   link dynamic function %s @ %d\n", cppia.identStr(dynamicFunctions[i]->nameId), classSize);
+               dynamicFunctions[i]->linkVarTypes(cppia,classSize);
+            }
          }
-      }
-      for(int i=0;i<dynamicFunctions.size();i++)
-      {
-         containsPointers = true;
-         if (dynamicFunctions[i]->offset)
-         {
-            DBGLOG("   super dynamic function %s @ %d\n", cppia.identStr(dynamicFunctions[i]->nameId), dynamicFunctions[i]->offset);
-         }
-         else
-         {
-            DBGLOG("   link dynamic function %s @ %d\n", cppia.identStr(dynamicFunctions[i]->nameId), classSize);
-            dynamicFunctions[i]->linkVarTypes(cppia,classSize);
-         }
-      }
 
-      if (dynamicMapOffset==-1)
-      {
-         AlignOffset(etObject, classSize);
-         dynamicMapOffset = classSize;
-         classSize += sizeof( hx::FieldMap * );
-         containsPointers = true;
+         if (dynamicMapOffset==-1 && align==TypeAlignment(etObject))
+         {
+            AlignOffset(etObject, classSize);
+            dynamicMapOffset = classSize;
+            classSize += sizeof( hx::FieldMap * );
+            containsPointers = true;
+         }
       }
 
       extraData = classSize - haxeBase->mDataOffset;
@@ -1454,6 +1473,19 @@ void CppiaClassInfo::compile()
 
    for(size_t i=0;i<interfaceAdapters.size();i++)
       interfaceAdapters[i]->compile();
+}
+
+// The same functions as compile, left to compile when each is first called
+void CppiaClassInfo::markLazy()
+{
+   for(int i=0;i<staticFunctions.size();i++)
+      staticFunctions[i]->markLazy();
+   if (newFunc)
+      newFunc->markLazy();
+   for(int i=0;i<memberFunctions.size();i++)
+      memberFunctions[i]->markLazy();
+   for(size_t i=0;i<interfaceAdapters.size();i++)
+      interfaceAdapters[i]->lazy = true;
 }
 #endif
 
@@ -2085,6 +2117,14 @@ void  linkCppiaClass(hx::Class_obj *inClass, CppiaModule &cppia, String inName)
    ((CppiaClass *)inClass)->linkClass(cppia,inName);
 }
 
+
+// The script class a class object stands for, or 0 for a host class or any
+// other object
+CppiaClassInfo *getScriptClassInfo(hx::Object *inClass)
+{
+   CppiaClass *cls = dynamic_cast<CppiaClass *>(inClass);
+   return cls ? cls->info : 0;
+}
 
 int getScriptId(hx::Class inClass)
 {

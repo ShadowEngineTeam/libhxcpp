@@ -29,7 +29,15 @@ inline unsigned int HashMixInt(unsigned int h)
 }
 
 inline unsigned int HashCalcHash(int inKey) { return HashMixInt((unsigned int)inKey); }
-inline unsigned int HashCalcHash(cpp::Int64 inKey) { return HashMixInt((unsigned int)((inKey >> 32) ^ inKey)); }
+// The high half is multiplied in rather than xored: xor folds a packed (x, y)
+// pair to x ^ y, so a 256 x 256 grid had 256 hashes, and equal halves all
+// to 0. A key with a zero high half hashes as the same Int does.
+inline unsigned int HashCalcHash(cpp::Int64 inKey)
+{
+   unsigned int low = (unsigned int)inKey;
+   unsigned int high = (unsigned int)((cpp::UInt64)inKey >> 32);
+   return HashMixInt(low ^ (high * 0x9E3779B1u));
+}
 inline unsigned int HashCalcHash(const String &inKey) { return inKey.hash(); }
 inline unsigned int HashCalcHash(const Dynamic &inKey)
 {
@@ -285,6 +293,11 @@ template<typename T> inline void CopyValue(null &, const T &) {  }
 }
 
 
+struct HashRoot;
+// A weak hash entry whose object key was not marked when its value was looked
+//  at: the collector marks the value as soon as it marks the key
+void EphemeronWait(hx::Object *inKey, HashRoot *inHash, void *inElement);
+
 struct HashRoot : public Object
 {
    HashStore store;
@@ -300,6 +313,11 @@ struct HashRoot : public Object
 
    virtual void updateAfterGc() = 0;
    virtual bool markWeakValues(MarkContext *__inCtx) = 0;
+   // Marks the value of an element that markWeakValues passed to EphemeronWait
+   virtual void markWeakElement(void *inElement, MarkContext *__inCtx) = 0;
+   // _hx_gc_freeze copied the keys into new objects, which hash differently
+   //  where the hash is the object's identity
+   virtual void rehashKeys() = 0;
 
    inline int getSize() { return size; }
 };
@@ -406,6 +424,10 @@ struct Hash : public HashBase< typename ELEMENT::Key >
    // chains (#231). Other key types always use HashCalcHash.
    bool mixIntKeys;
 
+   // Walks over the buckets in progress, which a collection must not fold
+   //  under: one that allocates, as converting the map does, can let it run
+   unsigned short walks;
+
    // An insert that walks this many entries switches to the mixed hash. With
    // a good hash and load <= 1 a chain this long practically never happens.
    enum { MIX_CHAIN_LIMIT = 16 };
@@ -416,6 +438,7 @@ struct Hash : public HashBase< typename ELEMENT::Key >
       bucket = 0;
       bucketsOversized = false;
       mixIntKeys = false;
+      walks = 0;
       if (ELEMENT::WeakKeys && Element::ManageKeys)
          RegisterWeakHash(this);
    }
@@ -436,6 +459,11 @@ struct Hash : public HashBase< typename ELEMENT::Key >
    bool TIsWeakRefValid(T &) { return true; }
    bool TIsWeakRefValid(Dynamic &key) { return IsWeakRefValid(key.mPtr); }
    bool TIsWeakRefValid(String &key) { return IsWeakRefValid(key.raw_ptr()); }
+
+   // String keys are left to the next pass over the table
+   template<typename T>
+   void TWaitForKey(T &, Element *) { }
+   void TWaitForKey(Dynamic &key, Element *inElement) { EphemeronWait(key.mPtr, this, inElement); }
 
    template<typename T>
    bool TMarkWeakValue(T &, MarkContext *) { return false; }
@@ -460,7 +488,11 @@ struct Hash : public HashBase< typename ELEMENT::Key >
 
    bool markWeakValues(MarkContext *__inCtx) HXCPP_OVERRIDE
    {
-      if (!Element::WeakKeys || !Element::ManageKeys)
+      // Int, Float, Int64 and null values reach nothing to mark, and the map
+      //  keeps this storage until it converts to another Hash. The walk took
+      //  longer than the rest of a minor collection (libhxcpp #333)
+      enum { ManagedValues = StoreOf<Value>::store==hashString || StoreOf<Value>::store==hashObject };
+      if (!Element::WeakKeys || !Element::ManageKeys || !ManagedValues)
          return false;
 
       bool marked = false;
@@ -471,10 +503,17 @@ struct Hash : public HashBase< typename ELEMENT::Key >
          {
             if (TIsWeakRefValid(element->key))
                marked = TMarkWeakValue(element->value, __inCtx) || marked;
+            else
+               TWaitForKey(element->key, element);
             element = element->next;
          }
       }
       return marked;
+   }
+
+   void markWeakElement(void *inElement, MarkContext *__inCtx) HXCPP_OVERRIDE
+   {
+      TMarkWeakValue(((Element *)inElement)->value, __inCtx);
    }
 
 
@@ -511,8 +550,9 @@ struct Hash : public HashBase< typename ELEMENT::Key >
          // remove() would compact to, so the collections that follow scan the
          // buckets in use rather than the most there ever were. The array keeps
          // its size until the next insert or remove, which may allocate
-         // (libhxcpp #204)
-         else if (bucketCount>8 && size < (bucketCount>>2))
+         // (libhxcpp #204). Not during a walk: entries moved into buckets it
+         // has passed would be skipped. A later collection folds instead
+         else if (bucketCount>8 && size < (bucketCount>>2) && !walks)
          {
             int newCount = bucketCount;
             while(newCount>8 && size < (newCount>>2))
@@ -600,6 +640,21 @@ struct Hash : public HashBase< typename ELEMENT::Key >
                head = &e.next;
          }
       }
+   }
+
+   template<typename V,bool W>
+   void rehashElement(TDynamicElement<V,W> &e) { e.hash = keyHash(e.key); }
+   template<typename E>
+   void rehashElement(E &) { }
+
+   void rehashKeys() HXCPP_OVERRIDE
+   {
+      if (IgnoreHash || !bucket)
+         return;
+      for(int b=0;b<bucketCount;b++)
+         for(Element *e=bucket[b]; e; e=e->next)
+            rehashElement(*e);
+      redistribute(bucketCount);
    }
 
    void switchToMixedHash()
@@ -869,9 +924,17 @@ struct Hash : public HashBase< typename ELEMENT::Key >
    }
 
 
+   struct AutoWalk
+   {
+      Hash *hash;
+      AutoWalk(Hash *inHash) : hash(inHash) { hash->walks++; }
+      ~AutoWalk() { hash->walks--; }
+   };
+
    template<typename F>
    void iterate(F &inFunc)
    {
+      AutoWalk walk(this);
       for(int b=0;b<bucketCount;b++)
       {
          Element *el = bucket[b];

@@ -23,10 +23,17 @@
 
 #include "sljit_src/sljitLir.h"
 #include <vector>
+#include <exception>
 
 
+// Native code that jitted code calls must not throw past it: jitted frames have
+// no unwind information, so an exception left uncaught here ends the process.
+// A const char * or std::exception becomes a String, as the interpreter's
+// Module.boot and run make it.
 #define TRY_NATIVE try {
-#define CATCH_NATIVE } catch(Dynamic e) {  CppiaCtx::getCurrent()->exception = hx::toPendingException(e.mPtr); }
+#define CATCH_NATIVE } catch(Dynamic e) {  CppiaCtx::getCurrent()->exception = hx::toPendingException(e.mPtr); } \
+   catch(const char *e) { CppiaCtx::getCurrent()->exception = Dynamic(String(e)).mPtr; } \
+   catch(const std::exception &e) { CppiaCtx::getCurrent()->exception = Dynamic(String(e.what())).mPtr; }
 
 
 extern "C" struct sljit_jump;

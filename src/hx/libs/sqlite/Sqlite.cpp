@@ -24,6 +24,7 @@
 #include "sqlite3.h"
 #include <stdlib.h>
 #include <algorithm>
+#include <limits>
 
 
 // Put in anon-namespace to avoid conflicts if static-linked
@@ -153,12 +154,63 @@ struct database : public hx::Object
 {
    sqlite3 *db;
    hx::ObjectPtr<result> last;
+   // The native memory reported for the connection, and the part of it its
+   //  schema and statements hold
+   size_t reported;
+   size_t structures;
 
    void create(sqlite3 *inDb)
    {
       db = inDb;
+      reported = 0;
+      structures = 0;
       _hx_set_finalizer(this, finalize);
    }
+
+   size_t status(int inOp)
+   {
+      sqlite3_int64 current = 0;
+      sqlite3_int64 highwater = 0;
+      if (sqlite3_db_status64(db, inOp, &current, &highwater, 0) != SQLITE_OK || current < 0)
+         return 0;
+      return (size_t)current;
+   }
+
+   // Counts the connection's page cache, schema and statements towards
+   //  collection pressure. SQLite's allocator is the process's, shared with
+   //  any other user, so its own figures for the connection are read. The
+   //  schema and statements change only as statements are prepared and
+   //  finalized, and are costlier to measure, so they are read only when
+   //  inStructures is set. Outside a GC-free zone only: growth can start a
+   //  collection
+   void report(bool inStructures)
+   {
+      if (!db)
+         return;
+      if (inStructures)
+         structures = status(SQLITE_DBSTATUS_SCHEMA_USED) + status(SQLITE_DBSTATUS_STMT_USED);
+      size_t now = status(SQLITE_DBSTATUS_CACHE_USED) + structures;
+      if (now > reported)
+      {
+         size_t grow = std::min(now - reported, (size_t)std::numeric_limits<int>::max());
+         reported += grow;
+         hx::GCChangeManagedMemory((int)grow, "sqlite");
+      }
+      else if (now < reported)
+      {
+         hx::GCReleaseManagedMemory(reported - now);
+         reported = now;
+      }
+   }
+
+   // Safe in a finalizer
+   void release()
+   {
+      hx::GCReleaseManagedMemory(reported);
+      reported = 0;
+      structures = 0;
+   }
+
    static void finalize(Dynamic obj) { ((database *)(obj.mPtr))->destroy(false); }
    void destroy(bool inThrowError)
    {
@@ -178,6 +230,7 @@ struct database : public hx::Object
             if (inThrowError)
                hx::Throw(HX_CSTRING("Sqlite: could not close"));
          }
+         release();
          db = 0;
       }
    }
@@ -258,6 +311,7 @@ Dynamic _hx_sqlite_connect(String filename)
 
    database *db = new database();
    db->create(sqlDb);
+   db->report(true);
    return db;
 }
 
@@ -334,6 +388,8 @@ Dynamic _hx_sqlite_request(Dynamic handle,String sql)
    r->create(db, db->db, statement,sql);
 
    db->setResult(r);
+   // Preparing can load the schema, and the cache pages it reads
+   db->report(true);
 
    return r;
 }
@@ -379,16 +435,21 @@ Dynamic _hx_sqlite_result_next(Dynamic handle)
    __hxcpp_enter_gc_free_zone();
    int step = sqlite3_step(r->r);
    __hxcpp_exit_gc_free_zone();
+   database *owner = static_cast<database *>(r->connection);
    switch(step)
    {
       case SQLITE_ROW:
       {
+         // A step can write pages and read them into the cache
+         owner->report(false);
          hx::Anon v = hx::Anon_obj::Create(r->ncols);
          r->first = 0;
          for(int slot=0;slot<r->ncols;slot++)
          {
             int i = r->order[slot];
-            Dynamic f;
+            // A Variant, not a Dynamic, so a number or text is kept in the
+            // row itself instead of in a box each cell holds on to
+            cpp::Variant f;
             switch( sqlite3_column_type(r->r,i) )
             {
             case SQLITE_NULL:
@@ -408,7 +469,7 @@ Dynamic _hx_sqlite_result_next(Dynamic handle)
                   if( v >= -2147483647LL - 1 && v <= 2147483647LL )
                      f = int(v);
                   else
-                     f = Dynamic( (cpp::Int64)v );
+                     f = (cpp::Int64)v;
                }
                break;
             case SQLITE_FLOAT:
@@ -435,6 +496,7 @@ Dynamic _hx_sqlite_result_next(Dynamic handle)
       }
       case SQLITE_DONE:
          r->destroy(true);
+         owner->report(true);
          return null();
       default:
       {
@@ -447,6 +509,7 @@ Dynamic _hx_sqlite_result_next(Dynamic handle)
          // own message: the step's is only "SQL logic error".
          sqlite3 *db = r->db;
          r->destroy(false);
+         owner->report(true);
          if( step == SQLITE_BUSY || step == SQLITE_LOCKED )
             hx::Throw( HX_CSTRING("Database is busy : ") + String(sqlite3_errmsg(db)) );
          sqlite_error(db);

@@ -133,7 +133,7 @@ HX_CHAR *NewString(int inLen)
    // bytes after the terminator, where String::hash() memoizes the hash on
    // first use
    bool hashSlot = inLen >= HX_GC_STRING_HASH_SLOT_MIN_LEN;
-   char *result =  (char *)hx::InternalNew( (inLen+1)*sizeof(char) + (hashSlot ? 4 : 0), false );
+   char *result =  (char *)hx::InternalNewString( (inLen+1)*sizeof(char) + (hashSlot ? 4 : 0) );
    result[inLen] = '\0';
    if (hashSlot)
       ((unsigned int *)result)[-1] |= HX_GC_STRING_HASH_SLOT;
@@ -144,9 +144,24 @@ HX_CHAR *NewString(int inLen)
 
 }
 
+char *NewStringUncleared(int inLen)
+{
+   bool hashSlot = inLen >= HX_GC_STRING_HASH_SLOT_MIN_LEN;
+   char *result =  (char *)hx::InternalNewString( (inLen+1)*sizeof(char) + (hashSlot ? 4 : 0), false );
+   // The terminator and the hash slot, which the caller does not fill
+   memset(result + inLen, 0, 1 + (hashSlot ? 4 : 0));
+   if (hashSlot)
+      ((unsigned int *)result)[-1] |= HX_GC_STRING_HASH_SLOT;
+#ifdef HXCPP_TELEMETRY
+   __hxt_new_string(result, inLen+1);
+#endif
+   return result;
+}
+
+// A copy writes every byte before anything else can see the buffer
 void *NewGCBytes(void *inData, size_t inSize)
 {
-   void *result =  hx::InternalNew(inSize,false);
+   void *result =  inData ? hx::InternalNewUncleared(inSize) : hx::InternalNew(inSize,false);
    if (inData)
    {
       memcpy(result,inData,inSize);
@@ -157,7 +172,7 @@ void *NewGCBytes(void *inData, size_t inSize)
 
 void *NewGCPrivate(void *inData, size_t inSize)
 {
-   void *result =  InternalNew(inSize,false);
+   void *result =  inData ? InternalNewUncleared(inSize) : InternalNew(inSize,false);
    if (inData)
    {
       memcpy(result,inData,inSize);

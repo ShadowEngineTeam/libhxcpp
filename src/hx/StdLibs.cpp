@@ -922,13 +922,25 @@ static bool hxParseIntChars(const char *str, int &outResult)
    return true;
 }
 
+// The text parseInt and parseFloat read. Both read only ASCII, and the first
+// other unit of a UTF-16 string ends a number as the end of the string does,
+// so only the ASCII before it is converted, not the whole string.
+static const char *hxParseText(const String &inString, hx::strbuf *outBuf)
+{
+   #ifdef HX_SMART_STRINGS
+   if (inString.isUTF16Encoded())
+      return inString.ascii_substr(outBuf,0,inString.length);
+   #endif
+   return inString.utf8_str(outBuf);
+}
+
 Dynamic __hxcpp_parse_int(const String &inString)
 {
    if (!inString.raw_ptr())
       return null();
    hx::strbuf buf;
    int result;
-   if (!hxParseIntChars(inString.utf8_str(&buf), result))
+   if (!hxParseIntChars(hxParseText(inString, &buf), result))
       return null();
    return result;
 }
@@ -983,7 +995,7 @@ double __hxcpp_parse_float(const String &inString)
       return Math_obj::NaN;
 
    hx::strbuf buf;
-   const char *str = inString.utf8_str(&buf);
+   const char *str = hxParseText(inString, &buf);
    return str ? hxParseFloatChars(str) : Math_obj::NaN;
 }
 
