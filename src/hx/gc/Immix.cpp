@@ -2839,30 +2839,37 @@ bool IsWeakRefValid(hx::Object *inPtr)
     // Special case of member closure - check if the 'this' pointer is still alive.
     // Adapters return the callable they wrap, so follow the chain to the receiver.
     bool isCurrent = mark==gByteMarkID;
+    // A chain of any length is followed: a limit of 16 hops cleared the
+    //  callbacks behind 16 adapters while their receiver lived (libhxcpp #364).
+    //  A second pointer follows at half speed, so a cycle of dead adapters
+    //  catches up with it and ends the walk.
     if ( !isCurrent && inPtr->__GetType()==vtFunction)
     {
-        enum { MAX_HOPS = 16 };
-        hx::Object *chain[MAX_HOPS];
-        int hops = 0;
         hx::Object *fn = inPtr;
-        while(hops<MAX_HOPS)
+        hx::Object *slow = inPtr;
+        bool moveSlow = false;
+        while(true)
         {
-            chain[hops++] = fn;
             hx::Object *thiz = (hx::Object *)fn->__GetHandle();
             if (!thiz)
                break;
             mark = ((unsigned char *)thiz)[HX_ENDIAN_MARK_ID_BYTE];
             if ( (((unsigned int *)thiz)[-1] & HX_GC_CONST_ALLOC_BIT) || mark==gByteMarkID)
             {
-               // The object is still alive, so mark the closures and continue
-               for(int i=0;i<hops;i++)
-                  MarkAlloc(chain[i],0);
+               // The object is still alive, so mark the closures that lead to it
+               for(hx::Object *link=inPtr; link!=thiz; link=(hx::Object *)link->__GetHandle())
+                  MarkAlloc(link,0);
                return true;
             }
             // A String's member closures hand back its characters, not an object
             if (!(((unsigned int *)thiz)[-1] & IMMIX_ALLOC_IS_CONTAINER) || thiz->__GetType()!=vtFunction)
                break;
             fn = thiz;
+            if (moveSlow)
+               slow = (hx::Object *)slow->__GetHandle();
+            moveSlow = !moveSlow;
+            if (fn==slow)
+               break;
         }
     }
     return isCurrent;
