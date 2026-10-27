@@ -1,0 +1,3 @@
+finalizer exception reaches the caller: true
+collector pause released after finalizer exception: true
+finalizer executes exactly once: true

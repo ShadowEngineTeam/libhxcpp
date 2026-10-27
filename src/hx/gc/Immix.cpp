@@ -15,6 +15,7 @@
 #include <atomic>
 #include <inttypes.h>
 #include <limits>
+#include <exception>
 
 #ifdef __EMSCRIPTEN__
    #include <emscripten/stack.h>
@@ -2926,6 +2927,43 @@ static int localAllocs;
 static int rootObjects;
 static int rootAllocs;
 
+// The first exception a finalizer threw in this collection. The collection
+//  goes on, running the other finalizers, and Collect throws it to its caller
+//  once the other threads are released: thrown straight out of the finalizer,
+//  it left the collector paused and the collection half done (libhxcpp #358)
+std::exception_ptr sFinalizerException;
+// The context of the thread whose collection it was, which alone throws it,
+//  set once the collection is over
+std::atomic<void *> sFinalizerExceptionOwner{ nullptr };
+
+// Throws what a finalizer threw in this thread's last collection. Collect
+//  calls it when it holds no lock; a collection made for an allocation, under
+//  the state lock, leaves it to the allocator once it has its block
+void ThrowFinalizerException()
+{
+   void *owner = sFinalizerExceptionOwner.load(std::memory_order_acquire);
+   if (!owner || owner!=(void *)hx::tlsStackContext)
+      return;
+   std::exception_ptr thrown = sFinalizerException;
+   sFinalizerException = nullptr;
+   sFinalizerExceptionOwner.store(nullptr, std::memory_order_relaxed);
+   std::rethrow_exception(thrown);
+}
+
+template<typename CALL>
+static void CallFinalizer(CALL inCall)
+{
+   try
+   {
+      inCall();
+   }
+   catch(...)
+   {
+      if (!sFinalizerException)
+         sFinalizerException = std::current_exception();
+   }
+}
+
 // Runs the finalizers in inList whose object died. With inOld, the survivors
 //  move there; without, they stay
 static void RunInternalFinalizers(FinalizerList &inList, FinalizerList *inOld)
@@ -2943,7 +2981,7 @@ static void RunInternalFinalizers(FinalizerList &inList, FinalizerList *inOld)
       {
          if (f->mFinalizer)
          {
-            f->mFinalizer(f->mObject);
+            CallFinalizer([&]{ f->mFinalizer(f->mObject); });
             finalizerCount++;
          }
          inList.qerase(idx);
@@ -2974,7 +3012,7 @@ static void RunFinalizables(FinalizableList &inList, FinalizableList *inOld)
          // A copy: run may register another, which can move the list
          Finalizable run = f;
          inList.qerase(idx);
-         run.run();
+         CallFinalizer([&]{ run.run(); });
       }
       else if (inOld)
       {
@@ -3068,7 +3106,7 @@ void RunFinalizers(bool inMinor)
       TakeDeadFinalizers(sOldFinalizerMap, (FinalizerMap *)0, sRunNativeFinalizers);
    TakeDeadFinalizers(sFinalizerMap, &sOldFinalizerMap, sRunNativeFinalizers);
    for(size_t run=0; run<sRunNativeFinalizers.size(); run++)
-      (*sRunNativeFinalizers[run].second)(sRunNativeFinalizers[run].first);
+      CallFinalizer([&]{ (*sRunNativeFinalizers[run].second)(sRunNativeFinalizers[run].first); });
    sRunNativeFinalizers.clear();
 
 
@@ -3078,7 +3116,7 @@ void RunFinalizers(bool inMinor)
       TakeDeadFinalizers(sOldHaxeFinalizerMap, (HaxeFinalizerMap *)0, sRunHaxeFinalizers);
    TakeDeadFinalizers(sHaxeFinalizerMap, &sOldHaxeFinalizerMap, sRunHaxeFinalizers);
    for(size_t run=0; run<sRunHaxeFinalizers.size(); run++)
-      (*sRunHaxeFinalizers[run].second)(sRunHaxeFinalizers[run].first);
+      CallFinalizer([&]{ (*sRunHaxeFinalizers[run].second)(sRunHaxeFinalizers[run].first); });
    sRunHaxeFinalizers.clear();
 
    MEM_STAMP(hx::tFinalizers);
@@ -5881,6 +5919,8 @@ public:
 
       sgIsCollecting = false;
 
+      if (hx::sFinalizerException)
+         hx::sFinalizerExceptionOwner.store((void *)hx::tlsStackContext, std::memory_order_release);
 
       hx::gPauseForCollect = 0x00000000;
       #ifndef HXCPP_SINGLE_THREADED_APP
@@ -5903,6 +5943,9 @@ public:
 
 
       PROFILE_COLLECT_SUMMARY_END;
+
+      if (!inLocked)
+         hx::ThrowFinalizerException();
    }
 
    void reclaimBlocks(bool full, BlockDataStats &outStats)
@@ -7027,6 +7070,9 @@ public:
             #endif
             mCurrentHole = 1;
             mMoreHoles = mCurrentHole<mCurrentHoles;
+
+            // From a collection GetFreeBlock made: the block is ours now
+            hx::ThrowFinalizerException();
          }
 
          // Other thread may have started collect, in which case we may just
