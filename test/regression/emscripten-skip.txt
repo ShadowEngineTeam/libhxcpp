@@ -61,6 +61,7 @@ SocketTinyTimeout: sockets
 SqliteNativeMemoryPressure: threads (std::thread, which needs a pthreads build)
 SqliteResultConnectionLifetime: threads (std::thread, which needs a pthreads build)
 SslErrorCodes: sockets
+SslNativeMemoryPressure: threads (std::thread, which needs a pthreads build)
 SslPeerCertificateLifetime: sockets
 SslSniLifetime: sockets
 SslSniName: sockets
