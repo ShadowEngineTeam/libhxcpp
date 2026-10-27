@@ -50,6 +50,7 @@ libhxcpp 6.0.0 (unreleased)
 * Fixed constructing a sys.net.Socket on Emscripten throwing "Could not set socket timeout": it sets its timeout of zero, and Emscripten's sockets have no SO_SNDTIMEO or SO_RCVTIMEO, so setsockopt failed. Zero, or null, is the no timeout a socket starts with, so it is now accepted there. A positive timeout, which those sockets cannot keep, still throws (libhxcpp #344)
 * Fixed Socket.select on Emscripten giving sockets with a descriptor of 64 or more as ready when they were not: Emscripten's select reads and writes only the first 64 descriptors of each set, so a socket above that kept the bit it was given. select now runs through Emscripten's poll there, which takes any descriptor (libhxcpp #345)
 * JS Prime CFFI has the basic string functions, which a primitive such as an echo of alloc_string(val_string(v)) failed to link without: val_string, val_wstring, val_dup_string, val_dup_wstring, val_strlen, alloc_string_len and alloc_wstring_len. Strings are UTF-8, or UTF-32 for wchar_t, and val_strlen counts UTF-8 bytes. The strings given to a primitive are freed when it returns, a nested primitive freeing only its own (libhxcpp #346)
+* HXCPP_LINK_NO_EMBIND links an Emscripten executable without Embind, which every executable linked with through --bind. An application without JavaScript bindings saves about 11 KB of JavaScript. HXCPP_JS_PRIME keeps it, and the default is unchanged, for native code with EMSCRIPTEN_BINDINGS (libhxcpp #336)
 
 libhxcpp 6.0.0-rc.1
 ------------------------------------------------------------

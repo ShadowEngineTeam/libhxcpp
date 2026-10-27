@@ -274,6 +274,10 @@ jobs:
       if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
       run: timeout 600 sh test/emscripten/run.sh
 
+    - name: Run the Embind test
+      if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+      run: timeout 600 sh test/emscripten/embind/run.sh
+
     - name: Run the JS Prime CFFI tests
       if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
       run: |
