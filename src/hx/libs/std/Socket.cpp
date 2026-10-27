@@ -1212,7 +1212,17 @@ void _hx_std_socket_set_timeout( Dynamic o, Dynamic t )
    if( setsockopt(sock,SOL_SOCKET,SO_SNDTIMEO,(char*)&time,sizeof(time)) != 0
     || setsockopt(sock,SOL_SOCKET,SO_RCVTIMEO,(char*)&time,sizeof(time)) != 0 )
    {
+      #ifdef __EMSCRIPTEN__
+      // Emscripten's sockets have neither option, and setsockopt fails with
+      // ENOPROTOOPT. A socket without them has no timeout, which is what zero
+      // asks for, so only a positive timeout, which it cannot keep, fails.
+      int err = errno;
       hx::ExitGCFreeZone();
+      if( seconds == 0 && err == ENOPROTOOPT )
+         return;
+      #else
+      hx::ExitGCFreeZone();
+      #endif
       hx::Throw(HX_CSTRING("Could not set socket timeout"));
    }
    hx::ExitGCFreeZone();
