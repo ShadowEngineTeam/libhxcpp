@@ -1,0 +1,5 @@
+rendered strings preserve embedded NUL bytes: true
+ordinary text remains intact: true
+non-ASCII text remains intact: true
+an empty string appends nothing: true
+null values retain their representation: true

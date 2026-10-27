@@ -2,6 +2,7 @@
 libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
+* Fixed val_buffer losing the text of a value after a NUL character: it measured the UTF-8 text with strlen. It now appends the text's full byte count (libhxcpp #393)
 * Fixed Date's local fields keeping the previous time zone after the zone changed: the last time converted is cached per thread, and the cache was keyed by the time alone, so a date read before the change read the old zone until another time was converted. The cache now also keys on the zone the C library has, and Sys.putEnv("TZ") applies the new zone at once, where localtime_r and the Windows CRT had kept the old one until something called tzset (libhxcpp #392)
 * Fixed cpp.NativeFile.file_open with an exclusive-create mode such as "wbx" truncating a file that exists on Linux, macOS and other POSIX systems: files are opened with open(2) to make them close-on-exec, and the mode was mapped without O_EXCL. Such a mode now fails on a file that exists and leaves it as it was, and x without w fails too (libhxcpp #391)
 * Fixed the collector freeing part of a GC block, which corrupts the heap: releasing a buffer of 4000 to 16380 bytes that sat in a block, as InternalNew makes of a 3997 to 3999-byte request, queued it as a large allocation to be freed. StringTools.urlEncode on a 3998-character string with non-ASCII text could do it. Only allocations on the large list are released early now (libhxcpp #257)
