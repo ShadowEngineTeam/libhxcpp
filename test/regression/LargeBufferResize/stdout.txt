@@ -1,0 +1,3 @@
+resized buffers keep their bytes and zero their growth: true
+resizes after the list changed still work: true
+neighbouring buffers survive collection: true

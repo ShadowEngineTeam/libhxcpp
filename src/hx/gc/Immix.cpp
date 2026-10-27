@@ -3632,18 +3632,17 @@ public:
          return;
       }
       unsigned int *blob = ((unsigned int *)inLarge) - 2;
-      unsigned int size = *blob;
-      takeLargeAllocated(size);
-      // Search from the end - the realloc-growth path frees the buffer it
-      // just allocated, which is the most recently pushed entry, so the
-      // common case finds it immediately instead of scanning the whole
-      // list (qerase does not preserve order, so direction is free)
-      for(int i=mLargeList.size()-1;i>=0;i--)
-         if (mLargeList[i]==blob)
-         {
-            eraseLarge(i);
-            break;
-         }
+      // The buffer names its place in the list. Searching for it took time
+      //  in the number of other large allocations (libhxcpp #298). One not
+      //  in the list, such as one released twice, is left alone
+      int idx = largeSlot(blob);
+      if (idx<0 || idx>=mLargeList.size() || mLargeList[idx]!=blob)
+      {
+         mLargeListLock.unlock();
+         return;
+      }
+      takeLargeAllocated(*blob);
+      eraseLarge(idx);
       largeObjectRecycle.push(blob);
       mRecycleSize.store((int)largeObjectRecycle.size(), std::memory_order_relaxed);
       mLargeListLock.unlock();
@@ -3708,7 +3707,7 @@ public:
       }
 
       if (!result)
-         result = static_cast<unsigned int*>(HxAlloc(inSize + sizeof(int)*2));
+         result = static_cast<unsigned int*>(HxAlloc(inSize + sizeof(int)*3));
 
       if (!result)
       {
@@ -3723,7 +3722,7 @@ public:
          }
 
          CollectFromThisThread(true,true);
-         result = static_cast<unsigned int*>(HxAlloc(inSize + sizeof(int) * 2));
+         result = static_cast<unsigned int*>(HxAlloc(inSize + sizeof(int) * 3));
       }
 
       if (!result)
@@ -3745,6 +3744,7 @@ public:
       if (do_lock && !isLocked)
          mLargeListLock.lock();
 
+      largeSlot(result) = mLargeList.size();
       mLargeList.push(result);
       mLargeAllocated += inSize;
 
@@ -3767,6 +3767,20 @@ public:
       return result+2;
    }
 
+   // A large allocation's index in mLargeList, in an int after its data
+   static int &largeSlot(unsigned int *inBlob)
+   {
+      return *(int *)((char *)(inBlob + 2) + inBlob[0]);
+   }
+
+   // qerase, keeping the slot of the entry it moves
+   void qeraseLarge(int inIdx)
+   {
+      mLargeList.qerase(inIdx);
+      if (inIdx<mLargeList.size())
+         largeSlot(mLargeList[inIdx]) = inIdx;
+   }
+
    // Removes mLargeList[inIdx], keeping the old allocations before the new.
    //  Under mLargeListLock or in a collection
    void eraseLarge(int inIdx)
@@ -3777,10 +3791,11 @@ public:
          mLargeIndexReady = false;
          mLargeOld--;
          mLargeList[inIdx] = mLargeList[mLargeOld];
-         mLargeList.qerase(mLargeOld);
+         largeSlot(mLargeList[inIdx]) = inIdx;
+         qeraseLarge(mLargeOld);
       }
       else
-         mLargeList.qerase(inIdx);
+         qeraseLarge(inIdx);
    }
 
    // Under mLargeListLock or in a collection. Callers can release more
@@ -5619,7 +5634,7 @@ public:
                HxFree(blob);
             }
 
-            mLargeList.qerase(idx);
+            qeraseLarge(idx);
          }
          else
          {
