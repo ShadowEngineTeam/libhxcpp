@@ -7,6 +7,7 @@
 AnonConcurrentString: threads
 ArrayConcurrentString: threads
 AttachedThreadId: threads (std::thread, which needs a pthreads build)
+CffiNekoNullBoolWithoutInit: runs neko, which loads an ndll the test builds
 CffiNekoValueTags: runs neko, which loads an ndll the test builds
 CffiPrimeUnicodeFallback: loads an ndll it builds, and Emscripten links statically
 CffiQuietMissingPrimitive: loads an ndll it builds, and Emscripten links statically

@@ -71,9 +71,11 @@ neko_value gNekoFalse = 0;
 
 namespace
 {
+// Strings are Haxe Strings only once neko_init gives their constructor. null,
+//  true and false are neko's own from the start
 void CheckInitDynamicNekoLoader()
 {
-   if (!gNekoNull)
+   if (!gNeko2HaxeString)
    {
       printf("Haxe code is missing a call to cpp.Prime.nekoInit().\n");
    }
@@ -176,7 +178,7 @@ double api_val_number(neko_value  arg1)
 }
 
 
-neko_value api_alloc_bool(bool arg1) { CheckInitDynamicNekoLoader(); return arg1 ? gNekoTrue : gNekoFalse; }
+neko_value api_alloc_bool(bool arg1) { return arg1 ? gNekoTrue : gNekoFalse; }
 neko_value api_alloc_int(int arg1)
 {
    // neko 2 has an Int beyond 31 bits as a value of its own, where neko 1.8
@@ -439,7 +441,6 @@ int api_alloc_kind()
 }
 neko_value api_alloc_null()
 {
-   CheckInitDynamicNekoLoader();
    return gNekoNull;
 }
 
@@ -706,6 +707,17 @@ ResolveProc InitDynamicNekoLoader()
       //  made them abstracts, with a macro
       dyn_alloc_int32 = (alloc_int32_func)LoadNekoFunc("neko_alloc_int32");
       neko_tag_bits = dyn_alloc_int32 ? 4 : 3;
+      // neko's null, true and false, which neko exports as data, for an ndll
+      //  run before neko_init or without it. neko_init is given the same values
+      neko_value *nekoNull = (neko_value *)LoadNekoFunc("val_null");
+      neko_value *nekoTrue = (neko_value *)LoadNekoFunc("val_true");
+      neko_value *nekoFalse = (neko_value *)LoadNekoFunc("val_false");
+      if (nekoNull && nekoTrue && nekoFalse)
+      {
+         gNekoNull = *nekoNull;
+         gNekoTrue = *nekoTrue;
+         gNekoFalse = *nekoFalse;
+      }
       init = true;
    }
 

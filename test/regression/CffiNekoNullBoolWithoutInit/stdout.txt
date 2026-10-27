@@ -1,0 +1,7 @@
+alloc_null and alloc_bool give neko's null, true and false without neko_init: true
+val_bool reads neko's true without neko_init: true
+they print as neko's values from an object's fields without neko_init: true
+alloc_null and alloc_bool give neko's null, true and false after neko_init: true
+val_bool reads neko's true after neko_init: true
+they print as neko's values from an object's fields after neko_init: true
+neko ran the program to the end: true
