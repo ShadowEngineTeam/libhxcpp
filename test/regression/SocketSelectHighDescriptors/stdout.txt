@@ -1,0 +1,8 @@
+socket 0 not exceptional: true
+socket 60 not exceptional: true
+socket 61 not exceptional: true
+socket 62 not exceptional: true
+socket 79 not exceptional: true
+none of the last 64 exceptional: true
+in-place select removes the last: true
+in-place select removes the last 64: true

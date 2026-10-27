@@ -1,0 +1,3 @@
+bound function called: true
+exception caught: true
+strings kept: true

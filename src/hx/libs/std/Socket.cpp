@@ -83,6 +83,7 @@ typedef int SocketLen;
 #   include <stdlib.h>
 #   include <stdio.h>
 #   include <poll.h>
+#   include <vector>
    typedef int SOCKET;
 #   define closesocket close
 #   define SOCKET_ERROR (-1)
@@ -913,6 +914,76 @@ static void remainingTimeval(double inDeadline, struct timeval *t)
 }
 #endif
 
+#ifdef __EMSCRIPTEN__
+// Emscripten's select reads and writes only the first 64 descriptors of each
+// set, so a socket above that kept the bit it was given and came back as
+// ready. Its poll takes any descriptor, so select runs through that instead,
+// with the same readiness: POLLIN for reading, POLLOUT for writing and
+// POLLPRI for the others. A closed descriptor fails with EBADF, as in its
+// select.
+static int selectSockets(int n, fd_set *ra, fd_set *wa, fd_set *ea, struct timeval *tt)
+{
+   std::vector<struct pollfd> fds;
+   for(int fd=0;fd<n;fd++)
+   {
+      short events = (FD_ISSET(fd,ra) ? POLLIN : 0) | (FD_ISSET(fd,wa) ? POLLOUT : 0) | (FD_ISSET(fd,ea) ? POLLPRI : 0);
+      if (events)
+      {
+         struct pollfd p;
+         p.fd = fd;
+         p.events = events;
+         p.revents = 0;
+         fds.push_back(p);
+      }
+   }
+
+   int ms = -1;
+   if (tt)
+   {
+      double wait = tt->tv_sec * 1000.0 + tt->tv_usec / 1000.0;
+      ms = wait > 0x7fffffff ? 0x7fffffff : (int)wait;
+   }
+   if (poll(fds.data(), fds.size(), ms) < 0)
+      return SOCKET_ERROR;
+
+   FD_ZERO(ra);
+   FD_ZERO(wa);
+   FD_ZERO(ea);
+   int ready = 0;
+   for(size_t i=0;i<fds.size();i++)
+   {
+      const struct pollfd &p = fds[i];
+      if (p.revents & POLLNVAL)
+      {
+         errno = EBADF;
+         return SOCKET_ERROR;
+      }
+      // poll reports POLLERR and POLLHUP unasked, but select did not use them
+      if ((p.events & POLLIN) && (p.revents & POLLIN))
+      {
+         FD_SET(p.fd,ra);
+         ready++;
+      }
+      if ((p.events & POLLOUT) && (p.revents & POLLOUT))
+      {
+         FD_SET(p.fd,wa);
+         ready++;
+      }
+      if ((p.events & POLLPRI) && (p.revents & POLLPRI))
+      {
+         FD_SET(p.fd,ea);
+         ready++;
+      }
+   }
+   return ready;
+}
+#else
+static int selectSockets(int n, fd_set *ra, fd_set *wa, fd_set *ea, struct timeval *tt)
+{
+   return select(n,ra,wa,ea,tt);
+}
+#endif
+
 /**
    socket_select : read : 'socket array -> write : 'socket array -> others : 'socket array -> timeout:number? -> 'socket array array
    <doc>Perform the [select] operation. Timeout is in seconds or [null] if infinite</doc>
@@ -944,7 +1015,7 @@ Array<Dynamic> _hx_std_socket_select( Array<Dynamic> rs, Array<Dynamic> ws, Arra
    #endif
 
    hx::EnterGCFreeZone();
-   if( select((int)(n+1),ra,wa,ea,tt) == SOCKET_ERROR )
+   if( selectSockets((int)(n+1),ra,wa,ea,tt) == SOCKET_ERROR )
    {
       // Sample the error before leaving the zone - the zone exit can
       // clobber errno/GetLastError
@@ -1003,7 +1074,7 @@ void _hx_std_socket_fast_select( Array<Dynamic> rs, Array<Dynamic> ws, Array<Dyn
    #endif
 
    hx::EnterGCFreeZone();
-   if( select((int)(n+1),ra,wa,ea,tt) == SOCKET_ERROR )
+   if( selectSockets((int)(n+1),ra,wa,ea,tt) == SOCKET_ERROR )
    {
       // Sample the error before leaving the zone - the zone exit can
       // clobber errno/GetLastError
@@ -1252,7 +1323,17 @@ void _hx_std_socket_set_timeout( Dynamic o, Dynamic t )
    if( setsockopt(sock,SOL_SOCKET,SO_SNDTIMEO,(char*)&time,sizeof(time)) != 0
     || setsockopt(sock,SOL_SOCKET,SO_RCVTIMEO,(char*)&time,sizeof(time)) != 0 )
    {
+      #ifdef __EMSCRIPTEN__
+      // Emscripten's sockets have neither option, and setsockopt fails with
+      // ENOPROTOOPT. A socket without them has no timeout, which is what zero
+      // asks for, so only a positive timeout, which it cannot keep, fails.
+      int err = errno;
       hx::ExitGCFreeZone();
+      if( seconds == 0 && err == ENOPROTOOPT )
+         return;
+      #else
+      hx::ExitGCFreeZone();
+      #endif
       hx::Throw(HX_CSTRING("Could not set socket timeout"));
    }
    hx::ExitGCFreeZone();

@@ -1,0 +1,4 @@
+empty zero wait fails: true
+empty finite wait times out: true
+released finite wait succeeds: true
+permit consumed: true

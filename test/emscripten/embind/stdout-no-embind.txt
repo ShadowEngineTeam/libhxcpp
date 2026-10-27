@@ -1,0 +1,2 @@
+exception caught: true
+strings kept: true

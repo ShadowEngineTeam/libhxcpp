@@ -55,8 +55,6 @@ RegexpFailedSubjectRetention: threads (std::thread, which needs a pthreads build
 RegexpObsoleteSubject: threads (std::thread, which needs a pthreads build)
 RegisterHeldRoots: threads
 RootWalkRace: threads (std::thread, which needs a pthreads build)
-SemaphoreCollected: Semaphore is unsupported in single-threaded Emscripten builds (libhxcpp #334)
-SemaphoreLargeCount: Semaphore is unsupported in single-threaded Emscripten builds (libhxcpp #334)
 SemaphoreLoopCollect: threads
 SocketEmptyBytes: sockets
 SocketIpv6Accept: sockets

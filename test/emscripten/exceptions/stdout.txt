@@ -1,0 +1,4 @@
+20 of 20 payloads intact
+4000 of 4000 caller locals kept
+string caught: true
+outer catch took the Int: true

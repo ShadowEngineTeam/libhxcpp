@@ -1,0 +1,8 @@
+case 0 echo=1 freed=1 len=1 wide=1 strlen=1
+case 1 echo=1 freed=1 len=1 wide=1 strlen=1
+case 2 echo=1 freed=1 len=1 wide=1 strlen=1
+case 3 echo=1 freed=1 len=1 wide=1 strlen=1
+nested kept=1
+mult=1
+null="" number="42"
+prefix=1
