@@ -5473,7 +5473,8 @@ struct ArrayDef : public CppiaDynamicExpr
                compiler->move(sJitTemp1.star(jtPointer)+i*sizeof(void *), sJitTemp0.as(jtPointer));
                #ifdef HXCPP_GC_GENERATIONAL
                compiler->move(sJitTemp2, array);
-               genWriteBarrier(compiler, sJitTemp2, sJitTemp0 );
+               // Typed, since the barrier cannot move an untyped register
+               genWriteBarrier(compiler, sJitTemp2, sJitTemp0.as(jtPointer) );
                #endif
                break;
             case arrBool:

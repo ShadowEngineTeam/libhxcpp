@@ -1,0 +1,4 @@
+jit false: the module loads: true
+jit false: the array keeps its items: true
+jit true: the module loads: true
+jit true: the array keeps its items: true
