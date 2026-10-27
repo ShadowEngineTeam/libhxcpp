@@ -73,7 +73,13 @@ struct result : public hx::Object
          names[i] = String::create(sqlite3_column_name(r,i));
          for(int j=0;j<i;j++)
             if( names[j] == names[i] )
+            {
+               // Finalize the statement first, as neko does. Left to the
+               //  collector, it kept the connection from closing: close threw
+               //  "Sqlite: could not close" until this result was collected
+               destroy(false);
                hx::Throw(HX_CSTRING("Error, same field is two times in the request ") + sql);
+            }
 
          const char *dtype = sqlite3_column_decltype(r,i);
          bools[i] = dtype?(strcmp(dtype,"BOOL") == 0):0;

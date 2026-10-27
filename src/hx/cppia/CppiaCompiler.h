@@ -31,7 +31,7 @@
 // A const char * or std::exception becomes a String, as the interpreter's
 // Module.boot and run make it.
 #define TRY_NATIVE try {
-#define CATCH_NATIVE } catch(Dynamic e) {  CppiaCtx::getCurrent()->exception = e.mPtr ? e.mPtr : Dynamic(String("",0)).mPtr; } \
+#define CATCH_NATIVE } catch(Dynamic e) {  CppiaCtx::getCurrent()->exception = hx::toPendingException(e.mPtr); } \
    catch(const char *e) { CppiaCtx::getCurrent()->exception = Dynamic(String(e)).mPtr; } \
    catch(const std::exception &e) { CppiaCtx::getCurrent()->exception = Dynamic(String(e.what())).mPtr; }
 

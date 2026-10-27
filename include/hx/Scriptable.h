@@ -199,6 +199,13 @@ void __scriptable_load_neko(String inName);
 void __scriptable_load_cppia(String inCode);
 ::hx::CppiaLoadedModule __scriptable_cppia_from_string(String inCode);
 ::hx::CppiaLoadedModule __scriptable_cppia_from_data(Array<unsigned char> inBytes);
+// Teaches the cppia loader another script format. A script given to
+// __scriptable_cppia_from_data or _from_string (Module.fromData and fromString,
+// so Host.runFile too) that starts with inMagic, and not with CPPIA or CPPIB,
+// goes to inTranslate as bytes, and the cppia that returns is loaded in its
+// place: text as a String, or text or binary cppia as bytes. Registering a
+// magic again replaces its translator, and null removes the format
+void __scriptable_cppia_register_format(String inMagic, Dynamic inTranslate);
 void __scriptable_load_neko_bytes(Array<unsigned char> inBytes);
 void __scriptable_load_abc(Array<unsigned char> inBytes);
 // Modules whose native memory has not been freed yet
@@ -214,6 +221,16 @@ bool __scriptable_cppia_jit_active();
 // scripts. A module with a "__cppia_host" resource loads only into the host
 // whose fingerprint that resource holds
 String __scriptable_host_fingerprint();
+// Sets the size in bytes of the script stack, which holds script frames, for
+// threads that attach from now on and for the calling thread if no script frame
+// is on it (docs/ThreadsAndStacks.md). The size starts at HXCPP_CPPIA_STACK_SIZE,
+// 128 KB by default
+void __scriptable_cppia_set_stack_size(int inBytes);
+// The size of the calling thread's script stack
+int __scriptable_cppia_stack_size();
+// Defined where the two calls above exist, for hosts that build against older
+// runtimes too
+#define HXCPP_CPPIA_STACK_SIZE_API 1
 
 #define HX_SCRIPTABLE_REGISTER_INTERFACE(name,class) \
    ::hx::ScriptableRegisterInterface( HX_CSTRING(name), __scriptableFunctions, & class##_scriptable )

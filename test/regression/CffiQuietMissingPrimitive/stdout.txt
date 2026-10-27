@@ -1,0 +1,6 @@
+a quiet lookup of a primitive the library lacks gives null: true
+a quiet lookup of a query function the library lacks gives null: true
+a quiet lookup of a primitive nothing registered gives null: true
+a lookup that is not quiet gives null for a primitive the library lacks: true
+a quiet lookup finds a primitive the library has: true
+the primitive found runs: true

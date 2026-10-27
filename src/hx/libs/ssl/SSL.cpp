@@ -710,7 +710,7 @@ int _hx_ssl_recv( Dynamic hssl, Array<unsigned char> buf, int p, int l ) {
 		hx::Throw( HX_CSTRING("ssl_recv") );
 	}
 	if( dlen > 0 )
-		memcpy( &buf[0] + p, tmp, dlen );
+		memcpy( buf->GetBase() + p, tmp, dlen );
 	return dlen;
 }
 
@@ -1216,6 +1216,9 @@ Dynamic _hx_ssl_cert_add_pem( Dynamic hcert, String data ){
 	return cert;
 }
 
+// The bytes of a Haxe buffer for mbedTLS to read. &buf[0] grew an empty array
+//  to one zero byte, which an empty message was then hashed as, and changed
+//  the caller's Bytes; an empty array gives a null pointer, with length 0
 Dynamic _hx_ssl_cert_add_der( Dynamic hcert, Array<unsigned char> buf ){
 	// A null certificate starts a new chain
 	sslcert *cert = hcert.mPtr ? val_cert(hcert) : 0;

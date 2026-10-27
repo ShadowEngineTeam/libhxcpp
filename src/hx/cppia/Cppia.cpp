@@ -31,6 +31,9 @@ namespace hx
 
 bool gEnableJit = false;
 
+// Outside the collected heap, and no value a script throws can be it
+hx::Object *const gThrownNull = new (hx::NewObjConst) hx::Object();
+
 
 #ifdef DEBUG_RETURN_TYPE
 int gLastRet = etVoid;
@@ -6872,13 +6875,13 @@ struct TryExpr : public CppiaVoidExpr
          return;
       }
       if (ctx->exception)
-         handleException(ctx,ctx->exception);
+         handleException(ctx, fromPendingException(ctx->exception));
    }
 
    #ifdef CPPIA_JIT
    static int SLJIT_CALL isExceptionCatch(hx::Object *exception, TypeData *inType)
    {
-      if (!inType->isClassOf(exception))
+      if (!inType->isClassOf(fromPendingException(exception)))
          return 0;
       HX_STACK_BEGIN_CATCH
       return 1;
@@ -6901,17 +6904,20 @@ struct TryExpr : public CppiaVoidExpr
          for(int i=0;i<thisThrown.size();i++)
             compiler->comeFrom(thisThrown[i]);
 
+         JitVal exception = sJitCtx.star(jtPointer, offsetof(hx::StackContext, exception));
          for(int i=0;i<catches.size();i++)
          {
             Catch &c = catches[i];
-            compiler->callNative( (void *)isExceptionCatch, sJitCtx.star(jtPointer,offsetof(hx::StackContext,exception)), c.type );
+            compiler->callNative((void *)isExceptionCatch, exception, c.type);
             JumpId notThisOne = compiler->compare(cmpI_EQUAL, sJitReturnReg, (int)0);
 
-            // Exception is this type
+            // Exception is this type, and a thrown null binds as null
+            JumpId notNull = compiler->compare(cmpP_NOT_EQUAL, exception, (void *)gThrownNull);
+            compiler->move(exception, (void *)0);
+            compiler->comeFrom(notNull);
             ExprType type = c.var.expressionType;
-            compiler->convert( sJitCtx.star(jtPointer,offsetof(hx::StackContext,exception)), etObject,
-                              JitFramePos(c.var.stackPos,getJitType(type)), type );
-            compiler->move(sJitCtx.star(jtPointer,offsetof(hx::StackContext,exception)),(void *)0);
+            compiler->convert(exception, etObject, JitFramePos(c.var.stackPos, getJitType(type)), type);
+            compiler->move(exception, (void *)0);
 
             c.body->genCode(compiler, inDest, destType);
 
@@ -7379,7 +7385,12 @@ struct ThrowExpr : public CppiaVoidExpr
    #ifdef CPPIA_JIT
    void genCode(CppiaCompiler *compiler, const JitVal &inDest, ExprType destType) HXCPP_OVERRIDE
    {
-      value->genCode(compiler, sJitCtx.star(jtPointer, offsetof(hx::StackContext,exception)), etObject);
+      JitVal exception = sJitCtx.star(jtPointer, offsetof(hx::StackContext, exception));
+      value->genCode(compiler, exception, etObject);
+      // 0 there would mean nothing was thrown
+      JumpId notNull = compiler->notNull(exception);
+      compiler->move(exception, (void *)gThrownNull);
+      compiler->comeFrom(notNull);
       #ifdef HXCPP_STACK_TRACE
       compiler->callNative( (void *)jitSetLastException );
       #endif

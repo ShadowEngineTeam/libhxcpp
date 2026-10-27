@@ -7,13 +7,18 @@
 AnonConcurrentString: threads
 ArrayConcurrentString: threads
 AttachedThreadId: threads (std::thread, which needs a pthreads build)
+CffiNekoNullBoolWithoutInit: runs neko, which loads an ndll the test builds
+CffiNekoValueTags: runs neko, which loads an ndll the test builds
 CffiPrimeUnicodeFallback: loads an ndll it builds, and Emscripten links statically
+CffiQuietMissingPrimitive: loads an ndll it builds, and Emscripten links statically
 CppiaArrayAccess: its host is the first --next section, which -D emscripten does not reach
 CppiaBreakpoints: threads
 CppiaHostArgs: processes
 CppiaHostMismatch: checks jitted code, and Emscripten has no cppia JIT
 CppiaModuleFree: threads
 CppiaModuleRetained: threads
+CppiaJitThrowNull: its host is the first --next section, which -D emscripten does not reach
+CppiaStackSize: threads (std::thread, which needs a pthreads build)
 ExitWithBusyWorker: processes and threads
 FileFinalizerFlush: threads (std::thread, which needs a pthreads build)
 FinalizerExceptionState: threads (std::thread, which needs a pthreads build)
@@ -80,6 +85,7 @@ SocketTinyTimeout: sockets
 SqliteNativeMemoryPressure: threads (std::thread, which needs a pthreads build)
 SqliteResultConnectionLifetime: threads (std::thread, which needs a pthreads build)
 SslClosedState: sockets
+SslEmptyBuffers: sockets
 SslErrorCodes: sockets
 SslNativeMemoryPressure: threads (std::thread, which needs a pthreads build)
 SslPeerCertificateLifetime: sockets
@@ -90,6 +96,7 @@ ThreadEndsAtExitDebugger: threads
 ThreadEndsWhileCollecting: threads
 ThreadWaitTimeouts: threads
 TimerStampFirstCall: threads
+UncaughtNullException: processes (runs itself)
 WeakAdapterDepth: threads (std::thread, which needs a pthreads build)
 WeakMapIndirectChain: threads (std::thread, which needs a pthreads build)
 WeakMapSparseCapacity: threads (std::thread, which needs a pthreads build)

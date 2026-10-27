@@ -1,0 +1,14 @@
+a stream asking for a preset dictionary reports what it read: true
+its adler32 is the dictionary's id: true
+calling it again, which can make no progress, throws: true
+Uncompress.run on it throws: true
+a stream without a dictionary still inflates: true
+crc32 of 123456789: true
+adler32 of 123456789: true
+checksums continue across pieces: true
+checksums of a range: true
+checksums match haxe.crypto: true
+nothing leaves a checksum as it was: true
+a range outside the bytes is refused: true
+a stream's adler32 is its data's: true
+a closed stream is refused: true
