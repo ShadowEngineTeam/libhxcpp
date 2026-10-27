@@ -1232,39 +1232,50 @@ void CppiaClassInfo::linkTypes()
    {
       // Calculate table offsets...
       DBGLOG("  base haxe size %s = %d\n", haxeBase->name.c_str(), classSize);
-      for(int i=0;i<memberVars.size();i++)
+      // Fields are aligned to their types, so they are laid out from the
+      // widest alignment down: in declaration order an Int between two
+      // pointers would leave a gap after it, and make the object larger
+      int widest = std::max( TypeAlignment(etFloat), TypeAlignment(etString) );
+      widest = std::max( widest, TypeAlignment(etObject) );
+      for(int align=widest;align>0;align>>=1)
       {
-         if (memberVars[i]->offset)
+         for(int i=0;i<memberVars.size();i++)
          {
-            DBGLOG("   super var %s @ %d\n", cppia.identStr(memberVars[i]->nameId), memberVars[i]->offset);
+            if (memberVars[i]->offset)
+            {
+               if (align==widest)
+                  DBGLOG("   super var %s @ %d\n", cppia.identStr(memberVars[i]->nameId), memberVars[i]->offset);
+            }
+            else if (memberVars[i]->fieldAlignment(cppia)==align ||
+                     (align==widest && memberVars[i]->fieldAlignment(cppia)==0))
+            {
+               DBGLOG("   link var %s @ %d\n", cppia.identStr(memberVars[i]->nameId), classSize);
+               memberVars[i]->linkVarTypes(cppia,classSize);
+               containsPointers = containsPointers || memberVars[i]->hasPointer();
+            }
          }
-         else
+         for(int i=0;i<dynamicFunctions.size();i++)
          {
-            DBGLOG("   link var %s @ %d\n", cppia.identStr(memberVars[i]->nameId), classSize);
-            memberVars[i]->linkVarTypes(cppia,classSize);
-            containsPointers = containsPointers || memberVars[i]->hasPointer();
+            containsPointers = true;
+            if (dynamicFunctions[i]->offset)
+            {
+               if (align==widest)
+                  DBGLOG("   super dynamic function %s @ %d\n", cppia.identStr(dynamicFunctions[i]->nameId), dynamicFunctions[i]->offset);
+            }
+            else if (dynamicFunctions[i]->fieldAlignment(cppia)==align)
+            {
+               DBGLOG("   link dynamic function %s @ %d\n", cppia.identStr(dynamicFunctions[i]->nameId), classSize);
+               dynamicFunctions[i]->linkVarTypes(cppia,classSize);
+            }
          }
-      }
-      for(int i=0;i<dynamicFunctions.size();i++)
-      {
-         containsPointers = true;
-         if (dynamicFunctions[i]->offset)
-         {
-            DBGLOG("   super dynamic function %s @ %d\n", cppia.identStr(dynamicFunctions[i]->nameId), dynamicFunctions[i]->offset);
-         }
-         else
-         {
-            DBGLOG("   link dynamic function %s @ %d\n", cppia.identStr(dynamicFunctions[i]->nameId), classSize);
-            dynamicFunctions[i]->linkVarTypes(cppia,classSize);
-         }
-      }
 
-      if (dynamicMapOffset==-1)
-      {
-         AlignOffset(etObject, classSize);
-         dynamicMapOffset = classSize;
-         classSize += sizeof( hx::FieldMap * );
-         containsPointers = true;
+         if (dynamicMapOffset==-1 && align==TypeAlignment(etObject))
+         {
+            AlignOffset(etObject, classSize);
+            dynamicMapOffset = classSize;
+            classSize += sizeof( hx::FieldMap * );
+            containsPointers = true;
+         }
       }
 
       extraData = classSize - haxeBase->mDataOffset;
@@ -2085,6 +2096,14 @@ void  linkCppiaClass(hx::Class_obj *inClass, CppiaModule &cppia, String inName)
    ((CppiaClass *)inClass)->linkClass(cppia,inName);
 }
 
+
+// The script class a class object stands for, or 0 for a host class or any
+// other object
+CppiaClassInfo *getScriptClassInfo(hx::Object *inClass)
+{
+   CppiaClass *cls = dynamic_cast<CppiaClass *>(inClass);
+   return cls ? cls->info : 0;
+}
 
 int getScriptId(hx::Class inClass)
 {

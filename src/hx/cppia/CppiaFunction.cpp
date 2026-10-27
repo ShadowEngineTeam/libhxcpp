@@ -1086,6 +1086,20 @@ hx::Object *createMemberClosure(hx::Object *inThis, ScriptCallable *inFunction)
    return new (sizeof(hx::Object *)) CppiaClosure(inThis,inFunction);
 }
 
+// The script function a bound method, or a closure with an object or captured
+// variables, runs; 0 for any other object. A static function used as a value
+// is left out: the module keeps one of those for each, so it says nothing about
+// what else holds the module
+ScriptCallable *getClosureFunction(hx::Object *inObj)
+{
+   CppiaClosure *closure = dynamic_cast<CppiaClosure *>(inObj);
+   // The captured area always holds this, so a closure with nothing else in it
+   // and a null this is a static function
+   if (!closure || (!*closure->getThis() && closure->function->captureSize <= (int)sizeof(hx::Object *)))
+      return 0;
+   return closure->function;
+}
+
 
 
 

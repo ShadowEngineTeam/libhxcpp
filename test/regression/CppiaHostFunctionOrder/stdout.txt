@@ -1,0 +1,4 @@
+jit false: ClientSprite runs its oninit once, then update_sprite and draw each frame: true
+jit false: ClientSpriteReordered runs its oninit once, then update_sprite and draw each frame: true
+jit true: ClientSprite runs its oninit once, then update_sprite and draw each frame: true
+jit true: ClientSpriteReordered runs its oninit once, then update_sprite and draw each frame: true

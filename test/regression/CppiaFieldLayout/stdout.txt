@@ -1,0 +1,6 @@
+jit false: counted: true
+jit false: field order costs no space: true
+jit false: fields read back: true
+jit true: counted: true
+jit true: field order costs no space: true
+jit true: fields read back: true

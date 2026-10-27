@@ -1,0 +1,11 @@
+--main Script
+-cppia bin/plain.cppia
+--next
+--main Script
+-resource placeholder.txt@__cppia_host
+-cppia bin/required.cppia
+--next
+--main Main
+-cpp bin
+-D scriptable
+--dce no

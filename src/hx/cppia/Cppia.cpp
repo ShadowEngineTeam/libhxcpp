@@ -1848,8 +1848,10 @@ struct CallHaxe : public CppiaExpr
    ExprType returnType;
    bool   isStatic;
    bool   isSuper;
+   // The class the script found the function on, to name it if it cannot link
+   String className;
 
-   CallHaxe(CppiaExpr *inSrc,ScriptNamedFunction inFunction, CppiaExpr *inThis, Expressions &ioArgs, bool inIsStatic=false, bool inIsSuper = false )
+   CallHaxe(CppiaExpr *inSrc,ScriptNamedFunction inFunction, CppiaExpr *inThis, Expressions &ioArgs, bool inIsStatic=false, bool inIsSuper = false, String inClassName = String() )
        : CppiaExpr(inSrc)
    {
       args.swap(ioArgs);
@@ -1857,12 +1859,28 @@ struct CallHaxe : public CppiaExpr
       function = inFunction;
       isStatic = inIsStatic;
       isSuper = inIsSuper;
+      className = inClassName;
    }
    ExprType getType() HXCPP_OVERRIDE { return returnType; }
    CppiaExpr *link(CppiaModule &inModule) HXCPP_OVERRIDE
    {
-      if (strlen(function.signature) != args.size()+1)
-         throw "CallHaxe: Invalid arg count";
+      int hostArgs = (int)strlen(function.signature) - 1;
+      if (hostArgs != args.size())
+      {
+         // A script built against another version of the host: name the
+         // function with the other things the module is missing
+         std::string what = isStatic ? "static function " : "";
+         if (className.raw_ptr())
+            what += std::string(className.utf8_str()) + ".";
+         what += function.name ? function.name : "?";
+         what += " with " + std::to_string(args.size()) + " argument" + (args.size()==1 ? "" : "s") +
+                 ": the host's takes " + std::to_string(hostArgs);
+         inModule.linkMiss(this, what);
+         if (thisExpr)
+            thisExpr = thisExpr->link(inModule);
+         LinkExpressions(args,inModule);
+         return this;
+      }
       for(int i=0;i<args.size()+1;i++)
       {
          switch(function.signature[i])
@@ -2085,7 +2103,7 @@ struct CallStatic : public CppiaExpr
          if (func.signature)
          {
             //CPPIALOG(" found function %s\n", func.signature );
-            replace = new CallHaxe( this, func, 0, args, true );
+            replace = new CallHaxe( this, func, 0, args, true, false, type->name );
          }
          else
          {
@@ -2122,9 +2140,14 @@ struct CallStatic : public CppiaExpr
 
 #ifdef CPPIA_JIT
 static hx::Object *nullException = 0;
+// HXCPP_CATCH_SEGV turns a null access into an exception thrown from the
+// fault handler, but that exception cannot unwind through jitted frames, which
+// have no unwind information: it ended the process, on macOS with "terminating
+// due to uncaught exception of type Dynamic". So jitted code checks for null
+// itself there too.
 void genNullReferenceExceptionCheck(CppiaCompiler *compiler, const JitVal &reg)
 {
-   #ifdef HXCPP_CHECK_POINTER
+   #if defined(HXCPP_CHECK_POINTER) || defined(HXCPP_CATCH_SEGV)
    if (!nullException)
       nullException = (HX_CSTRING("Null Object Reference")).makePermanentObject();
 
@@ -3536,7 +3559,7 @@ struct CallMember : public CppiaExpr
                if (!strcmp(nativeInterfaceFuncs[i]->name,field.utf8_str()))
                {
                   //CPPIALOG(" found native interface function %s\n", field.out_str() );
-                  replace = new CallHaxe( this, *nativeInterfaceFuncs[i], thisExpr, args );
+                  replace = new CallHaxe( this, *nativeInterfaceFuncs[i], thisExpr, args, false, false, type->name );
                   break;
                }
             }
@@ -3551,7 +3574,7 @@ struct CallMember : public CppiaExpr
                CPPIALOG("Warning - calling super host '%s' from cppia can lead to infinte recursion\n", field.utf8_str());
 
             //CPPIALOG(" found function %s\n", func.signature );
-            replace = new CallHaxe( this, func, thisExpr, args, false, callSuperField && func.superExecute);
+            replace = new CallHaxe( this, func, thisExpr, args, false, callSuperField && func.superExecute, type->name);
          }
       }
 
@@ -3561,7 +3584,7 @@ struct CallMember : public CppiaExpr
          if (func.signature)
          {
             //CPPIALOG(" found function %s\n", func.signature );
-            replace = new CallHaxe( this, func, thisExpr, args );
+            replace = new CallHaxe( this, func, thisExpr, args, false, false, type->name );
          }
       }
 
@@ -5450,7 +5473,8 @@ struct ArrayDef : public CppiaDynamicExpr
                compiler->move(sJitTemp1.star(jtPointer)+i*sizeof(void *), sJitTemp0.as(jtPointer));
                #ifdef HXCPP_GC_GENERATIONAL
                compiler->move(sJitTemp2, array);
-               genWriteBarrier(compiler, sJitTemp2, sJitTemp0 );
+               // Typed, since the barrier cannot move an untyped register
+               genWriteBarrier(compiler, sJitTemp2, sJitTemp0.as(jtPointer) );
                #endif
                break;
             case arrBool:

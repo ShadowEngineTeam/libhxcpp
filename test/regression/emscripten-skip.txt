@@ -10,7 +10,10 @@ AttachedThreadId: threads (std::thread, which needs a pthreads build)
 CffiPrimeUnicodeFallback: loads an ndll it builds, and Emscripten links statically
 CppiaArrayAccess: its host is the first --next section, which -D emscripten does not reach
 CppiaBreakpoints: threads
+CppiaHostArgs: processes
+CppiaHostMismatch: checks jitted code, and Emscripten has no cppia JIT
 CppiaModuleFree: threads
+CppiaModuleRetained: threads
 ExitWithBusyWorker: processes and threads
 FinalizerExceptionState: threads (std::thread, which needs a pthreads build)
 FinalizersAcrossFreeZones: threads

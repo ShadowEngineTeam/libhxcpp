@@ -1,0 +1,5 @@
+a script run alone sees no arguments: true
+a script sees the arguments after it: true
+a -jit before the script is the host's: true
+a -jit after the script is the script's too: true
+-fingerprint prints 16 hex digits: true

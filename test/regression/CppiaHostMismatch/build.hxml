@@ -1,0 +1,22 @@
+-cp host
+--main Main
+-cpp bin
+-D scriptable
+-D dll_export=bin/host.info
+-D HXCPP_CATCH_SEGV
+--dce no
+--next
+-cp stale
+--main ArgCount
+-D dll_import=bin/host.info
+-cppia bin/argcount.cppia
+--next
+-cp host
+--main NativeThrow
+-D dll_import=bin/host.info
+-cppia bin/nativethrow.cppia
+--next
+-cp host
+--main NullField
+-D dll_import=bin/host.info
+-cppia bin/nullfield.cppia

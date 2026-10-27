@@ -7,11 +7,16 @@ namespace hx
 
 static int sTypeSize[] = { 0, 0, sizeof(hx::Object *), sizeof(String), sizeof(Float), sizeof(int) };
 
+int TypeAlignment(ExprType type)
+{
+   return type==etInt ? (int)alignof(int) :
+          type==etFloat ? (int)alignof(Float) :
+          type==etString ? (int)alignof(String) : (int)alignof(hx::Object *);
+}
+
 void AlignOffset(ExprType type, int &ioOffset)
 {
-   int align = type==etInt ? (int)alignof(int) :
-               type==etFloat ? (int)alignof(Float) :
-               type==etString ? (int)alignof(String) : (int)alignof(hx::Object *);
+   int align = TypeAlignment(type);
    ioOffset = (ioOffset + align - 1) & ~(align - 1);
 }
 
@@ -184,6 +189,14 @@ void CppiaVar::linkVarTypes(CppiaModule &cppia, int &ioOffset)
 
       ioOffset += sTypeSize[exprType];
    }
+}
+
+// What linkVarTypes will align the field to, or 0 when it takes no space
+int CppiaVar::fieldAlignment(CppiaModule &cppia)
+{
+   if (isVirtual)
+      return 0;
+   return TypeAlignment(typeId==0 ? etObject : cppia.types[typeId]->expressionType);
 }
 
 void CppiaVar::createDynamic(hx::Object *inBase)

@@ -1,0 +1,12 @@
+--main Script
+-cppia bin/script.cppia
+--next
+-cp ../../../project/cppia
+--main Cppia
+-cpp bin/host
+-D scriptable
+-D dll_export=
+--dce no
+--next
+--main Main
+-cpp bin

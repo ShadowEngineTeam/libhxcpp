@@ -1,0 +1,5 @@
+jit false: a call with the wrong argument count fails to load, naming it: true
+jit false: a const char * thrown by native code reaches the host: true
+jit true: a call with the wrong argument count fails to load, naming it: true
+jit true: a const char * thrown by native code reaches the host: true
+jit true: a null field read reaches the host: true

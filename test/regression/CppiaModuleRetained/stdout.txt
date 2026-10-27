@@ -1,0 +1,10 @@
+jit false: the released module is listed while held: true
+jit false: its live instances are the three Things held: true
+jit false: its closures are the bound method and the closure held: true
+jit false: what is held still works: true
+jit false: once dropped it is freed and not listed: true
+jit true: the released module is listed while held: true
+jit true: its live instances are the three Things held: true
+jit true: its closures are the bound method and the closure held: true
+jit true: what is held still works: true
+jit true: once dropped it is freed and not listed: true
