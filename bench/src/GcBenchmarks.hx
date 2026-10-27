@@ -247,6 +247,29 @@ class GcRememberedBurst extends Benchmark {
 }
 
 /**
+	250,000 new objects given IDs, dropped, and a full collection, in each
+	round: the tables grow again after each collection gives their storage
+	back (libhxcpp #379).
+**/
+class GcObjectIdBurst extends Benchmark {
+	static inline var N = 250000;
+
+	public function new() {
+		super("gc_object_id_burst", "objects", N);
+	}
+
+	override public function run():Int {
+		var sum = 0;
+		var objects = [for (i in 0...N) new GcKey(i)];
+		for (o in objects)
+			sum = (sum + (untyped __global__.__hxcpp_obj_id(o) >= 0 ? 1 : 0)) | 0;
+		objects = null;
+		cpp.vm.Gc.run(true);
+		return sum;
+	}
+}
+
+/**
 	65,536 retained 4 KB buffers, with twelve raw pointers into them on the stack
 	while the collections run, so the stack scan looks them up (libhxcpp #365).
 **/

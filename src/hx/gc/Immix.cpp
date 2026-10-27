@@ -3171,6 +3171,47 @@ static void UpdateWeakRefs(WeakRefs &inList, WeakRefs *inOld)
    }
 }
 
+// Gives back what a vector holds beyond four times what it uses
+template<typename T>
+static void ShrinkQuickVec(hx::QuickVec<T> &ioVec)
+{
+   if (ioVec.mAlloc > 1024 && ioVec.mAlloc/4 > ioVec.size())
+   {
+      size_t alloc = 10 + ioVec.size()*3/2;
+      T *ptr = static_cast<T*>(realloc(ioVec.mPtr, alloc*sizeof(T)));
+      if (ptr)
+      {
+         ioVec.mPtr = ptr;
+         ioVec.mAlloc = alloc;
+      }
+   }
+}
+
+// After a burst of IDs whose objects died, the tables kept the storage of
+//  their peak: a million left 13 MB of vectors and a million hash buckets
+//  (libhxcpp #379). The unused IDs at the top of the range are dropped, with
+//  their slots, and storage far beyond what is left goes back. Live objects
+//  keep their IDs; one in the middle keeps the free IDs below it
+static void TrimObjectIds()
+{
+   size_t slots = sIdObjectMap.size();
+   while(slots>0 && !sIdObjectMap[slots-1])
+      slots--;
+   if (slots<sIdObjectMap.size())
+   {
+      sIdObjectMap.setSize(slots);
+      int kept = 0;
+      for(int i=0;i<sFreeObjectIds.size();i++)
+         if (sFreeObjectIds[i]<(int)slots)
+            sFreeObjectIds[kept++] = sFreeObjectIds[i];
+      sFreeObjectIds.setSize(kept);
+   }
+   ShrinkQuickVec(sIdObjectMap);
+   ShrinkQuickVec(sFreeObjectIds);
+   if (sObjectIdMap.bucket_count() > 1024 && sObjectIdMap.bucket_count()/4 > sObjectIdMap.size())
+      ObjectIdMap(sObjectIdMap.begin(), sObjectIdMap.end()).swap(sObjectIdMap);
+}
+
 // inMinor: a minor collection, which leaves the old entries alone
 void RunFinalizers(bool inMinor)
 {
@@ -3233,6 +3274,7 @@ void RunFinalizers(bool inMinor)
       }
    }
    else
+   {
       for(ObjectIdMap::iterator i=sObjectIdMap.begin(); i!=sObjectIdMap.end(); )
       {
          ObjectIdMap::iterator next = i;
@@ -3249,6 +3291,8 @@ void RunFinalizers(bool inMinor)
 
          i = next;
       }
+      TrimObjectIds();
+   }
    sYoungObjectIds.clear();
 
    for(int i=0;i<sWeakHashList.size();    )

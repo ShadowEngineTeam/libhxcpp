@@ -2,6 +2,7 @@
 libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
+* Full collections give back the object ID tables' storage once the IDs' objects have died: the unused IDs at the top of the range are dropped and storage far beyond what is left is freed. After a million IDs whose objects died, about 13 MB of vectors and a million hash buckets stayed allocated (libhxcpp #379)
 * The collector keeps 256 spare marking chunks and frees half of the rest in each full collection, at most 1,024, where it kept every chunk it ever made: after a million old objects each took a young child, about 9,600 chunks, 4.7 MB, stayed allocated for the rest of the process (libhxcpp #374)
 * A collection whose roots and stacks leave nothing to mark no longer wakes and joins every marking thread to find that out: an idle minor collection with HXCPP_GC_GENERATIONAL took about 0.02 ms, almost all of it the workers, and takes about 0.005 ms (libhxcpp #377)
 * A full or minor collection after many finalizers were registered no longer rebuilds each surviving registration's table entry to move it to the old table: the larger table keeps its entries and the smaller one is copied in. A full collection after 125,000 objects were given finalizers again took 34 to 42 ms, and takes 10 to 12 ms (libhxcpp #375)
