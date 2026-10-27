@@ -1,0 +1,4 @@
+large negative seek after readByte is rejected: true
+rejected seek keeps the position: true
+large negative seek after readBytes is rejected: true
+valid relative seek preserves byte and position: true

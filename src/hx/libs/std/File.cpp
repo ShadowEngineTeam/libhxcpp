@@ -488,14 +488,24 @@ void _hx_std_file_seek( Dynamic handle, int pos, int kind )
 {
    fio *f = getFio(handle);
    AheadLock lock(f);
+   // The stream is past the bytes read ahead, so a relative seek takes them
+   // back too: in 64 bits, as an int wrapped a large backward seek into a
+   // forward one
+   long long offset = pos;
    if (kind == SEEK_CUR)
-      pos -= lock.unread();
-   f->aheadPos = f->aheadLen = 0;
-   f->aheadAtEnd = false;
+      offset -= lock.unread();
    hx::EnterGCFreeZone();
-   if( fseek(f->io,pos,kind) != 0 )
+   #ifdef NEKO_WINDOWS
+   int failed = _fseeki64(f->io,offset,kind);
+   #else
+   int failed = (off_t)offset != offset || fseeko(f->io,(off_t)offset,kind);
+   #endif
+   // A failed seek leaves the stream, and so the bytes read ahead, as they were
+   if( failed )
       file_error("file_seek",f->name);
    hx::ExitGCFreeZone();
+   f->aheadPos = f->aheadLen = 0;
+   f->aheadAtEnd = false;
 }
 
 /**
