@@ -44,6 +44,7 @@ libhxcpp 6.0.0 (unreleased)
 * indexOf and lastIndexOf on typed arrays and Strings take an Int start position without boxing it, which allocated for every start past 255: searches that start each call from an offset are 2.9x faster (libhxcpp #307)
 * Fixed String.split and lastIndexOf, and indexOf between a byte and a wide string, comparing a long needle again at every position where its start matched, as indexOf on two strings of one encoding already no longer did: they now finish with a search that stays linear in the text. Splitting 1 MB of "a" on a near-miss 8,192-character delimiter takes 1.3 ms instead of 208 ms, and lastIndexOf 0.5 ms instead of 208 ms (libhxcpp #280)
 * Std.parseInt and Std.parseFloat no longer convert a whole UTF-16 string to UTF-8 to read the number at its start: only the ASCII before its first other character is copied, so a line of non-ASCII text after a number no longer costs its length. Parsing numbers at the start of such lines is 4.5x faster (libhxcpp #284)
+* Fixed Reflect.field, hasField, setField and deleteField with a string literal for the name scanning every field of an anonymous object before searching it by hash: the scan by address is now kept to objects of up to 40 fields, where it is faster. On a 256-field object those calls are 4.3x faster (libhxcpp #285)
 
 libhxcpp 6.0.0-rc.1
 ------------------------------------------------------------

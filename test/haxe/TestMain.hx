@@ -30,6 +30,7 @@ class TestMain #if nme extends nme.display.Sprite #end {
       runner.addCase(new TestInt64Hash());
       runner.addCase(new TestDynamicArray());
       runner.addCase(new TestSearch());
+      runner.addCase(new TestAnonFields());
       #if !nme
       runner.addCase(new file.TestFile());
       #end
@@ -87,6 +88,7 @@ class TestMain #if nme extends nme.display.Sprite #end {
          new TestInt64Hash(),
          new TestDynamicArray(),
          new TestSearch(),
+         new TestAnonFields(),
          new file.TestFile(),
          new native.TestFinalizer()
       ]);
