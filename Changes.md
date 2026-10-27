@@ -46,6 +46,7 @@ libhxcpp 6.0.0 (unreleased)
 * Fixed Sys.programPath on Windows giving the first 259 characters of an executable path longer than MAX_PATH as if it were the whole path: the path is now read into a buffer that grows until it fits (libhxcpp #354, HaxeFoundation/hxcpp#1352)
 * Fixed FileSystem.readDirectory returning the entries read so far, as if they were all of them, when the directory failed to read part way through: readdir's NULL, and FindNextFileW failing on Windows, were taken as the end. It now throws "Error reading directory" unless errno, or GetLastError's ERROR_NO_MORE_FILES on Windows, says the end was reached, after closing the directory (libhxcpp #348)
 * Fixed a negative cpp.Random seed giving a different sequence on Linux, macOS and other LP64 platforms than on Windows once the state refreshed, after 25 draws: the state was unsigned long, 64 bits there, so the seed set high bits that the refresh shifted into the result. The state is now 32 bits wide everywhere, giving the sequence Windows always has (libhxcpp #386)
+* Fixed sys.ssl.Digest.make, sign and verify growing an empty Bytes to one byte: they took the first element through the accessor that resizes the array, so the digest of an empty input could include that byte, and repeated calls on it gave another result. Empty data given to the other SSL functions, such as a certificate or key in DER, is no longer grown either (libhxcpp #384)
 
 libhxcpp 6.0.0-rc.1
 ------------------------------------------------------------
