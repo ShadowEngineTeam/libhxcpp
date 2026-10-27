@@ -11,6 +11,7 @@ CffiPrimeUnicodeFallback: loads an ndll it builds, and Emscripten links statical
 CppiaArrayAccess: its host is the first --next section, which -D emscripten does not reach
 CppiaBreakpoints: threads
 CppiaModuleFree: threads
+CppiaStackSize: threads (std::thread, which needs a pthreads build)
 ExitWithBusyWorker: processes and threads
 FinalizerExceptionState: threads (std::thread, which needs a pthreads build)
 FinalizersAcrossFreeZones: threads

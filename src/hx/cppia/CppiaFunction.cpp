@@ -600,8 +600,8 @@ void ScriptCallable::runFunction(CppiaCtx *ctx)
       if (stackSize)
       {
          // Unchecked, deep script recursion otherwise memsets straight
-         // past the fixed script stack into the heap
-         if (ctx->pointer + stackSize > ctx->stackEnd)
+         // past the script stack
+         if (ctx->pointer + stackSize > ctx->stackEnd && !ctx->growScriptStack(stackSize))
             hx::Throw( HX_CSTRING("Stack Overflow") );
          memset(ctx->pointer, 0 , stackSize );
          ctx->pointer += stackSize;
@@ -666,7 +666,7 @@ void ScriptCallable::addStackVarsSpace(CppiaCtx *ctx)
 {
    if (stackSize)
    {
-      if (ctx->pointer + stackSize > ctx->stackEnd)
+      if (ctx->pointer + stackSize > ctx->stackEnd && !ctx->growScriptStack(stackSize))
          hx::Throw( HX_CSTRING("Stack Overflow") );
       memset(ctx->pointer, 0 , stackSize );
       ctx->pointer += stackSize;

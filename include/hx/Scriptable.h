@@ -206,6 +206,16 @@ int __scriptable_cppia_live_modules();
 // Whether modules loaded now are compiled by the JIT: it is built in, enabled
 // with cpp.cppia.Host.enableJit, and can get executable memory on this platform
 bool __scriptable_cppia_jit_active();
+// Sets the size in bytes of the script stack, which holds script frames, for
+// threads that attach from now on and for the calling thread if no script frame
+// is on it (docs/ThreadsAndStacks.md). The size starts at HXCPP_CPPIA_STACK_SIZE,
+// 128 KB by default
+void __scriptable_cppia_set_stack_size(int inBytes);
+// The size of the calling thread's script stack
+int __scriptable_cppia_stack_size();
+// Defined where the two calls above exist, for hosts that build against older
+// runtimes too
+#define HXCPP_CPPIA_STACK_SIZE_API 1
 
 #define HX_SCRIPTABLE_REGISTER_INTERFACE(name,class) \
    ::hx::ScriptableRegisterInterface( HX_CSTRING(name), __scriptableFunctions, & class##_scriptable )
