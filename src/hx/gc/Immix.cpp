@@ -7719,7 +7719,9 @@ int __hxcpp_gc_trace(hx::Class inClass,bool inPrint)
        gCollectTrace = inClass.GetPtr();
        gCollectTraceCount = 0;
        gCollectTraceDoPrint = inPrint;
-       hx::InternalCollect(false,false);
+       // Major, so that every live instance is marked and counted: a minor
+       //  collection skips the old ones, which are marked already
+       hx::InternalCollect(true,false);
        gCollectTrace = 0;
        return gCollectTraceCount;
     #endif
