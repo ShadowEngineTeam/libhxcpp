@@ -14,6 +14,7 @@ CppiaModuleFree: threads
 ExitWithBusyWorker: processes and threads
 FinalizerExceptionState: threads (std::thread, which needs a pthreads build)
 FinalizersAcrossFreeZones: threads
+GcFreeZoneNestedGuard: single-threaded Emscripten builds have no GC-free zones, so a guard enters none
 GcHeapGrows: expects the desktop 20 MB working target; other platforms, Emscripten included, use 8 MB
 GcNativePressureBoundary: threads (std::thread, which needs a pthreads build)
 GcReleaseEmptyBlocks: threads

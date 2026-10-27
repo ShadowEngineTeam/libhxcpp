@@ -235,7 +235,9 @@ bool TryExitGCFreeZone();
 class HXCPP_EXTERN_CLASS_ATTRIBUTES AutoGCFreeZone
 {
 public:
-	AutoGCFreeZone() : locked(true) { EnterGCFreeZone(); }
+	// Leaves only a zone it entered, so a guard inside a zone its caller
+	// already entered keeps the caller's zone when it ends
+	AutoGCFreeZone() : locked(TryGCFreeZone()) { }
 	~AutoGCFreeZone() { if (locked) ExitGCFreeZone(); }
 	AutoGCFreeZone(const AutoGCFreeZone &) = delete;
 	AutoGCFreeZone &operator=(const AutoGCFreeZone &) = delete;
