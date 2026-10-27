@@ -1,0 +1,2 @@
+each census counts the retained class: true
+retained objects remain intact: true

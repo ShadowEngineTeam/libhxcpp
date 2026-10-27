@@ -330,11 +330,23 @@ struct CensusEntry
    size_t count;
    size_t bytes;
 };
-// Set while __hxcpp_gc_census collects; marking is then single-threaded
+// One __hxcpp_gc_census call, which the next full mark fills
+struct CensusRequest
+{
+   std::unordered_map<hx::Class_obj *,CensusEntry> counts;
+   // Stack values the census could not tell from raw memory, with whether
+   // each is a large allocation; they are marked after the precise marking
+   std::vector< std::pair<void *,bool> > deferred;
+   bool done = false;
+};
+// Census calls take turns, and the one whose turn it is waits here for a full
+//  mark to fill it. A competing collection can run first, so the mark takes
+//  the request rather than the call that asked
+static std::mutex *sgCensusLock = new std::mutex();
+static std::atomic<CensusRequest *> sgCensusRequest(nullptr);
+// Set while a mark fills a census request; marking is then single-threaded
 static bool sgCensus = false;
 static std::unordered_map<hx::Class_obj *,CensusEntry> *sgCensusCounts = 0;
-// Stack values a census collection could not tell from raw memory, with whether
-// each is a large allocation; they are marked after the precise marking
 static std::vector< std::pair<void *,bool> > *sgCensusDeferred = 0;
 
 #ifdef HXCPP_DEBUG
@@ -5120,8 +5132,15 @@ public:
 
 
       mMarker.init();
+      // Only a full mark reaches every live object
+      CensusRequest *census = inGenerational ? nullptr : sgCensusRequest.load();
+      sgCensus = census && !census->done;
       if (sgCensus)
+      {
+         sgCensusCounts = &census->counts;
+         sgCensusDeferred = &census->deferred;
          sgCensusCounts->clear();
+      }
 
       hx::MarkClassStatics(&mMarker);
       #if defined(HXCPP_SCRIPTABLE) && defined(HXCPP_GC_GENERATIONAL)
@@ -5216,6 +5235,14 @@ public:
       MarkWeakHashValues();
       hx::FindZombies(mMarker);
       MarkWeakHashValues();
+
+      if (sgCensus)
+      {
+         census->done = true;
+         sgCensus = false;
+         sgCensusCounts = 0;
+         sgCensusDeferred = 0;
+      }
 
       hx::RunFinalizers(inGenerational);
 
@@ -7746,15 +7773,23 @@ int __hxcpp_gc_trace(hx::Class inClass,bool inPrint)
 
 Dynamic __hxcpp_gc_census()
 {
-   std::unordered_map<hx::Class_obj *,CensusEntry> counts;
-   std::vector< std::pair<void *,bool> > deferred;
-   sgCensusCounts = &counts;
-   sgCensusDeferred = &deferred;
-   sgCensus = true;
-   hx::InternalCollect(true,false);
-   sgCensus = false;
-   sgCensusCounts = 0;
-   sgCensusDeferred = 0;
+   // Simultaneous calls replaced each other's counts, and one that found another
+   //  collection running returned with none (libhxcpp #363)
+   CensusRequest request;
+   {
+      {
+         hx::AutoGCFreeZone wait;
+         sgCensusLock->lock();
+      }
+      struct Turn
+      {
+         ~Turn() { sgCensusRequest = nullptr; sgCensusLock->unlock(); }
+      } turn;
+      sgCensusRequest = &request;
+      while(!request.done)
+         hx::InternalCollect(true,false);
+   }
+   std::unordered_map<hx::Class_obj *,CensusEntry> &counts = request.counts;
 
    std::vector< std::pair<hx::Class_obj *,CensusEntry> > sorted(counts.begin(), counts.end());
    std::sort(sorted.begin(), sorted.end(), [](const std::pair<hx::Class_obj *,CensusEntry> &a, const std::pair<hx::Class_obj *,CensusEntry> &b)
