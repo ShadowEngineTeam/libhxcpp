@@ -61,6 +61,8 @@ class Main {
   var i = dirs.length;
   while (i-- > 0)
    cleaned = removeDir(dirs[i]) && cleaned;
-  Sys.println("short-path control and fixture cleanup: " + (cleaned && list(".").indexOf("build.hxml") >= 0 && list("./").indexOf("Main.hx") >= 0));
+  // The program's own directory, as the runner starts it from elsewhere
+  var bin = haxe.io.Path.directory(Sys.programPath());
+  Sys.println("short-path control and fixture cleanup: " + (cleaned && list(bin).indexOf("Main.exe") >= 0 && list(bin + "/").indexOf("Main.exe") >= 0));
  }
 }
