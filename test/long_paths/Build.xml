@@ -1,0 +1,12 @@
+<xml>
+  <!-- A source named like a generic instance, whose object name the build
+       tool shortens so that it does not reach MAX_PATH first -->
+  <files id="main">
+    <file name="src/TimerTable_app_internal_system_timer_wheel__TimerWheel_WheelNode.cpp"/>
+  </files>
+
+  <target id="default" output="longname" tool="linker" toolid="exe">
+    <files id="main"/>
+    <outdir name="out"/>
+  </target>
+</xml>

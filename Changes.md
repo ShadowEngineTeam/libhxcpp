@@ -2,6 +2,7 @@
 libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
+* On Windows, a build with cl.exe warns when a source, generated header or object path reaches 260 characters, which MSVC cannot open even with long paths enabled and reports as missing, and says how to build through a short junction instead. Object file names longer than 48 characters are cut and hashed, so a generic instance's object path no longer reaches the limit before its source. Shorter generated file names need a Haxe change; docs/WindowsLongPaths.md has the details (libhxcpp #356)
 * Fixed a sys.thread.Deque keeping the storage a burst grew it to once it drained: a thread mailbox that once held a million messages held 8 MB for as long as it lived. A deque that drains now gives back storage above 16,384 messages (libhxcpp #316)
 * Sped up sys.thread.Deque.push, which adds at the front and moved every queued item for each push while holding the queue's lock, so filling a deque from the front was quadratic. 65,536 pushes and pops went from 489k to 4.73M messages a second, the rate of adding at the back (libhxcpp #317)
 * Sped up val_string on a boxed non-ASCII string, which converted the whole string to UTF-8 into a new buffer on every call. The box now keeps the first conversion: reading a boxed 65,536-character string 256 times went from 3.3k to 284M calls a second, and peak memory from 40 MB to 9 MB (libhxcpp #322)
