@@ -274,6 +274,12 @@ jobs:
       if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
       run: timeout 600 sh test/emscripten/run.sh
 
+    - name: Run the JS Prime CFFI tests
+      if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+      run: |
+        timeout 600 sh test/emscripten/cffi-js-prime/run-fields.sh
+        timeout 600 sh test/emscripten/cffi-js-prime/run-strings.sh
+
   check-haxelib:
     name: Check installing with haxelib
     strategy:

@@ -50,14 +50,40 @@ int __reg_##func = hx_register_prim(lib "_" #func "__" #nargs,(void *)(&func)); 
 
 #elif defined(HXCPP_JS_PRIME)
 
+// The strings val_string and val_wstring give a primitive last until it
+// returns: each call marks where its strings start, and frees them on the way
+// out, so a nested call frees only its own. Strings asked for outside a
+// primitive last until the program ends.
+extern "C" int hx_js_prime_strings_mark();
+extern "C" void hx_js_prime_strings_release(int inMark);
+
+struct HxJsPrimeStringScope
+{
+   int mark;
+   HxJsPrimeStringScope() : mark(hx_js_prime_strings_mark()) { }
+   ~HxJsPrimeStringScope() { hx_js_prime_strings_release(mark); }
+};
+
+template<typename F, F f> struct HxJsPrimeCall;
+template<typename R, typename... A, R (*f)(A...)>
+struct HxJsPrimeCall<R (*)(A...), f>
+{
+   static R call(A... args)
+   {
+      HxJsPrimeStringScope scope;
+      return f(args...);
+   }
+};
+
 #define DEFINE_PRIM_MULT(func) EMSCRIPTEN_BINDINGS(func) { \
    function(#func, +[](value inArgs) -> value { \
+      HxJsPrimeStringScope scope; \
       std::vector<value> args = vecFromJSArray<value>(inArgs); \
       return func(args.empty() ? 0 : &args[0], (int)args.size()); \
    }); \
 }
 
-#define DEFINE_PRIM(func,nargs) EMSCRIPTEN_BINDINGS(func) { function(#func, &func); }
+#define DEFINE_PRIM(func,nargs) EMSCRIPTEN_BINDINGS(func) { function(#func, &HxJsPrimeCall<decltype(&func), &func>::call); }
 
 
 #else
