@@ -1,4 +1,5 @@
 #include <hxcpp.h>
+#include <vector>
 
 
 // -------- Enums ---------------------------------
@@ -119,18 +120,60 @@ Dynamic EnumBase_obj::__GetItem(int inIndex) const
 
 
 
+// Enum parameters are formatted in place, with a stack of the enums still
+// open, and every piece is joined once at the end.  Building each parameter's
+// string and then copying it into its parent's copied the deepest text once
+// per level, O(n^2) for a chain n deep, and recursed once per level on the
+// native stack.  Other parameters are converted in the same order as before
 String EnumBase_obj::toString() {
    if (mFixedFields==0)
       return _hx_tag;
-   if (mFixedFields==1)
-      return _hx_tag + HX_CSTRING("(") + _hx_getFixed()->asString() + HX_CSTRING(")");
 
-   Array<String> args = Array_obj<String>::__new(mFixedFields);
-   cpp::Variant *v = _hx_getFixed();
-   for(int i=0;i<mFixedFields;i++)
-      args->__unsafe_set(i, v[i].asString());
+   Array<String> parts = Array_obj<String>::__new(0, 16);
+   // Held in an Array, so the collector sees and moves them while a
+   // parameter's own toString runs
+   Array<Dynamic> open = Array_obj<Dynamic>::__new(0, 8);
+   std::vector<int> nextParam;
 
-   return _hx_tag + HX_CSTRING("(") + args->join(HX_CSTRING(",")) + HX_CSTRING(")");
+   parts->push(_hx_tag);
+   parts->push(HX_CSTRING("("));
+   open->push(Dynamic(this));
+   nextParam.push_back(0);
+   while(open->length > 0)
+   {
+      int top = open->length - 1;
+      EnumBase_obj *e = static_cast<EnumBase_obj *>(open[top].mPtr);
+      int i = nextParam[top];
+      if (i==e->mFixedFields)
+      {
+         parts->push(HX_CSTRING(")"));
+         open->pop();
+         nextParam.pop_back();
+         continue;
+      }
+      nextParam[top] = i + 1;
+      if (i>0)
+         parts->push(HX_CSTRING(","));
+
+      cpp::Variant &v = e->_hx_getFixed()[i];
+      if (v.type==cpp::Variant::typeObject && v.valObject && v.valObject->__GetType()==vtEnum)
+      {
+         EnumBase_obj *child = static_cast<EnumBase_obj *>(v.valObject);
+         parts->push(child->_hx_tag);
+         if (child->mFixedFields>0)
+         {
+            parts->push(HX_CSTRING("("));
+            open->push(Dynamic(child));
+            nextParam.push_back(0);
+         }
+      }
+      else
+      {
+         String s = v.asString();
+         parts->push(s.raw_ptr() ? s : HX_CSTRING("null"));
+      }
+   }
+   return parts->join(HX_CSTRING(""));
 }
 
 }
