@@ -58,6 +58,7 @@ SocketIpv6Accept: sockets
 SocketIpv6ConcurrentFormat: threads (std::thread, which needs a pthreads build)
 SocketTinyTimeout: sockets
 SqliteResultConnectionLifetime: threads (std::thread, which needs a pthreads build)
+SslClosedState: sockets
 SslErrorCodes: sockets
 SslPeerCertificateLifetime: sockets
 SslSniLifetime: sockets

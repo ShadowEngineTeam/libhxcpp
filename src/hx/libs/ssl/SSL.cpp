@@ -46,10 +46,14 @@ typedef size_t socket_int;
 #include "mbedtls/debug.h"
 #include "psa/crypto.h"
 
-#define val_ssl(o)	((sslctx*)o.mPtr)
-#define val_conf(o)	((sslconf*)o.mPtr)
-#define val_cert(o) ((sslcert*)o.mPtr)
-#define val_pkey(o) ((sslpkey*)o.mPtr)
+// Handles from Haxe are checked before use: a socket that has not connected
+// passes null, and a closed context or configuration keeps its wrapper with
+// the native pointer cleared. These were unchecked casts, so either crashed
+// the process instead of throwing. See the functions after the structs.
+#define val_ssl(o)	ssl_open_handle(o)
+#define val_conf(o)	ssl_open_conf(o)
+#define val_cert(o) ssl_open_cert(o)
+#define val_pkey(o) ssl_open_pkey(o)
 
 size_t _hx_std_socket_handle(Dynamic inSocket);
 
@@ -310,6 +314,49 @@ struct sslpkey : public hx::Object
 	String toString() HXCPP_OVERRIDE { return HX_CSTRING("sslpkey"); }
 };
 
+template<typename T>
+static T *ssl_handle_of( const Dynamic &o )
+{
+	hx::Object *obj = o.mPtr;
+	return obj && obj->_hx_isInstanceOf(T::_hx_ClassId) ? (T *)obj : 0;
+}
+
+static sslctx *ssl_open_handle( const Dynamic &o )
+{
+	sslctx *ssl = ssl_handle_of<sslctx>( o );
+	if( !ssl )
+		hx::Throw( HX_CSTRING("Invalid ssl handle") );
+	if( !ssl->s )
+		hx::Throw( HX_CSTRING("ssl: the context is closed") );
+	return ssl;
+}
+
+static sslconf *ssl_open_conf( const Dynamic &o )
+{
+	sslconf *conf = ssl_handle_of<sslconf>( o );
+	if( !conf )
+		hx::Throw( HX_CSTRING("Invalid ssl configuration") );
+	if( !conf->c )
+		hx::Throw( HX_CSTRING("ssl: the configuration is closed") );
+	return conf;
+}
+
+static sslcert *ssl_open_cert( const Dynamic &o )
+{
+	sslcert *cert = ssl_handle_of<sslcert>( o );
+	if( !cert || !cert->c )
+		hx::Throw( HX_CSTRING("Invalid certificate") );
+	return cert;
+}
+
+static sslpkey *ssl_open_pkey( const Dynamic &o )
+{
+	sslpkey *pk = ssl_handle_of<sslpkey>( o );
+	if( !pk || !pk->k )
+		hx::Throw( HX_CSTRING("Invalid key") );
+	return pk;
+}
+
 // The bytes of a Haxe byte array, read only. &buf[0] resized an empty array
 // to hold the element it named, so hashing an empty Bytes grew its storage,
 // and, with the length read in the same call, could hash a byte.
@@ -345,7 +392,9 @@ static void ssl_error( int ret ){
 
 Dynamic _hx_ssl_new( Dynamic hconf ) {
 	int ret;
-	sslconf *conf = val_conf(hconf);
+	sslconf *conf = ssl_handle_of<sslconf>(hconf);
+	if( !conf )
+		hx::Throw( HX_CSTRING("Invalid ssl configuration") );
 	// mbedtls_ssl_setup with a closed configuration's null crashed
 	if( !conf->shared )
 		hx::Throw( HX_CSTRING("ssl_new: the configuration is closed") );
@@ -359,8 +408,11 @@ Dynamic _hx_ssl_new( Dynamic hconf ) {
 	return ssl;
 }
 
+// Closing again does nothing
 void _hx_ssl_close( Dynamic hssl ) {
-	sslctx *ssl = val_ssl(hssl);
+	sslctx *ssl = ssl_handle_of<sslctx>(hssl);
+	if( !ssl )
+		hx::Throw( HX_CSTRING("Invalid ssl handle") );
 	ssl->destroy();
 }
 
@@ -415,7 +467,11 @@ void _hx_ssl_set_hostname( Dynamic hssl, String hostname ){
 }
 
 Dynamic _hx_ssl_get_peer_certificate( Dynamic hssl ){
-	sslctx *ssl = val_ssl(hssl);
+	// No context yet, or a closed one, has no session and so no peer
+	sslctx *ssl = ssl_handle_of<sslctx>(hssl);
+	if( !hssl.mPtr || (ssl && !ssl->s) )
+		return null();
+	ssl = val_ssl(hssl);
 	const mbedtls_x509_crt *crt = mbedtls_ssl_get_peer_cert(ssl->s);
 	if( crt == NULL )
 		return null();
@@ -751,8 +807,11 @@ Dynamic _hx_ssl_conf_new( bool server ) {
 	return conf;
 }
 
+// Closing again does nothing
 void _hx_ssl_conf_close( Dynamic hconf ) {
-	sslconf *conf = val_conf(hconf);
+	sslconf *conf = ssl_handle_of<sslconf>(hconf);
+	if( !conf )
+		hx::Throw( HX_CSTRING("Invalid ssl configuration") );
 	conf->destroy();
 }
 
@@ -809,10 +868,11 @@ static int sni_callback( void *arg, mbedtls_ssl_context *ctx, const unsigned cha
 			// TODO authmode and ca
 			Dynamic hcert = ret->__Field(HX_CSTRING("cert"), hx::paccDynamic);
 			Dynamic hpkey = ret->__Field(HX_CSTRING("key"), hx::paccDynamic);
-			if( !hcert.mPtr || !hpkey.mPtr )
+			// No throwing here, inside mbedtls: a bad pair fails the handshake
+			sslcert *cert = ssl_handle_of<sslcert>(hcert);
+			sslpkey *pk = ssl_handle_of<sslpkey>(hpkey);
+			if( !cert || !cert->c || !pk || !pk->k )
 				return -1;
-			sslcert *cert = val_cert(hcert);
-			sslpkey *pk = val_pkey(hpkey);
 
 			return mbedtls_ssl_set_hs_own_cert( ctx, cert->c, pk->k );
 		}
@@ -1036,7 +1096,8 @@ Dynamic _hx_ssl_cert_add_pem( Dynamic hcert, String data ){
    if (data.isUTF16Encoded())
 		hx::Throw( HX_CSTRING("Invalid data encoding") );
    #endif
-	sslcert *cert = val_cert(hcert);
+	// A null certificate starts a new chain
+	sslcert *cert = hcert.mPtr ? val_cert(hcert) : 0;
 	int r;
 	bool isnew = 0;
 	if( !cert ){
@@ -1058,7 +1119,8 @@ Dynamic _hx_ssl_cert_add_pem( Dynamic hcert, String data ){
 }
 
 Dynamic _hx_ssl_cert_add_der( Dynamic hcert, Array<unsigned char> buf ){
-	sslcert *cert = val_cert(hcert);
+	// A null certificate starts a new chain
+	sslcert *cert = hcert.mPtr ? val_cert(hcert) : 0;
 	int r;
 	bool isnew = 0;
 	if( !cert ){
