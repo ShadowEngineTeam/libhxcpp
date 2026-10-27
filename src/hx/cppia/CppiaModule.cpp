@@ -473,6 +473,10 @@ public:
          String error(errorString);
          hx::Throw(error);
       }
+      catch(const std::exception &e)
+      {
+         hx::Throw( String(e.what()) );
+      }
    }
 
 
@@ -505,6 +509,10 @@ public:
          {
             String error(errorString);
             hx::Throw(error);
+         }
+         catch(const std::exception &e)
+         {
+            hx::Throw( String(e.what()) );
          }
       }
    }
