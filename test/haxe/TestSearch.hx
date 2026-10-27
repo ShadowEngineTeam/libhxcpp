@@ -133,4 +133,92 @@ class TestSearch extends Test
       checkString("abcabcab", "");
       checkString("αβγαβγ", "βγ");
    }
+
+   // Long needles whose start keeps matching the text switch to a search
+   // that stays linear in the text; split, indexOf and lastIndexOf must give
+   // what a plain scan gives, in byte, wide and mixed encodings
+   static function repeat(count:Int, unit:String):String
+   {
+      var b = new StringBuf();
+      for(i in 0...count)
+         b.add(unit);
+      return b.toString();
+   }
+
+   static function plainSplit(text:String, delimiter:String):Array<String>
+   {
+      var parts = [];
+      var last = 0;
+      var at = stringIndexOf(text, delimiter, 0);
+      while(at >= 0)
+      {
+         parts.push(text.substring(last, at));
+         last = at + delimiter.length;
+         at = stringIndexOf(text, delimiter, last);
+      }
+      parts.push(text.substr(last));
+      return parts;
+   }
+
+   function checkLong(text:String, needle:String, expectedParts:Int, ?pos:haxe.PosInfos)
+   {
+      var parts = text.split(needle);
+      Assert.equals(expectedParts, parts.length, pos);
+      Assert.same(plainSplit(text, needle), parts, pos);
+      var at = [-5, 0, 1, needle.length, text.length >> 2, text.length >> 1, text.length - needle.length - 1,
+                text.length - needle.length, text.length, text.length + 10];
+      for(s in at)
+      {
+         Assert.equals(stringIndexOf(text, needle, s), text.indexOf(needle, s), pos);
+         if (s >= 0)
+            Assert.equals(stringLastIndexOf(text, needle, s), text.lastIndexOf(needle, s), pos);
+      }
+      Assert.equals(stringLastIndexOf(text, needle, text.length), text.lastIndexOf(needle), pos);
+   }
+
+   public function testLongByteNeedles()
+   {
+      var a = repeat(20000, "a");
+      var near = repeat(500, "a") + "b";
+      checkLong(a, near, 1);
+      checkLong(a + near + "x" + a + near + near + a, near, 4);
+      checkLong(near + a + near, near, 3);
+      checkLong(near + near + "y" + near, near, 4);
+      var periodic = repeat(100, "ab") + "c";
+      checkLong(repeat(5000, "ab") + periodic + repeat(5000, "ab") + periodic, periodic, 3);
+      var nulNeedle = repeat(100, "a\x00") + "b";
+      var nul = repeat(2000, "a\x00");
+      checkLong(nul + nulNeedle + nul, nulNeedle, 2);
+   }
+
+   public function testLongWideNeedles()
+   {
+      var wide = repeat(20000, "α");
+      var wideNear = repeat(500, "α") + "β";
+      checkLong(wide, wideNear, 1);
+      checkLong(wide + wideNear + "x" + wide + wideNear, wideNear, 3);
+   }
+
+   public function testLongMixedNeedles()
+   {
+      var near = repeat(500, "a") + "b";
+      var mixedText = repeat(20000, "a") + "é";
+      checkLong(mixedText, near, 1);
+      checkLong(mixedText + near + mixedText + near, near, 3);
+      checkLong(repeat(20000, "a"), repeat(500, "a") + "é", 1);
+      var asciiFromWide = (repeat(500, "a") + "é").substr(0, 500) + "b";
+      checkLong(repeat(20000, "a") + near + repeat(20000, "a"), asciiFromWide, 2);
+   }
+
+   public function testLastIndexOfStart()
+   {
+      var near = repeat(500, "a") + "b";
+      var found = "start" + near + "middle" + near + "end";
+      var first = 5;
+      var last = first + near.length + 6;
+      Assert.equals(last, found.lastIndexOf(near));
+      Assert.equals(first, found.lastIndexOf(near, last - 1));
+      Assert.same(["a", "b", "", "c", ""], "a,b,,c,".split(","));
+      Assert.same(["x", "y", "", "z"], "x--y----z".split("--"));
+   }
 }

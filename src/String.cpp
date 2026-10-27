@@ -1678,16 +1678,27 @@ String String::createPermanent(const char *inUtf8, int length)
 
 
 // Two-Way search (Crochemore and Perrin): linear in the text whatever the
-// needle, for when first-unit candidates keep matching a long needle's start
-template<typename T>
-static int TMaxSuffix(const T *x, int m, int &outPeriod, bool inReverse)
+// needle, for when first-unit candidates keep matching a long needle's start.
+// Units are read through TTwoWayUnits, forwards for indexOf, or from the end
+// for lastIndexOf, where the first match in the reversed text is the last one.
+template<typename T, bool BACK>
+struct TTwoWayUnits
+{
+   typedef T Unit;
+   const T *ptr;
+   int len;
+   inline T operator[](int i) const { return BACK ? ptr[len-1-i] : ptr[i]; }
+};
+
+template<typename UNITS>
+static int TMaxSuffix(const UNITS &x, int m, int &outPeriod, bool inReverse)
 {
    int ms = -1, j = 0, k = 1;
    outPeriod = 1;
    while(j + k < m)
    {
-      T a = x[j + k];
-      T b = x[ms + k];
+      typename UNITS::Unit a = x[j + k];
+      typename UNITS::Unit b = x[ms + k];
       if (inReverse ? a > b : a < b)
       {
          j += k;
@@ -1714,18 +1725,28 @@ static int TMaxSuffix(const T *x, int m, int &outPeriod, bool inReverse)
    return ms;
 }
 
-template<typename T>
-static int TTwoWayIndexOf(int s, const T *str, int strLen, const T *x, int m)
+// The first match of the needle wholly inside str[inStart, inEnd), or with
+// BACK the last, as an index into str, or -1
+template<typename T, bool BACK>
+static int TTwoWaySearch(const T *str, int inStart, int inEnd, const T *sought, int m)
 {
-   const T *y = str + s;
-   int n = strLen - s;
+   int n = inEnd - inStart;
+   if (n < m)
+      return -1;
+   TTwoWayUnits<T,BACK> x = { sought, m };
+   TTwoWayUnits<T,BACK> y = { str + inStart, n };
    int p, q;
    int i = TMaxSuffix(x, m, p, false);
    int j = TMaxSuffix(x, m, q, true);
    int ell = i > j ? i : j;
    int per = i > j ? p : q;
 
-   if (!memcmp(x, x + per, (ell + 1)*sizeof(T)))
+   bool periodic = true;
+   for(int k=0; k<=ell && periodic; k++)
+      periodic = x[k]==x[k + per];
+
+   int found = -1;
+   if (periodic)
    {
       int pos = 0, memory = -1;
       while(pos <= n - m)
@@ -1739,7 +1760,10 @@ static int TTwoWayIndexOf(int s, const T *str, int strLen, const T *x, int m)
             while(i > memory && x[i] == y[i + pos])
                i--;
             if (i <= memory)
-               return s + pos;
+            {
+               found = pos;
+               break;
+            }
             pos += per;
             memory = m - per - 1;
          }
@@ -1765,14 +1789,56 @@ static int TTwoWayIndexOf(int s, const T *str, int strLen, const T *x, int m)
             while(i >= 0 && x[i] == y[i + pos])
                i--;
             if (i < 0)
-               return s + pos;
+            {
+               found = pos;
+               break;
+            }
             pos += per;
          }
          else
             pos += i - ell;
       }
    }
-   return -1;
+   if (found<0)
+      return -1;
+   return BACK ? inStart + n - found - m : inStart + found;
+}
+
+template<typename T>
+static int TTwoWayIndexOf(int s, const T *str, int strLen, const T *sought, int soughtLen)
+{
+   return TTwoWaySearch<T,false>(str, s, strLen, sought, soughtLen);
+}
+
+// lastIndexOf from start s, the last start it may return
+template<typename T>
+static int TTwoWayLastIndexOf(int s, const T *str, const T *sought, int soughtLen)
+{
+   return TTwoWaySearch<T,true>(str, 0, s + soughtLen, sought, soughtLen);
+}
+
+// Past twice the text scanned, a search whose candidates keep matching the
+// needle's start finishes with the Two-Way search
+static inline bool CandidatesTooCostly(long long inCompared, int inScanned, int inSoughtLen)
+{
+   return inSoughtLen>=32 && inCompared > 2LL*inScanned + 4096;
+}
+
+// A needle in one encoding converted to the haystack's other one, for the
+// Two-Way search. Across encodings only units up to 127 can be equal (see
+// StrMatch), so a needle with any other unit has no match: false.
+template<typename TO, typename FROM>
+static bool ConvertNeedle(const FROM *inNeedle, int inLen, std::vector<TO> &outNeedle)
+{
+   outNeedle.resize(inLen);
+   for(int i=0;i<inLen;i++)
+   {
+      int unit = sizeof(FROM)==1 ? (int)(signed char)inNeedle[i] : (int)inNeedle[i];
+      if (unit<0 || unit>127)
+         return false;
+      outNeedle[i] = (TO)unit;
+   }
+   return true;
 }
 
 template<typename T>
@@ -1816,7 +1882,7 @@ static int TIndexOf(int s, const T *str, int strLen, const T *sought, int sought
             // Candidates that keep matching the start cost a whole compare
             // each: past twice the text scanned, finish in linear time
             compared += soughtLen;
-            if (soughtLen>=32 && compared > 2LL*(s-start) + 4096)
+            if (CandidatesTooCostly(compared, s-start, soughtLen))
                return TTwoWayIndexOf(s, str, strLen, sought, soughtLen);
             s++;
          }
@@ -1836,7 +1902,7 @@ static int TIndexOf(int s, const T *str, int strLen, const T *sought, int sought
          if (!memcmp(str + s,sought,soughtLen*sizeof(T)))
             return s;
          compared += soughtLen;
-         if (soughtLen>=32 && compared > 2LL*(s-start) + 4096)
+         if (CandidatesTooCostly(compared, s-start, soughtLen))
             return TTwoWayIndexOf(s, str, strLen, sought, soughtLen);
          s++;
       }
@@ -1889,6 +1955,8 @@ int String::indexOf(const String &inValue, int inStart) const
          // never equal a char16_t unit, so skipping on the unsigned value
          // can only ever skip positions StrMatch would reject.
          char16_t first = (char16_t)(unsigned char)inValue.__s[0];
+         int start = s;
+         long long compared = 0;
          while(s+l<=length)
          {
             while(s+l<=length && __w[s]!=first)
@@ -1897,6 +1965,14 @@ int String::indexOf(const String &inValue, int inStart) const
                break;
             if (StrMatch(__w+s, inValue.__s, l))
                return s;
+            compared += l;
+            if (CandidatesTooCostly(compared, s-start, l))
+            {
+               std::vector<char16_t> sought;
+               if (!ConvertNeedle(inValue.__s, l, sought))
+                  return -1;
+               return TTwoWayIndexOf(s, __w, length, &sought[0], l);
+            }
             s++;
          }
          return -1;
@@ -1908,6 +1984,8 @@ int String::indexOf(const String &inValue, int inStart) const
       char16_t first = inValue.__w[0];
       if (first>127)
          return -1;
+      int start = s;
+      long long compared = 0;
       while(s+l<=length)
       {
          const char *cand = (const char *)memchr(__s+s, (char)first, length-l-s+1);
@@ -1916,6 +1994,14 @@ int String::indexOf(const String &inValue, int inStart) const
          s = (int)(cand-__s);
          if (StrMatch(inValue.__w, __s+s, l))
             return s;
+         compared += l;
+         if (CandidatesTooCostly(compared, s-start, l))
+         {
+            std::vector<char> sought;
+            if (!ConvertNeedle(inValue.__w, l, sought))
+               return -1;
+            return TTwoWayIndexOf(s, __s, length, &sought[0], l);
+         }
          s++;
       }
       return -1;
@@ -1942,10 +2028,18 @@ static int TLastIndexOf(int s, const T *str, int strLen, const T *sought, int so
    else
    {
       T first = *sought;
+      int start = s;
+      long long compared = 0;
       while(s>=0)
       {
-         if (str[s]==first && !memcmp(str + s,sought,soughtLen*sizeof(T)))
-            return s;
+         if (str[s]==first)
+         {
+            if (!memcmp(str + s,sought,soughtLen*sizeof(T)))
+               return s;
+            compared += soughtLen;
+            if (CandidatesTooCostly(compared, start-s, soughtLen))
+               return s>0 ? TTwoWayLastIndexOf(s-1, str, sought, soughtLen) : -1;
+         }
          --s;
       }
    }
@@ -1987,6 +2081,8 @@ int String::lastIndexOf(const String &inValue, int inStart) const
          // Wide haystack, byte needle - skip backwards on the first unit
          // (see indexOf for why the unsigned conversion is safe)
          char16_t first = (char16_t)(unsigned char)inValue.__s[0];
+         int start = s;
+         long long compared = 0;
          while(s>=0)
          {
             while(s>=0 && __w[s]!=first)
@@ -1995,6 +2091,14 @@ int String::lastIndexOf(const String &inValue, int inStart) const
                break;
             if (StrMatch(__w+s, inValue.__s, l))
                return s;
+            compared += l;
+            if (CandidatesTooCostly(compared, start-s, l))
+            {
+               std::vector<char16_t> sought;
+               if (s==0 || !ConvertNeedle(inValue.__s, l, sought))
+                  return -1;
+               return TTwoWayLastIndexOf(s-1, __w, &sought[0], l);
+            }
             s--;
          }
          return -1;
@@ -2004,6 +2108,8 @@ int String::lastIndexOf(const String &inValue, int inStart) const
       char16_t first = inValue.__w[0];
       if (first>127)
          return -1;
+      int start = s;
+      long long compared = 0;
       while(s>=0)
       {
          while(s>=0 && __s[s]!=(char)first)
@@ -2012,6 +2118,14 @@ int String::lastIndexOf(const String &inValue, int inStart) const
             break;
          if (StrMatch(inValue.__w, __s+s, l))
             return s;
+         compared += l;
+         if (CandidatesTooCostly(compared, start-s, l))
+         {
+            std::vector<char> sought;
+            if (s==0 || !ConvertNeedle(inValue.__w, l, sought))
+               return -1;
+            return TTwoWayLastIndexOf(s-1, __s, &sought[0], l);
+         }
          s--;
       }
       return -1;
@@ -2634,14 +2748,6 @@ bool my_wstrneq(const wchar_t *s1, const wchar_t *s2, int len)
 }
 #endif
 
-static bool isSame(const char16_t *a, const char *b, int count)
-{
-   for(int i=0;i<count;i++)
-      if (a[i]!=b[i])
-         return false;
-   return true;
-}
-
 Array<String> String::split(const String &inDelimiter) const
 {
    int len = inDelimiter.length;
@@ -2685,77 +2791,37 @@ Array<String> String::split(const String &inDelimiter) const
    }
 
 
+   // Each delimiter is found by indexOf's search, which stays linear in the
+   // text however much of a long delimiter each candidate matches
    Array<String> result(0,1);
    #if HX_SMART_STRINGS
    bool s0 = isUTF16Encoded();
-   bool s1 = inDelimiter.isUTF16Encoded();
-   if (s0 || s1)
+   if (s0!=inDelimiter.isUTF16Encoded())
    {
-      if (s0 && s1)
+      int found;
+      while( (found = indexOf(inDelimiter, pos))>=0 )
       {
-         // Skip to candidate positions on the first unit before paying for
-         // the full compare
-         char16_t c0 = inDelimiter.__w[0];
-         while(pos+len <=length )
-         {
-            while(pos+len<=length && __w[pos]!=c0)
-               pos++;
-            if (pos+len>length)
-               break;
-            if (len==1 || !memcmp(__w+pos+1,inDelimiter.__w+1,(len-1)*2))
-            {
-               result->push( substr(last,pos-last) );
-               pos += len;
-               last = pos;
-            }
-            else
-               pos++;
-         }
+         result->push( substr(last,found-last) );
+         pos = last = found + len;
       }
-      else if (s0)
-         while(pos+len <=length )
-            if (isSame(__w+pos,inDelimiter.__s,len))
-            {
-               result->push( substr(last,pos-last) );
-               pos += len;
-               last = pos;
-            }
-            else
-               pos++;
-      else
-         while(pos+len <=length )
-            if (isSame(inDelimiter.__w,__s+pos,len))
-            {
-               result->push( substr(last,pos-last) );
-               pos += len;
-               last = pos;
-            }
-            else
-               pos++;
+   }
+   else if (s0)
+   {
+      int found;
+      while( (found = TIndexOf(pos, __w, length, inDelimiter.__w, len))>=0 )
+      {
+         result->push( substr(last,found-last) );
+         pos = last = found + len;
+      }
    }
    else
    #endif
    {
-      // memchr candidate scan, like indexOf - far faster than a libc call
-      // per byte position, and memcmp does not stop at embedded NULs the
-      // way strncmp does (a delimiter containing \0 matched any \0)
-      const char *base = __s;
-      const char *del = inDelimiter.__s;
-      char c0 = del[0];
-      while(pos+len <=length )
+      int found;
+      while( (found = TIndexOf(pos, __s, length, inDelimiter.__s, len))>=0 )
       {
-         const char *found = (const char *)memchr(base+pos, c0, length-len-pos+1);
-         if (!found)
-            break;
-         pos = (int)(found-base);
-         if (len==1 || !memcmp(found+1,del+1,len-1))
-         {
-            result->push( substr(last,pos-last) );
-            pos += len;
-            last = pos;
-         }
-         else
-            pos++;
+         result->push( substr(last,found-last) );
+         pos = last = found + len;
       }
    }
 
