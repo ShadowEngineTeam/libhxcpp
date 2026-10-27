@@ -2,6 +2,7 @@
 libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
+* Fixed a thread whose cpp.Lib.load was failing crashing the process at exit on Windows, about once in a hundred exits: a failing load reads haxelib's files to look further, and exit frees the C runtime's table of open files while other threads still run. The loader reads them with Win32 calls instead (libhxcpp #371)
 * Fixed Gc.trace with path printing overflowing the native stack on a deep graph, as it marked by recursing all the way down: it now recurses 256 objects deep, and paths below that start with "... + higher". It also counts instances that are large allocations and instances with no object fields, which it missed, and prints paths through large objects from their root (libhxcpp #389)
 * Fixed val_buffer losing the text of a value after a NUL character: it measured the UTF-8 text with strlen. It now appends the text's full byte count (libhxcpp #393)
 * Fixed Date's local fields keeping the previous time zone after the zone changed: the last time converted is cached per thread, and the cache was keyed by the time alone, so a date read before the change read the old zone until another time was converted. The cache now also keys on the zone the C library has, and Sys.putEnv("TZ") applies the new zone at once, where localtime_r and the Windows CRT had kept the old one until something called tzset (libhxcpp #392)

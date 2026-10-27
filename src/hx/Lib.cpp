@@ -316,20 +316,33 @@ typedef void (*NekoEntryFunc)();
 
 static String GetFileContents(String inFile)
 {
-#ifndef _MSC_VER
+   char buf[2049];
+#ifndef _WIN32
    FILE *file = fopen(inFile.__CStr(),"rb");
-#else
-   FILE *file = _wfopen(inFile.__WCStr(),L"rb");
-#endif
    if (!file)
    {
       // printf("Could not open %S\n", inFile.__s);
       return null();
    }
 
-   char buf[2049];
    int bytes = fread(buf,1,2048,file);
    fclose(file);
+#else
+   // Not the CRT's streams: a failing load reads these files, a thread can
+   //  be loading while main returns, and exit frees the CRT's table of
+   //  streams under it, so its fopen faulted (#371)
+   HANDLE file = CreateFileW(inFile.__WCStr(), GENERIC_READ,
+                             FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,
+                             0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+   if (file==INVALID_HANDLE_VALUE)
+      return null();
+
+   int bytes = 0;
+   DWORD got = 0;
+   while(bytes<2048 && ReadFile(file, buf+bytes, 2048-bytes, &got, 0) && got>0)
+      bytes += (int)got;
+   CloseHandle(file);
+#endif
    if (bytes<1)
       return null();
    buf[bytes]='\0';
