@@ -33,5 +33,7 @@ class Main {
 		check("a script sees the arguments after it", [script, "a", "-b"], "[a,-b]");
 		check("a -jit before the script is the host's", ["-jit", script, "a", "-b"], "[a,-b]");
 		check("a -jit after the script is the script's too", [script, "x", "-jit"], "[x,-jit]");
+		var fingerprint = run(["-fingerprint"]);
+		Sys.println('-fingerprint prints 16 hex digits: ${~/^[0-9a-f]{16}$/.match(fingerprint)}');
 	}
 }

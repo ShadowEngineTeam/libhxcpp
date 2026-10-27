@@ -206,6 +206,10 @@ int __scriptable_cppia_live_modules();
 // Whether modules loaded now are compiled by the JIT: it is built in, enabled
 // with cpp.cppia.Host.enableJit, and can get executable memory on this platform
 bool __scriptable_cppia_jit_active();
+// 16 hex digits standing for the classes, functions and fields this host gives
+// scripts. A module with a "__cppia_host" resource loads only into the host
+// whose fingerprint that resource holds
+String __scriptable_host_fingerprint();
 
 #define HX_SCRIPTABLE_REGISTER_INTERFACE(name,class) \
    ::hx::ScriptableRegisterInterface( HX_CSTRING(name), __scriptableFunctions, & class##_scriptable )

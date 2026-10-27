@@ -670,6 +670,7 @@ public:
    static HaxeNativeClass *findClass(const std::string &inName);
    static HaxeNativeClass *hxObject();
    static void link();
+   static const std::string &hostFingerprint();
 #ifndef NATIVE_CLASS_OVERRIDES_MARKED
 private:
    void addVtableEntries( std::vector<std::string> &outVtable, std::unordered_set<std::string> &outMethodsSet);

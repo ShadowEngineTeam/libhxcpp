@@ -835,6 +835,25 @@ CppiaLoadedModule LoadCppia(const unsigned char *inData, int inDataLength)
       throw;
    }
 
+   // A module built for one host, with its fingerprint as a resource, is refused
+   // by any other before linking, which would only find the first difference
+   if (!error.raw_ptr())
+      for(size_t r=0;r<cppia.resources.size();r++)
+         if (cppia.resources[r].mData && cppia.resources[r].mName==HX_CSTRING("__cppia_host"))
+         {
+            std::string wanted((const char *)cppia.resources[r].mData, cppia.resources[r].mDataLength);
+            size_t first = wanted.find_first_not_of(" \t\r\n");
+            size_t last = wanted.find_last_not_of(" \t\r\n");
+            wanted = first==std::string::npos ? std::string() : wanted.substr(first, last-first+1);
+            const std::string &host = HaxeNativeClass::hostFingerprint();
+            if (wanted!=host)
+            {
+               std::string message = "This cppia module was built for host " + wanted + ", but this host is " + host;
+               error = String::create(message.c_str(), (int)message.size());
+            }
+            break;
+         }
+
    if (!error.raw_ptr())
       try
       {
@@ -1006,6 +1025,11 @@ void __hxcpp_dbg_getScriptableClasses( Array< ::String> ioClasses )
 int __scriptable_cppia_live_modules()
 {
    return hx::sLiveModules;
+}
+
+String __scriptable_host_fingerprint()
+{
+   return String::create(hx::HaxeNativeClass::hostFingerprint().c_str());
 }
 
 bool __scriptable_cppia_jit_active()

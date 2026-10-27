@@ -1,0 +1,8 @@
+the fingerprint is 16 hex digits: true
+the fingerprint is the same each time: true
+jit false: a module without the resource loads: true
+jit false: a module for another host is refused, naming both: true
+jit false: a module for this host loads: true
+jit true: a module without the resource loads: true
+jit true: a module for another host is refused, naming both: true
+jit true: a module for this host loads: true

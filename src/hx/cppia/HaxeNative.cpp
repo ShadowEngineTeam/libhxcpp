@@ -1,6 +1,7 @@
 #include <hxcpp.h>
 #include <hx/Scriptable.h>
 #include "Cppia.h"
+#include <algorithm>
 
 
 namespace hx
@@ -147,6 +148,85 @@ void HaxeNativeClass::link()
       }
    }
 
+}
+
+
+// What the host gives scripts to link against, as text: each registered class
+// with its super class, functions and fields, and each interface with its
+// functions. Lists are sorted, so the same host source always gives the same
+// text. Field offsets are left out: they change with the word size, not with
+// what a script can use.
+static std::string hostExports()
+{
+   std::string out;
+   if (sScriptRegistered)
+      for(ScriptRegisteredMap::iterator i = sScriptRegistered->begin(); i!=sScriptRegistered->end();++i)
+      {
+         // Lookups of a missing name leave empty entries
+         if (!i->second)
+            continue;
+         HaxeNativeClass *native = i->second;
+         out += "class " + native->name;
+         hx::Class cls = hx::Class_obj::Resolve( String(native->name.c_str()) );
+         if (cls.mPtr && cls->GetSuper().mPtr)
+            out += " extends " + std::string(cls->GetSuper()->mName.utf8_str());
+         out += "\n";
+
+         std::vector<std::string> members;
+         if (native->construct.signature)
+            members.push_back(std::string("new ") + native->construct.signature);
+         if (native->functions)
+            for(ScriptNamedFunction *f=native->functions;f->name;f++)
+               members.push_back(std::string(f->isStatic ? "static function " : "function ") + f->name + " " + (f->signature ? f->signature : ""));
+         if (cls.mPtr)
+         {
+            if (cls->mMemberStorageInfo)
+               for(const hx::StorageInfo *s=cls->mMemberStorageInfo; s->name.raw_ptr(); s++)
+                  members.push_back("var " + std::string(s->name.utf8_str()) + " " + std::to_string((int)s->type));
+            if (cls->mStaticStorageInfo)
+               for(const hx::StaticInfo *s=cls->mStaticStorageInfo; s->name.raw_ptr(); s++)
+                  members.push_back("static var " + std::string(s->name.utf8_str()) + " " + std::to_string((int)s->type));
+         }
+         std::sort(members.begin(), members.end());
+         for(size_t m=0;m<members.size();m++)
+            out += "  " + members[m] + "\n";
+      }
+
+   if (sScriptRegisteredInterface)
+      for(HaxeNativeIntefaceMap::iterator i = sScriptRegisteredInterface->begin(); i!=sScriptRegisteredInterface->end();++i)
+      {
+         if (!i->second)
+            continue;
+         out += "interface " + i->second->name + "\n";
+         std::vector<std::string> members;
+         if (i->second->functions)
+            for(ScriptNamedFunction *f=i->second->functions;f->name;f++)
+               members.push_back(std::string("function ") + f->name + " " + (f->signature ? f->signature : ""));
+         std::sort(members.begin(), members.end());
+         for(size_t m=0;m<members.size();m++)
+            out += "  " + members[m] + "\n";
+      }
+   return out;
+}
+
+// A 64-bit FNV-1a hash of hostExports, as 16 hex digits. Worked out on first
+// use, after every class has registered at boot
+const std::string &HaxeNativeClass::hostFingerprint()
+{
+   static const std::string fingerprint = []()
+   {
+      std::string exports = hostExports();
+      unsigned long long hash = 14695981039346656037ULL;
+      for(size_t i=0;i<exports.size();i++)
+      {
+         hash ^= (unsigned char)exports[i];
+         hash *= 1099511628211ULL;
+      }
+      char buf[17];
+      snprintf(buf, sizeof(buf), "%016llx", hash);
+      return std::string(buf);
+   }();
+   return fingerprint;
 }
 
 
