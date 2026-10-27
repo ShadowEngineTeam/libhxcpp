@@ -2,6 +2,7 @@
 libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
+* Fixed __hxcpp_get_proc_address crashing when asked to fail quietly for a primitive an ndll does not have: it called the primitive's query function though the library had no such symbol. It now gives null without a message, where the lookup that is not quiet gives null with one (libhxcpp #399)
 * Fixed a sys.thread.Deque keeping the storage a burst grew it to once it drained: a thread mailbox that once held a million messages held 8 MB for as long as it lived. A deque that drains now gives back storage above 16,384 messages (libhxcpp #316)
 * Sped up sys.thread.Deque.push, which adds at the front and moved every queued item for each push while holding the queue's lock, so filling a deque from the front was quadratic. 65,536 pushes and pops went from 489k to 4.73M messages a second, the rate of adding at the back (libhxcpp #317)
 * Sped up val_string on a boxed non-ASCII string, which converted the whole string to UTF-8 into a new buffer on every call. The box now keeps the first conversion: reading a boxed 65,536-character string 256 times went from 3.3k to 284M calls a second, and peak memory from 40 MB to 9 MB (libhxcpp #322)

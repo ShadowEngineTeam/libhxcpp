@@ -21,6 +21,7 @@ test/anon/cpp
 test/extern-lib/gen-externs
 test/cffi/project/ndll
 test/regression/CffiPrimeUnicodeFallback/native/ndll
+test/regression/CffiQuietMissingPrimitive/native/ndll
 test/snippets/messagebox/cpp
 test/haxe/gc/big.txt
 tools/hxcpp/cpp
