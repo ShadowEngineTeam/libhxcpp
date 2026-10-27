@@ -1,0 +1,3 @@
+objects and arrays of Floats and Int64s start 8-byte aligned: true
+string data can start 4 bytes into 8: true
+every string, object and array keeps its values: true
