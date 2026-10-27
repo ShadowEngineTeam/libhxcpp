@@ -5,6 +5,8 @@
 #include <atomic>
 #ifndef HXCPP_SINGLE_THREADED_APP
 #include <thread>
+#include <mutex>
+#include <condition_variable>
 #endif
 
 #include <hx/OS.h>
@@ -68,6 +70,60 @@ static FILE *hxFopen(const char *inPath, const char *inMode)
 }
 #endif
 
+#ifndef HXCPP_SINGLE_THREADED_APP
+// Closes the streams of files the collector found dead. Closing flushes, which
+// can wait on a pipe reader or slow storage, and finalizers run with every
+// thread stopped, so the wait was a pause for all of them (libhxcpp #331).
+// This thread closes them once they run again; a collection does not wait for
+// it, and exit flushes any stream still open
+struct LateCloser
+{
+   std::mutex lock;
+   std::condition_variable wake;
+   std::vector<FILE *> pending;
+   bool started = false;
+
+   // False when no thread can be started, for the caller to close it
+   bool add(FILE *inFile)
+   {
+      std::lock_guard<std::mutex> hold(lock);
+      if (!started)
+      {
+         try
+         {
+            std::thread([this]() { run(); }).detach();
+         }
+         catch(...)
+         {
+            return false;
+         }
+         started = true;
+      }
+      pending.push_back(inFile);
+      wake.notify_one();
+      return true;
+   }
+
+   void run()
+   {
+      std::vector<FILE *> closing;
+      std::unique_lock<std::mutex> hold(lock);
+      for(;;)
+      {
+         wake.wait(hold, [this]() { return !pending.empty(); });
+         closing.swap(pending);
+         hold.unlock();
+         for(FILE *file : closing)
+            fclose(file);
+         closing.clear();
+         hold.lock();
+      }
+   }
+};
+// Never destroyed: the thread can still be closing at exit
+static LateCloser &sLateCloser = *new LateCloser();
+#endif
+
 struct fio : public hx::Object
 {
    HX_IS_INSTANCE_OF enum { _hx_ClassId = hx::clsIdFio };
@@ -126,7 +182,12 @@ struct fio : public hx::Object
 
    static void finalize(Dynamic inObj)
    {
-      ((fio *)(inObj.mPtr))->destroy();
+      fio *f = (fio *)(inObj.mPtr);
+      #ifndef HXCPP_SINGLE_THREADED_APP
+      if (f->io && f->closeIo && sLateCloser.add(f->io))
+         f->io = 0;
+      #endif
+      f->destroy();
    }
 
    String toString() HXCPP_OVERRIDE { return HX_CSTRING("fio:") + name; }

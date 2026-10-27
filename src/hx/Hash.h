@@ -293,6 +293,11 @@ template<typename T> inline void CopyValue(null &, const T &) {  }
 }
 
 
+struct HashRoot;
+// A weak hash entry whose object key was not marked when its value was looked
+//  at: the collector marks the value as soon as it marks the key
+void EphemeronWait(hx::Object *inKey, HashRoot *inHash, void *inElement);
+
 struct HashRoot : public Object
 {
    HashStore store;
@@ -308,6 +313,8 @@ struct HashRoot : public Object
 
    virtual void updateAfterGc() = 0;
    virtual bool markWeakValues(MarkContext *__inCtx) = 0;
+   // Marks the value of an element that markWeakValues passed to EphemeronWait
+   virtual void markWeakElement(void *inElement, MarkContext *__inCtx) = 0;
 
    inline int getSize() { return size; }
 };
@@ -445,6 +452,11 @@ struct Hash : public HashBase< typename ELEMENT::Key >
    bool TIsWeakRefValid(Dynamic &key) { return IsWeakRefValid(key.mPtr); }
    bool TIsWeakRefValid(String &key) { return IsWeakRefValid(key.raw_ptr()); }
 
+   // String keys are left to the next pass over the table
+   template<typename T>
+   void TWaitForKey(T &, Element *) { }
+   void TWaitForKey(Dynamic &key, Element *inElement) { EphemeronWait(key.mPtr, this, inElement); }
+
    template<typename T>
    bool TMarkWeakValue(T &, MarkContext *) { return false; }
    bool TMarkWeakValue(Dynamic &inValue, MarkContext *__inCtx)
@@ -468,7 +480,11 @@ struct Hash : public HashBase< typename ELEMENT::Key >
 
    bool markWeakValues(MarkContext *__inCtx) HXCPP_OVERRIDE
    {
-      if (!Element::WeakKeys || !Element::ManageKeys)
+      // Int, Float, Int64 and null values reach nothing to mark, and the map
+      //  keeps this storage until it converts to another Hash. The walk took
+      //  longer than the rest of a minor collection (libhxcpp #333)
+      enum { ManagedValues = StoreOf<Value>::store==hashString || StoreOf<Value>::store==hashObject };
+      if (!Element::WeakKeys || !Element::ManageKeys || !ManagedValues)
          return false;
 
       bool marked = false;
@@ -479,10 +495,17 @@ struct Hash : public HashBase< typename ELEMENT::Key >
          {
             if (TIsWeakRefValid(element->key))
                marked = TMarkWeakValue(element->value, __inCtx) || marked;
+            else
+               TWaitForKey(element->key, element);
             element = element->next;
          }
       }
       return marked;
+   }
+
+   void markWeakElement(void *inElement, MarkContext *__inCtx) HXCPP_OVERRIDE
+   {
+      TMarkWeakValue(((Element *)inElement)->value, __inCtx);
    }
 
 

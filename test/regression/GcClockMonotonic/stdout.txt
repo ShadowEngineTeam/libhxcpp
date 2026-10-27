@@ -1,0 +1,3 @@
+GC stamps ignore a backward clock change: true
+GC stamps ignore a forward clock change: true
+Timer.stamp ignores a backward clock change: true

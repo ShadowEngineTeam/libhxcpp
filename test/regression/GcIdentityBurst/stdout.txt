@@ -1,0 +1,3 @@
+burst identities resolve to their live targets: true
+released burst identities stop resolving: true
+later registrations preserve lookup correctness: true

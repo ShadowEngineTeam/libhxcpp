@@ -330,11 +330,23 @@ struct CensusEntry
    size_t count;
    size_t bytes;
 };
-// Set while __hxcpp_gc_census collects; marking is then single-threaded
+// One __hxcpp_gc_census call, which the next full mark fills
+struct CensusRequest
+{
+   std::unordered_map<hx::Class_obj *,CensusEntry> counts;
+   // Stack values the census could not tell from raw memory, with whether
+   // each is a large allocation; they are marked after the precise marking
+   std::vector< std::pair<void *,bool> > deferred;
+   bool done = false;
+};
+// Census calls take turns, and the one whose turn it is waits here for a full
+//  mark to fill it. A competing collection can run first, so the mark takes
+//  the request rather than the call that asked
+static std::mutex *sgCensusLock = new std::mutex();
+static std::atomic<CensusRequest *> sgCensusRequest(nullptr);
+// Set while a mark fills a census request; marking is then single-threaded
 static bool sgCensus = false;
 static std::unordered_map<hx::Class_obj *,CensusEntry> *sgCensusCounts = 0;
-// Stack values a census collection could not tell from raw memory, with whether
-// each is a large allocation; they are marked after the precise marking
 static std::vector< std::pair<void *,bool> > *sgCensusDeferred = 0;
 namespace hx
 {
@@ -342,6 +354,18 @@ namespace hx
 // the released modules they keep loaded
 void (*gCensusVisitor)(hx::Object *inObj, size_t inBytes) = 0;
 }
+
+// While the weak hash values are marked, the entries whose object key is not
+//  marked yet, by key, and those whose key the marking has reached since.
+//  Marking is single-threaded then
+struct EphemeronEntry
+{
+   hx::HashRoot *hash;
+   void         *element;
+};
+typedef std::unordered_multimap<hx::Object *,EphemeronEntry> EphemeronPending;
+static EphemeronPending *sgEphemeronPending = 0;
+static std::vector<EphemeronEntry> *sgEphemeronReady = 0;
 
 #ifdef HXCPP_DEBUG
 static hx::Object *gCollectTrace = 0;
@@ -494,6 +518,10 @@ static void WaitForSafe(LocalAllocator *inAlloc);
 static void ReleaseFromSafe(LocalAllocator *inAlloc);
 static void ClearPooledAlloc(LocalAllocator *inAlloc);
 static void CollectFromThisThread(bool inMajor,bool inForceCompact);
+// What a collection that a thread starts is, in one argument (see
+//  LocalAllocator::SetupStackAndCollectFlags)
+enum { collectMajor = 1, collectCompact = 2, collectLocked = 4, collectFreeIsFragged = 8 };
+static void CollectFromAlloc(hx::ImmixAllocator *inAlloc, int inFlags);
 
 // Non-zero while Gc.compact() is collecting. Only then are all empty groups given
 // back to the system. Gc.run(true) asks for the same major+compact collection, but
@@ -505,6 +533,12 @@ static std::atomic_int sReleaseAllRequests{0};
 namespace hx
 {
 std::atomic_uint gPauseForCollect{ 0x00000000 };
+
+void EphemeronWait(hx::Object *inKey, HashRoot *inHash, void *inElement)
+{
+   if (sgEphemeronPending)
+      sgEphemeronPending->insert(std::make_pair(inKey, EphemeronEntry{ inHash, inElement }));
+}
 
 StackContext *gMainThreadContext = 0;
 
@@ -1847,6 +1881,34 @@ struct GlobalChunks
       release(inChunk);
    }
 
+   // Every chunk taken was kept for reuse, so a burst of remembered referrers
+   //  or marking left the free list at its peak for good: 8,000 chunks, 4 MB,
+   //  after one million old owners took a young child (libhxcpp #374). This
+   //  keeps inKeep and frees half of the rest, at most inMost, so a large
+   //  surplus decays over several collections rather than going in one pause,
+   //  and a workload that keeps needing it keeps most of it. Only while every
+   //  thread is stopped and no marking runs
+   void trimFree(int inKeep, int inMost)
+   {
+      MarkChunk *last = freeList;
+      for(int i=1;last && i<inKeep;i++)
+         last = last->next;
+      if (!last)
+         return;
+      int surplusCount = 0;
+      for(MarkChunk *c = last->next; c; c = c->next)
+         surplusCount++;
+      int toFree = std::min(inMost, surplusCount/2);
+      MarkChunk *surplus = last->next;
+      for(int i=0;surplus && i<toFree;i++)
+      {
+         MarkChunk *next = surplus->next;
+         delete surplus;
+         surplus = next;
+      }
+      last->next = surplus;
+   }
+
    inline MarkChunk *alloc()
    {
       int expected{ 0 };
@@ -2428,6 +2490,14 @@ void MarkObjectAllocUnchecked(hx::Object *inPtr,hx::MarkContext *__inCtx)
    if (sgCensus)
       CensusCount(inPtr, flags);
 
+   if (sgEphemeronPending && !sgEphemeronPending->empty())
+   {
+      auto range = sgEphemeronPending->equal_range(inPtr);
+      for(auto i=range.first; i!=range.second; ++i)
+         sgEphemeronReady->push_back(i->second);
+      sgEphemeronPending->erase(range.first, range.second);
+   }
+
    int rows = flags & IMMIX_ALLOC_ROW_COUNT;
    if (rows)
    {
@@ -2778,9 +2848,15 @@ typedef std::unordered_map<hx::Object *,int> ObjectIdMap;
 typedef hx::QuickVec<hx::Object *> IdObjectMap;
 FILE_SCOPE ObjectIdMap &sObjectIdMap = *new ObjectIdMap();
 FILE_SCOPE IdObjectMap &sIdObjectMap = *new IdObjectMap();
+// The objects given an ID since the last collection, which are all a minor
+//  collection can find dead. Emptied by every collection, before any moves
+FILE_SCOPE hx::QuickVec<hx::Object *> &sYoungObjectIds = *new hx::QuickVec<hx::Object *>();
 
 typedef std::unordered_set<hx::Object *> MakeZombieSet;
 FILE_SCOPE MakeZombieSet &sMakeZombieSet = *new MakeZombieSet();
+// The objects given to doNotKill since the last collection, which are all a
+//  minor collection can find dead. Emptied by every collection, before any moves
+FILE_SCOPE hx::QuickVec<hx::Object *> &sYoungZombieCandidates = *new hx::QuickVec<hx::Object *>();
 
 typedef hx::QuickVec<hx::Object *> ZombieList;
 FILE_SCOPE ZombieList &sZombieList = *new ZombieList();
@@ -2812,8 +2888,36 @@ void InternalFinalizer::Detach()
    mValid = false;
 }
 
-void FindZombies(MarkContext &inContext)
+static void MakeZombie(hx::Object *inObj, MarkContext &inContext)
 {
+   sZombieList.push(inObj);
+
+   // Mark now to prevent secondary zombies...
+   inContext.init();
+   hx::MarkObjectAlloc(inObj , &inContext );
+   inContext.processMarkStack();
+}
+
+// inMinor: a minor collection, in which an old object cannot die, so only the
+//  registrations made since the last collection are looked at. Walking every
+//  one made a large stable set cost tens of milliseconds a minor collection
+//  (libhxcpp #383)
+void FindZombies(MarkContext &inContext, bool inMinor)
+{
+   if (inMinor)
+   {
+      for(int i=0;i<sYoungZombieCandidates.size();i++)
+      {
+         hx::Object *obj = sYoungZombieCandidates[i];
+         unsigned char mark = ((unsigned char *)obj)[HX_ENDIAN_MARK_ID_BYTE];
+         // A zombie already, or registered again, is no longer in the set
+         if ( mark!=gByteMarkID && sMakeZombieSet.erase(obj) )
+            MakeZombie(obj, inContext);
+      }
+      sYoungZombieCandidates.clear();
+      return;
+   }
+   sYoungZombieCandidates.clear();
    for(MakeZombieSet::iterator i=sMakeZombieSet.begin(); i!=sMakeZombieSet.end(); )
    {
       hx::Object *obj = *i;
@@ -2823,13 +2927,8 @@ void FindZombies(MarkContext &inContext)
       unsigned char mark = ((unsigned char *)obj)[HX_ENDIAN_MARK_ID_BYTE];
       if ( mark!=gByteMarkID )
       {
-         sZombieList.push(obj);
          sMakeZombieSet.erase(i);
-
-         // Mark now to prevent secondary zombies...
-         inContext.init();
-         hx::MarkObjectAlloc(obj , &inContext );
-         inContext.processMarkStack();
+         MakeZombie(obj, inContext);
       }
 
       i = next;
@@ -3062,13 +3161,20 @@ static void TakeDeadFinalizers(MAP &inMap, MAP *inOld, RUN &outRun)
          outRun.push_back( std::make_pair(obj, i->second) );
          i = inMap.erase(i);
       }
-      else if (inOld)
-      {
-         (*inOld)[obj] = i->second;
-         i = inMap.erase(i);
-      }
       else
          ++i;
+   }
+
+   // The two hold different objects, so the larger keeps its nodes and the
+   //  smaller is copied into it. Moving each survivor into the old map made a
+   //  node and freed one for every entry, which for a batch of new
+   //  registrations was most of a collection (libhxcpp #375)
+   if (inOld && !inMap.empty())
+   {
+      if (inMap.size() > inOld->size())
+         inMap.swap(*inOld);
+      inOld->insert(inMap.begin(), inMap.end());
+      inMap.clear();
    }
 }
 
@@ -3103,6 +3209,47 @@ static void UpdateWeakRefs(WeakRefs &inList, WeakRefs *inOld)
             i++;
       }
    }
+}
+
+// Gives back what a vector holds beyond four times what it uses
+template<typename T>
+static void ShrinkQuickVec(hx::QuickVec<T> &ioVec)
+{
+   if (ioVec.mAlloc > 1024 && ioVec.mAlloc/4 > ioVec.size())
+   {
+      size_t alloc = 10 + ioVec.size()*3/2;
+      T *ptr = static_cast<T*>(realloc(ioVec.mPtr, alloc*sizeof(T)));
+      if (ptr)
+      {
+         ioVec.mPtr = ptr;
+         ioVec.mAlloc = alloc;
+      }
+   }
+}
+
+// After a burst of IDs whose objects died, the tables kept the storage of
+//  their peak: a million left 13 MB of vectors and a million hash buckets
+//  (libhxcpp #379). The unused IDs at the top of the range are dropped, with
+//  their slots, and storage far beyond what is left goes back. Live objects
+//  keep their IDs; one in the middle keeps the free IDs below it
+static void TrimObjectIds()
+{
+   size_t slots = sIdObjectMap.size();
+   while(slots>0 && !sIdObjectMap[slots-1])
+      slots--;
+   if (slots<sIdObjectMap.size())
+   {
+      sIdObjectMap.setSize(slots);
+      int kept = 0;
+      for(int i=0;i<sFreeObjectIds.size();i++)
+         if (sFreeObjectIds[i]<(int)slots)
+            sFreeObjectIds[kept++] = sFreeObjectIds[i];
+      sFreeObjectIds.setSize(kept);
+   }
+   ShrinkQuickVec(sIdObjectMap);
+   ShrinkQuickVec(sFreeObjectIds);
+   if (sObjectIdMap.bucket_count() > 1024 && sObjectIdMap.bucket_count()/4 > sObjectIdMap.size())
+      ObjectIdMap(sObjectIdMap.begin(), sObjectIdMap.end()).swap(sObjectIdMap);
 }
 
 // inMinor: a minor collection, which leaves the old entries alone
@@ -3144,22 +3291,49 @@ void RunFinalizers(bool inMinor)
 
    MEM_STAMP(hx::tFinalizers);
 
-   for(ObjectIdMap::iterator i=sObjectIdMap.begin(); i!=sObjectIdMap.end(); )
+   // A minor collection frees no old object, so only the IDs given since the
+   //  last collection can belong to a dead one. Walking every registration
+   //  made a large stable table cost tens of milliseconds a minor collection
+   //  (libhxcpp #357)
+   if (inMinor)
    {
-      ObjectIdMap::iterator next = i;
-      next++;
-
-      hx::Object *o = i->first;
-      unsigned char mark = ((unsigned char *)o)[HX_ENDIAN_MARK_ID_BYTE];
-      if ( mark!=gByteMarkID && !(((unsigned int *)o)[-1] & HX_GC_CONST_ALLOC_BIT))
+      for(int i=0;i<sYoungObjectIds.size();i++)
       {
-         sFreeObjectIds.push(i->second);
-         sIdObjectMap[i->second] = 0;
-         sObjectIdMap.erase(i);
+         hx::Object *o = sYoungObjectIds[i];
+         unsigned char mark = ((unsigned char *)o)[HX_ENDIAN_MARK_ID_BYTE];
+         if ( mark!=gByteMarkID && !(((unsigned int *)o)[-1] & HX_GC_CONST_ALLOC_BIT))
+         {
+            ObjectIdMap::iterator id = sObjectIdMap.find(o);
+            if (id!=sObjectIdMap.end())
+            {
+               sFreeObjectIds.push(id->second);
+               sIdObjectMap[id->second] = 0;
+               sObjectIdMap.erase(id);
+            }
+         }
       }
-
-      i = next;
    }
+   else
+   {
+      for(ObjectIdMap::iterator i=sObjectIdMap.begin(); i!=sObjectIdMap.end(); )
+      {
+         ObjectIdMap::iterator next = i;
+         next++;
+
+         hx::Object *o = i->first;
+         unsigned char mark = ((unsigned char *)o)[HX_ENDIAN_MARK_ID_BYTE];
+         if ( mark!=gByteMarkID && !(((unsigned int *)o)[-1] & HX_GC_CONST_ALLOC_BIT))
+         {
+            sFreeObjectIds.push(i->second);
+            sIdObjectMap[i->second] = 0;
+            sObjectIdMap.erase(i);
+         }
+
+         i = next;
+      }
+      TrimObjectIds();
+   }
+   sYoungObjectIds.clear();
 
    for(int i=0;i<sWeakHashList.size();    )
    {
@@ -3228,7 +3402,8 @@ void GCDoNotKill(hx::Object *inObj)
       throw Dynamic(HX_CSTRING("doNotKill - invalid const object"));
 
    std::lock_guard<hx::FastMutex> lock(*gSpecialObjectLock);
-   sMakeZombieSet.insert(inObj);
+   if (sMakeZombieSet.insert(inObj).second)
+      sYoungZombieCandidates.push(inObj);
 }
 
 hx::Object *GCGetNextZombie()
@@ -4274,7 +4449,7 @@ public:
 
          if (!result)
          {
-            inAlloc->SetupStackAndCollect(false,forceCompact,true,true);
+            CollectFromAlloc(inAlloc, (forceCompact ? collectCompact : 0) | collectLocked | collectFreeIsFragged);
             result = GetNextFree(inRequiredBytes);
          }
 
@@ -4282,7 +4457,7 @@ public:
          {
             // Try with compact this time...
             forceCompact = true;
-            inAlloc->SetupStackAndCollect(false,forceCompact,true,true);
+            CollectFromAlloc(inAlloc, (forceCompact ? collectCompact : 0) | collectLocked | collectFreeIsFragged);
             result = GetNextFree(inRequiredBytes);
          }
 
@@ -4745,6 +4920,7 @@ public:
       }
       hx::sObjectIdMap[(hx::Object *)inPtr] = id;
       hx::sIdObjectMap[id] = (hx::Object *)inPtr;
+      hx::sYoungObjectIds.push((hx::Object *)inPtr);
       return id;
    }
 
@@ -5276,8 +5452,15 @@ public:
 
 
       mMarker.init();
+      // Only a full mark reaches every live object
+      CensusRequest *census = inGenerational ? nullptr : sgCensusRequest.load();
+      sgCensus = census && !census->done;
       if (sgCensus)
+      {
+         sgCensusCounts = &census->counts;
+         sgCensusDeferred = &census->deferred;
          sgCensusCounts->clear();
+      }
 
       hx::MarkClassStatics(&mMarker);
       #if defined(HXCPP_SCRIPTABLE) && defined(HXCPP_GC_GENERATIONAL)
@@ -5353,8 +5536,11 @@ public:
       {
          mMarker.releaseJobs();
 
-         // Unleash the workers...
-         StartThreadJobs(tpjMark, MAX_GC_THREADS, true);
+         // Unleash the workers, if the roots and stacks left them anything:
+         //  a minor collection that marked nothing new paid for waking and
+         //  joining every one of them, most of its time (libhxcpp #377)
+         if (hx::sGlobalChunks.processList.load())
+            StartThreadJobs(tpjMark, MAX_GC_THREADS, true);
       }
       else
       #endif
@@ -5370,8 +5556,16 @@ public:
       // An object that only a weak hash value keeps is not a zombie while its key lives,
       // and a zombie can keep more keys alive
       MarkWeakHashValues();
-      hx::FindZombies(mMarker);
+      hx::FindZombies(mMarker, inGenerational);
       MarkWeakHashValues();
+
+      if (sgCensus)
+      {
+         census->done = true;
+         sgCensus = false;
+         sgCensusCounts = 0;
+         sgCensusDeferred = 0;
+      }
 
       hx::RunFinalizers(inGenerational);
 
@@ -5425,13 +5619,25 @@ public:
    // direction, so one registered the other way resolves in the next (libhxcpp #203).
    // Before, what a pass found was marked only at the end of the pass, by restarting
    // the marking threads, so such a chain gave up one link per pass.
+   //
+   // Within one hash that did not help: a key that only another entry's value
+   // leads to was found marked in the next pass over the whole table, so a
+   // chain of N such entries took N passes (libhxcpp #378). An entry whose
+   // object key is not marked is now remembered by its key while the values
+   // are marked, and once the marking reaches the key its value is marked
+   // too, in the same pass. String keys still wait for the next pass.
    void MarkWeakHashValues()
    {
+      EphemeronPending pending;
+      std::vector<EphemeronEntry> ready;
+      sgEphemeronReady = &ready;
       bool marked;
       bool forward = true;
       do
       {
          marked = false;
+         pending.clear();
+         sgEphemeronPending = &pending;
          int count = hx::sWeakHashList.size();
          for(int i=0;i<count;i++)
          {
@@ -5444,11 +5650,22 @@ public:
                   marked = true;
                   mMarker.processMarkStack();
                }
+               while(!ready.empty())
+               {
+                  marked = true;
+                  mMarker.init();
+                  for(size_t r=0;r<ready.size();r++)
+                     ready[r].hash->markWeakElement(ready[r].element, &mMarker);
+                  ready.clear();
+                  mMarker.processMarkStack();
+               }
             }
          }
          forward = !forward;
       }
       while(marked);
+      sgEphemeronPending = 0;
+      sgEphemeronReady = 0;
    }
 
    #ifdef HX_GC_VERIFY_ALLOC_START
@@ -5754,7 +5971,18 @@ public:
       if (sweepOld)
       {
          mLargeOld = 0;
-         mLargeIndexReady = false;
+         // The kept index loses the dead and takes the new survivors, so a
+         //  full collection does not sort a stable pool again (libhxcpp #365).
+         //  The sweep reorders the list, so the new survivors are taken first
+         if (mLargeIndexReady)
+         {
+            auto dead = [](uintptr_t inBase) { return (((unsigned int *)inBase)[-1] & IMMIX_ALLOC_MARK_ID) != hx::gMarkID; };
+            mLargeIndex.erase(std::remove_if(mLargeIndex.begin(), mLargeIndex.end(), dead), mLargeIndex.end());
+            mLargeIndexNew.clear();
+            for(int i=firstNew;i<mLargeList.size();i++)
+               if (!dead(reinterpret_cast<uintptr_t>(mLargeList[i] + 2)))
+                  mLargeIndexNew.push_back(reinterpret_cast<uintptr_t>(mLargeList[i] + 2));
+         }
       }
       int l0 = mLargeList.size();
       // Bounds of the survivors, so a past burst does not keep them wide
@@ -5790,11 +6018,14 @@ public:
          }
       }
       // Every survivor is old now. A kept index takes the new survivors' bases
-      if (mLargeIndexReady && mLargeList.size()>firstNew)
+      if (mLargeIndexReady)
       {
          size_t had = mLargeIndex.size();
-         for(int i=firstNew;i<mLargeList.size();i++)
-            mLargeIndex.push_back( reinterpret_cast<uintptr_t>(mLargeList[i] + 2) );
+         if (sweepOld)
+            mLargeIndex.insert(mLargeIndex.end(), mLargeIndexNew.begin(), mLargeIndexNew.end());
+         else
+            for(int i=firstNew;i<mLargeList.size();i++)
+               mLargeIndex.push_back( reinterpret_cast<uintptr_t>(mLargeList[i] + 2) );
          std::sort(mLargeIndex.begin()+had, mLargeIndex.end());
          std::inplace_merge(mLargeIndex.begin(), mLargeIndex.begin()+had, mLargeIndex.end());
       }
@@ -6089,6 +6320,11 @@ public:
       #ifdef HXCPP_GC_VERIFY
       VerifyBlockOrder();
       #endif
+
+      // Minor collections leave the spare chunks to the next full one, so a
+      //  burst repeated between full collections does not make them again
+      if (!generational)
+         hx::sGlobalChunks.trimFree(256, 1024);
 
       for(int i=0;i<LOCAL_POOL_SIZE;i++)
       {
@@ -6398,6 +6634,8 @@ public:
    std::vector<uintptr_t> mLargeIndex;
    bool mLargeIndexReady = false;
    int mLargeLookups = 0;
+   // The new survivors' bases, taken for the index before a full sweep
+   std::vector<uintptr_t> mLargeIndexNew;
    std::vector<uintptr_t> mYoungLargeIndex;
    bool mYoungLargeIndexReady = false;
    int mYoungLargeLookups = 0;
@@ -7086,6 +7324,24 @@ public:
 
    void SetupStackAndCollect(bool inMajor, bool inForceCompact, bool inLocked=false,bool inFreeIsFragged=false) HXCPP_OVERRIDE
    {
+      SetupStackAndCollectFlags( (inMajor ? collectMajor : 0) | (inForceCompact ? collectCompact : 0) |
+                                 (inLocked ? collectLocked : 0) | (inFreeIsFragged ? collectFreeIsFragged : 0) );
+   }
+
+   // The flags come in one register. SetupStackAndCollect's fifth argument went
+   //  on the stack, in the range this thread's own scan covers, and MSVC stores
+   //  a bool there as one byte over what the slot held: a stale heap address
+   //  with its low byte cleared can point at an object, which then stayed
+   //  alive through every collection this thread made from that depth
+   //  (libhxcpp #367). The runtime calls this, so no argument it passes is on
+   //  the stack above the scan's bottom
+   void SetupStackAndCollectFlags(int inFlags)
+   {
+      bool inMajor = inFlags & collectMajor;
+      bool inForceCompact = inFlags & collectCompact;
+      bool inLocked = inFlags & collectLocked;
+      bool inFreeIsFragged = inFlags & collectFreeIsFragged;
+
       #ifndef HXCPP_SINGLE_THREADED_APP
         #if HXCPP_DEBUG
         if (mGCFreeZone)
@@ -7443,7 +7699,12 @@ void VisitLocalAlloc(LocalAllocator *inAlloc,hx::VisitContext *__inCtx)
 void CollectFromThisThread(bool inMajor,bool inForceCompact)
 {
    LocalAllocator *la = GetLocalAlloc();
-   la->SetupStackAndCollect(inMajor,inForceCompact);
+   la->SetupStackAndCollectFlags( (inMajor ? collectMajor : 0) | (inForceCompact ? collectCompact : 0) );
+}
+
+void CollectFromAlloc(hx::ImmixAllocator *inAlloc, int inFlags)
+{
+   ((LocalAllocator *)inAlloc)->SetupStackAndCollectFlags(inFlags);
 }
 
 namespace hx
@@ -7641,7 +7902,7 @@ size_t InternalCollectBytes(bool inMajor,bool inCompact)
    if (!sgAllocInit)
        return 0;
 
-   GetLocalAlloc()->SetupStackAndCollect(inMajor, inCompact);
+   GetLocalAlloc()->SetupStackAndCollectFlags( (inMajor ? collectMajor : 0) | (inCompact ? collectCompact : 0) );
 
    return sGlobalAlloc->MemUsage();
 }
@@ -7957,15 +8218,23 @@ int __hxcpp_gc_trace(hx::Class inClass,bool inPrint)
 
 Dynamic __hxcpp_gc_census()
 {
-   std::unordered_map<hx::Class_obj *,CensusEntry> counts;
-   std::vector< std::pair<void *,bool> > deferred;
-   sgCensusCounts = &counts;
-   sgCensusDeferred = &deferred;
-   sgCensus = true;
-   hx::InternalCollect(true,false);
-   sgCensus = false;
-   sgCensusCounts = 0;
-   sgCensusDeferred = 0;
+   // Simultaneous calls replaced each other's counts, and one that found another
+   //  collection running returned with none (libhxcpp #363)
+   CensusRequest request;
+   {
+      {
+         hx::AutoGCFreeZone wait;
+         sgCensusLock->lock();
+      }
+      struct Turn
+      {
+         ~Turn() { sgCensusRequest = nullptr; sgCensusLock->unlock(); }
+      } turn;
+      sgCensusRequest = &request;
+      while(!request.done)
+         hx::InternalCollect(true,false);
+   }
+   std::unordered_map<hx::Class_obj *,CensusEntry> &counts = request.counts;
 
    std::vector< std::pair<hx::Class_obj *,CensusEntry> > sorted(counts.begin(), counts.end());
    std::sort(sorted.begin(), sorted.end(), [](const std::pair<hx::Class_obj *,CensusEntry> &a, const std::pair<hx::Class_obj *,CensusEntry> &b)

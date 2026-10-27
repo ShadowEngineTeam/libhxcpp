@@ -138,6 +138,34 @@ static inline bool regexp_retry_without_jit(int inResult)
    #endif
 }
 
+// A match over a span this long or longer runs in a GC-free zone, so that a
+// collection another thread asks for does not wait for it to finish, which for
+// a long subject added the whole match to every thread's pause (libhxcpp
+// #330). Entering the zone costs about as much as a match over a few dozen
+// characters, so shorter spans match as before.
+static const int REGEXP_FREE_ZONE_SPAN = 1024;
+
+// The subject and the expression object stay alive while the collector runs
+// beside the match through these copies in this frame, which it scans
+// conservatively, and under HXCPP_GC_MOVING stay where they are. The match
+// data and the compiled code are malloc'd and owned by the expression.
+template<typename MATCH>
+static int regexp_match_span(int inSpan, const void *inSubject, const void *inOwner, MATCH inMatch)
+{
+   if (inSpan<REGEXP_FREE_ZONE_SPAN)
+      return inMatch();
+   const void * volatile subject = inSubject;
+   const void * volatile owner = inOwner;
+   int result;
+   {
+      hx::AutoGCFreeZone zone;
+      result = inMatch();
+   }
+   (void)subject;
+   (void)owner;
+   return result;
+}
+
 static void regexp_compilation_error(String pattern, int error_code, size_t error_offset) {
    PCRE2_UCHAR8 error_buffer[128];
    pcre2_get_error_message_8(error_code, error_buffer, sizeof(error_buffer));
@@ -314,9 +342,14 @@ struct pcredata : public hx::Object
 
          // Valid utf16 (see utf16Subject), so PCRE2_NO_UTF_CHECK is safe
          PCRE2_SPTR16 subject = (PCRE2_SPTR16)utf16Subject(string);
-         int n = pcre2_match_16(rUtf16,subject,pos+len,pos,PCRE2_NO_UTF_CHECK,match_data16,NULL);
-         if (regexp_retry_without_jit(n))
-            n = pcre2_match_16(rUtf16,subject,pos+len,pos,PCRE2_NO_UTF_CHECK|PCRE2_NO_JIT,match_data16,NULL);
+         pcre2_code_16 *code = rUtf16;
+         pcre2_match_data_16 *data = match_data16;
+         int n = regexp_match_span(len, subject, this, [=]() {
+            int n = pcre2_match_16(code,subject,pos+len,pos,PCRE2_NO_UTF_CHECK,data,NULL);
+            if (regexp_retry_without_jit(n))
+               n = pcre2_match_16(code,subject,pos+len,pos,PCRE2_NO_UTF_CHECK|PCRE2_NO_JIT,data,NULL);
+            return n;
+         });
          // The compilation above, and the frames the match keeps in its data
          memory->report();
          return checkMatch(n);
@@ -345,9 +378,14 @@ struct pcredata : public hx::Object
       // The 8-bit subject comes from utf8_str(), which validates, so
       // PCRE2_NO_UTF_CHECK is safe here
       PCRE2_SPTR8 subject = (PCRE2_SPTR8)string.utf8_str();
-      int n = pcre2_match_8(rUtf8,subject,pos+len,pos,PCRE2_NO_UTF_CHECK,match_data8,NULL);
-      if (regexp_retry_without_jit(n))
-         n = pcre2_match_8(rUtf8,subject,pos+len,pos,PCRE2_NO_UTF_CHECK|PCRE2_NO_JIT,match_data8,NULL);
+      pcre2_code_8 *code = rUtf8;
+      pcre2_match_data_8 *data = match_data8;
+      int n = regexp_match_span(len, subject, this, [=]() {
+         int n = pcre2_match_8(code,subject,pos+len,pos,PCRE2_NO_UTF_CHECK,data,NULL);
+         if (regexp_retry_without_jit(n))
+            n = pcre2_match_8(code,subject,pos+len,pos,PCRE2_NO_UTF_CHECK|PCRE2_NO_JIT,data,NULL);
+         return n;
+      });
       memory->report();
       return checkMatch(n);
    }

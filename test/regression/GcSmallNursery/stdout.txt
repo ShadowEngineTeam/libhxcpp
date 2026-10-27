@@ -1,0 +1,2 @@
+small nursery collections preserve changed references: true
+full collection preserves the small retained graph: true

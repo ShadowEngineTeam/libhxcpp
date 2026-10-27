@@ -5,6 +5,7 @@ import AnonBenchmarks;
 import ArrayBenchmarks;
 import CffiBenchmarks;
 import EnumBenchmarks;
+import GcBenchmarks;
 import IoBenchmarks;
 import LargeBenchmarks;
 import MapBenchmarks;
@@ -39,6 +40,7 @@ class Main {
 			new MapInt64(), new MapInt64Values(), new ArrayPushDynamic(), new ArrayReserveDynamic(), new ArrayPop(),
 			new SearchFrom(), new StringLongNeedle(), new ParseNumbers(), new AnonFieldSmall(), new AnonFieldWide(), new SqliteRows(),
 			new SocketRead(), new CffiBuffer(), new LargeResize(), new LargeRecycle(), new LargeCopy(), new LargeCachePurge(),
+			new GcWeakMapInt(), new GcObjectIds(), new GcLargeStackRoots(), new GcRegexWait(), new GcZombieReservations(), new GcFinalizerPromotion(), new GcIdleMinor(), new GcRememberedBurst(), new GcObjectIdBurst(), new GcWeakMapChain(),
 		];
 		#end
 	}

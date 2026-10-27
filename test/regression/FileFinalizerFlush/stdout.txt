@@ -1,0 +1,3 @@
+abandoned files are flushed: true
+abandoned files are released: true
+a reachable file stays writable: true

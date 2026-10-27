@@ -1,0 +1,4 @@
+values survive minor collections: true
+values survive full collections: true
+transient keys are removed: true
+value-to-key cycles are collected: true

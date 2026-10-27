@@ -108,6 +108,16 @@ These numbers are from one Windows machine; Linux and macOS results are still to
 | `sort_int` | `Array<Int>` sorted with a comparator closure |
 | `sort_string` | `Array<String>` sorted with `Reflect.compare` |
 | `sort_object` | Objects sorted by an Int field, with repeated keys |
+| `gc_weak_map_int` | Collections with an unchanged `WeakMap` of 262,144 retained keys to Int values; each collection's duration is recorded |
+| `gc_object_ids` | Collections with 250,000 retained objects that each have an ID from `__hxcpp_obj_id` |
+| `gc_large_stack_roots` | Collections with 65,536 retained 4 KB buffers and twelve raw pointers into them on the stack |
+| `gc_regex_wait` | A collection that another thread asks for 5 ms into a match over a 32 MB subject; the latency is how long that request took |
+| `gc_zombie_reservations` | Collections with 250,000 retained objects that are each registered with `Gc.doNotKill` |
+| `gc_finalizer_promotion` | A full collection after 125,000 retained objects are given finalizers again, which moves the registrations to the old table; no finalizer runs |
+| `gc_idle_minor` | 2,000 collections of a heap of 128 retained objects, so that a minor collection has nothing to mark |
+| `gc_remembered_burst` | 250,000 retained objects each take a new child, then a collection: a burst of remembered referrers and marking in each round |
+| `gc_object_id_burst` | 250,000 new objects given IDs with `__hxcpp_obj_id`, dropped, then a full collection, in each round |
+| `gc_weak_map_chain` | Collections with a `WeakMap` of 4,096 entries in which each key's value leads to the next key, and only the first key is held elsewhere |
 | `noop` | Starting the program and exiting at once (startup time, measured 20 times per runtime) |
 
 ### CPPIA
@@ -150,6 +160,7 @@ haxe --run Run                       # every benchmark, both runtimes
 haxe --run Run --only map_int,sort_int
 haxe --run Run --only cppia_interp_native_call,cppia_jit_native_call
 haxe --run Run --no-build            # reuse the last builds
+haxe --run Run --only gc_object_ids --define HXCPP_GC_GENERATIONAL
 haxe --run Run --readme              # publish: this page and the README summary
 ```
 

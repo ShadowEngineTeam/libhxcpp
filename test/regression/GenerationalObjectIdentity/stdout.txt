@@ -1,0 +1,5 @@
+minor collections keep live IDs: true
+minor collections clear dead young IDs: true
+full collection keeps live IDs: true
+full collection clears released old IDs: true
+freed IDs are given again correctly: true

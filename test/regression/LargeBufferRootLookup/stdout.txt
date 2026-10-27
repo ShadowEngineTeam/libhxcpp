@@ -1,0 +1,5 @@
+stack-held buffers with 128 pooled: true
+stack-held buffers with 256 pooled: true
+stack-held buffers with 16 pooled: true
+stack-held buffers with 192 pooled: true
+pooled buffers intact: true

@@ -41,7 +41,6 @@
 
 //#include <hxMacros.h>
 
-static double t0 = 0;
 double __hxcpp_time_stamp()
 {
 #ifdef HX_WINDOWS
@@ -77,20 +76,25 @@ double __hxcpp_time_stamp()
 #else
    #if defined(IPHONE) || defined(APPLETV)
       double t = CACurrentMediaTime();
+   #elif defined(USE_CLOCK_GETTIME)
+      // The collector's pause times and heap sizing take differences of these,
+      //  which a wall-clock correction made negative or a minute long when
+      //  gettimeofday came first (libhxcpp #347)
+      struct timespec ts;
+      if( clock_gettime(CLOCK_MONOTONIC, &ts) )
+         return 0;
+      double t =  ( ts.tv_sec + ((double)ts.tv_nsec)*1e-9  );
    #elif defined(USE_GETTIMEOFDAY)
       struct timeval tv;
       if( gettimeofday(&tv,NULL) )
          return 0;
       double t =  ( tv.tv_sec + ((double)tv.tv_usec) / 1000000.0 );
-   #elif defined(USE_CLOCK_GETTIME)
-      struct timespec ts;
-      clock_gettime(CLOCK_MONOTONIC, &ts);
-      double t =  ( ts.tv_sec + ((double)ts.tv_nsec)*1e-9  );
    #else
       double t = (double)clock() * (1.0 / CLOCKS_PER_SEC);
    #endif
-   if (t0==0) t0 = t;
-   return t-t0;
+   // Set once, by whichever thread calls first
+   static const double start = t;
+   return t-start;
 #endif
 }
 

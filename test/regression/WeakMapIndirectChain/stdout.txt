@@ -1,0 +1,2 @@
+indirect weak-map chain remains reachable: true
+unrooted chain and weak entries are collected: true

@@ -1,0 +1,3 @@
+promotion preserves live targets without callbacks: true
+replacement promotion preserves live targets: true
+replacement and removal survive promotion: true
