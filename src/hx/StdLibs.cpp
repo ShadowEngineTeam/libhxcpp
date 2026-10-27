@@ -847,6 +847,10 @@ int __int__(double x)
    #ifndef __EMSCRIPTEN__
    if (x < -0x7fffffff || x>0x7fffffff )
    {
+      // Past 64 bits, infinities included, the cast is undefined. x86 gives
+      // the 64-bit minimum there, whose low 32 bits are 0
+      if (x < -9223372036854775808.0 || x >= 9223372036854775808.0)
+         return 0;
       __int64 big_int = (__int64)(x);
       return big_int & 0xffffffff;
    }
