@@ -42,6 +42,7 @@ libhxcpp 6.0.0 (unreleased)
 * Fixed cpp.net.Poll.events returning at once on Windows when no sockets were registered, before any prepare or after one removed the last socket, so an idle event loop spun at full CPU: Winsock's select fails with no sockets, which looked like a finished empty poll. It now waits out the timeout, and with a negative one waits for good, as on other systems (libhxcpp #311)
 * Fixed a large backward FileInput.seek with SeekCur, after readByte, moving the file about 2 GB forward instead of failing: taking back the bytes read ahead wrapped the int offset. The offset is now 64 bits, and a seek that fails leaves the position where it was, where it moved it to the end of the bytes read ahead (libhxcpp #349)
 * Fixed FileInput.tell after readByte on a file opened in text mode on Windows giving a position past unread text, so seeking back to it skipped some: the bytes read ahead had their CRLFs turned into LFs, and tell took back fewer bytes than the stream had moved over. Text-mode files no longer read ahead on Windows (libhxcpp #353)
+* Fixed FileSystem.readDirectory on Windows throwing "Invalid directory" for a path longer than MAX_PATH, such as an extended-length one starting with \\?\, before Windows saw it, though other file functions take such a path. The search pattern is now as long as the path needs, after a backslash, since \\?\ paths take no forward slashes (libhxcpp #352, HaxeFoundation/hxcpp#1352)
 
 libhxcpp 6.0.0-rc.1
 ------------------------------------------------------------

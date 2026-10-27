@@ -762,35 +762,22 @@ Array<String> _hx_std_sys_read_dir( String p )
    Array<String> result = Array_obj<String>::__new();
 
 #if defined(NEKO_WINDOWS)
-   const wchar_t *path = p.wchar_str();
-   size_t len = wcslen(path);
-   if (len>MAX_PATH)
-      hx::Throw(HX_CSTRING("Invalid directory"));
+   // Sized to the path: a fixed MAX_PATH buffer threw for a longer one,
+   // such as a \\?\ path, before Windows saw it. The pattern goes after a
+   // backslash, as \\?\ paths take no forward slashes
+   std::wstring searchPath(p.wchar_str());
+   size_t len = searchPath.size();
+   if( len && searchPath[len-1] != '/' && searchPath[len-1] != '\\' )
+      searchPath += L'\\';
+   searchPath += L"*.*";
 
    WIN32_FIND_DATAW d;
    HANDLE handle;
-  #if defined(HX_WINRT) && !defined(_XBOX_ONE)
-   std::wstring tempWStr(path);
-   std::string searchPath(tempWStr.begin(), tempWStr.end());
-  #else
-   // Worst case append below is "/*.*" plus the terminator - five wchars
-   wchar_t searchPath[ MAX_PATH + 5 ];
-   memcpy(searchPath,path, len*sizeof(wchar_t));
-  #endif
-
-
-   if( len && path[len-1] != '/' && path[len-1] != '\\' )
-      searchPath[len++] = '/';
-   searchPath[len++] = '*';
-   searchPath[len++] = '.';
-   searchPath[len++] = '*';
-   searchPath[len] = '\0';
-
    hx::EnterGCFreeZone();
   #if defined(HX_WINRT) && !defined(_XBOX_ONE)
-   handle = FindFirstFileEx(searchPath.c_str(), FindExInfoStandard, &d, FindExSearchNameMatch, NULL, 0);
+   handle = FindFirstFileExW(searchPath.c_str(), FindExInfoStandard, &d, FindExSearchNameMatch, NULL, 0);
   #else
-   handle = FindFirstFileW(searchPath,&d);
+   handle = FindFirstFileW(searchPath.c_str(),&d);
   #endif
    if( handle == INVALID_HANDLE_VALUE )
    {
