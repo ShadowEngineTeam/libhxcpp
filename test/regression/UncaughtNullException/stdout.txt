@@ -1,0 +1,4 @@
+an uncaught null ends the program with a failure code: true
+an uncaught null is reported as Error : null: true
+an uncaught String ends the program with a failure code: true
+an uncaught String is reported with its text: true

@@ -74,5 +74,6 @@ ThreadEndsAtExitDebugger: threads
 ThreadEndsWhileCollecting: threads
 ThreadWaitTimeouts: threads
 TimerStampFirstCall: threads
+UncaughtNullException: processes (runs itself)
 WeakAdapterDepth: threads (std::thread, which needs a pthreads build)
 WeakMapSparseCapacity: threads (std::thread, which needs a pthreads build)
