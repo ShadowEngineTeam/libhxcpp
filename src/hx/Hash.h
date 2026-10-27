@@ -29,7 +29,15 @@ inline unsigned int HashMixInt(unsigned int h)
 }
 
 inline unsigned int HashCalcHash(int inKey) { return HashMixInt((unsigned int)inKey); }
-inline unsigned int HashCalcHash(cpp::Int64 inKey) { return HashMixInt((unsigned int)((inKey >> 32) ^ inKey)); }
+// The high half is multiplied in rather than xored: xor folds a packed (x, y)
+// pair to x ^ y, so a 256 x 256 grid had 256 hashes, and equal halves all
+// to 0. A key with a zero high half hashes as the same Int does.
+inline unsigned int HashCalcHash(cpp::Int64 inKey)
+{
+   unsigned int low = (unsigned int)inKey;
+   unsigned int high = (unsigned int)((cpp::UInt64)inKey >> 32);
+   return HashMixInt(low ^ (high * 0x9E3779B1u));
+}
 inline unsigned int HashCalcHash(const String &inKey) { return inKey.hash(); }
 inline unsigned int HashCalcHash(const Dynamic &inKey)
 {
