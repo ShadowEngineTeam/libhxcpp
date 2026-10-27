@@ -12,6 +12,7 @@ CppiaArrayAccess: its host is the first --next section, which -D emscripten does
 CppiaBreakpoints: threads
 CppiaModuleFree: threads
 ExitWithBusyWorker: processes and threads
+FileFinalizerFlush: threads (std::thread, which needs a pthreads build)
 FinalizerExceptionState: threads (std::thread, which needs a pthreads build)
 FinalizersAcrossFreeZones: threads
 GcConcurrentCensus: threads (std::thread, which needs a pthreads build)
