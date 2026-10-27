@@ -242,14 +242,16 @@ public:
 
    // For GC (non-const) strings the memoized hash lives after the
    // terminator - note the offset is in BYTES, so wide strings store it
-   // past their final two-byte NUL
-   inline unsigned int *endHashSlot() const
+   // past their final two-byte NUL. It need not be 4-byte aligned, so it is
+   // only reached through memcpy, and a char pointer: memcpy through an
+   // unsigned int pointer may assume the alignment
+   inline char *endHashSlot() const
    {
       #ifdef HX_SMART_STRINGS
       if (!isAsciiEncodedQ())
-         return (unsigned int *)(__s + (length<<1) + 2);
+         return const_cast<char *>(__s) + (length<<1) + 2;
       #endif
-      return (unsigned int *)(__s + length + 1);
+      return const_cast<char *>(__s) + length + 1;
    }
 
    inline unsigned int endHash() const

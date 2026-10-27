@@ -21,6 +21,15 @@ static int freeIds() { return (int)hx::sFreeObjectIds.size(); }
 #endif
 static bool idMatches(int id,Dynamic value) { return __hxcpp_id_obj(id)==value.mPtr; }
 static bool idEmpty(int id) { return __hxcpp_id_obj(id)==0; }
+// Without the moving collector a 32-bit build gives the address of an object as
+// its ID, as __hxcpp_obj_id in Immix.cpp does, with no table to clear
+static bool idsAreAddresses() {
+#if defined(HXCPP_M64) || defined(HXCPP_GC_MOVING)
+ return false;
+#else
+ return true;
+#endif
+}
 static void runJoined(Dynamic callback) {
  std::thread worker([callback]() mutable { hx::NativeAttach attach; callback(); });
  hx::AutoGCFreeZone freeZone; worker.join();
@@ -40,7 +49,9 @@ class Main {
  }
  static function release():Void held=null;
  static function checkDead():Void {
-  for(id in ids) if(!(untyped __cpp__("idEmpty({0})",id))) correct=false;
+  // A dead object's address stays its ID there, so only the live IDs can be checked
+  if(!(untyped __cpp__("idsAreAddresses()")))
+   for(id in ids) if(!(untyped __cpp__("idEmpty({0})",id))) correct=false;
   ids=null;
  }
  static function main() {

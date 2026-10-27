@@ -18,6 +18,16 @@ for test in */; do
       tail -30 "$test/bin/build.log"
       continue
    fi
+   # A host that an earlier --next section compiled, which -D no-compilation
+   # does not reach, was built where Haxe ran, so it is built again here
+   for host in "$test"/bin/*/Build.xml; do
+      [ -f "$host" ] || continue
+      if ! (cd "${host%/Build.xml}" && neko "$root/hxcpp.n" Build.xml -DHXCPP="$root/" > build.log 2>&1); then
+         echo "Failed to build the host ${host%/Build.xml} of test $test"
+         tail -30 "${host%/Build.xml}/build.log"
+         continue 2
+      fi
+   done
    # An ndll the test loads was built where Haxe ran, for that system, so it
    # is built again here
    if [ -f "$test/native/Build.xml" ] && ! (cd "$test/native" && rm -rf obj ndll && neko "$root/hxcpp.n" Build.xml -DHXCPP="$root/" > build.log 2>&1); then
@@ -25,8 +35,10 @@ for test in */; do
       tail -30 "$test/native/build.log"
       continue
    fi
-   if ! actual=$("$test/bin/Main"); then
-      echo "Test $test failed: return code was $?"
+   actual=$("$test/bin/Main")
+   code=$?
+   if [ $code -ne 0 ]; then
+      echo "Test $test failed: return code was $code"
       continue
    fi
    expected=$(tr -d '\r' < "$test/stdout.txt")

@@ -7379,7 +7379,11 @@ public:
 
       mGCFreeZone = false;
       std::atomic_thread_fence(std::memory_order_seq_cst);
-      if (hx::gPauseForCollect.load(std::memory_order_relaxed))
+      // Acquire: a collection that ran while the thread was in the zone ended
+      //  by clearing gPauseForCollect, and what it did to the thread's objects
+      //  must be seen before the thread uses them. The fence above orders the
+      //  store before this load, but does not make a relaxed load acquire
+      if (hx::gPauseForCollect.load(std::memory_order_acquire))
       {
          // A collection is pending or running.  The collector either saw us
          // in the zone (and expects us to stay parked) or is waiting on our

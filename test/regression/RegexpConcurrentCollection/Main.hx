@@ -1,8 +1,10 @@
+import haxe.atomic.AtomicBool;
 import sys.thread.Thread;
 
 class Main {
-	static var stop = false;
-	static var collecting = false;
+	// Both threads use these, so they are atomic
+	static var stop = new AtomicBool(false);
+	static var collecting = new AtomicBool(false);
 
 	static function subject(prefix:String, n:Int, round:Int):String {
 		var buf = new StringBuf();
@@ -38,15 +40,15 @@ class Main {
 	// subject and expression must stay alive and in place through the match
 	static function main() {
 		var collector = Thread.create(() -> {
-			while (!stop) {
-				collecting = true;
+			while (!stop.load()) {
+				collecting.store(true);
 				cpp.vm.Gc.compact();
 				cpp.vm.Gc.run(true);
 				// Lets the matching thread allocate between collections
 				Sys.sleep(0.001);
 			}
 		});
-		while (!collecting)
+		while (!collecting.load())
 			Sys.sleep(0.001);
 		// 2,000 ASCII characters and 1,500 UTF-16 ones stay below the large
 		// allocation size, and both are long enough to match in the zone
@@ -54,7 +56,7 @@ class Main {
 		Sys.println("UTF-16 matches, captures and positions: " + check("\u00e9", 1500, 300));
 		Sys.println("long subjects: " + check("", 200000, 20) + " " + check("\u00e9", 200000, 20));
 		Sys.println("short subjects: " + check("", 10, 3000) + " " + check("\u00e9", 10, 3000));
-		stop = true;
+		stop.store(true);
 		Sys.sleep(0.05);
 	}
 }
