@@ -1,0 +1,7 @@
+StringMap holding itself as a value: true
+IntMap holding itself as a value: true
+ObjectMap holding itself as a key: true
+cycle through an array and an anonymous object: true
+throwing value formatter is caught each time: true
+formatting still works after the throws: true
+five nested maps format in full: true
