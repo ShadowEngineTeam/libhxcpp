@@ -15,15 +15,16 @@ class GcKey {
 
 /**
 	Collections of a heap whose large part does not change between them, as a
-	program with long-lived tables sees. Each run() requests COLLECTIONS
+	program with long-lived tables sees. Each run() requests its number of
 	collections, which are minor ones with HXCPP_GC_GENERATIONAL and full ones
 	otherwise, and records each one's duration.
 **/
 class GcCollections extends Benchmark {
-	static inline var COLLECTIONS = 20;
+	final collections:Int;
 
-	public function new(name:String) {
-		super(name, "collections", COLLECTIONS, true);
+	public function new(name:String, collections = 20) {
+		super(name, "collections", collections, true);
+		this.collections = collections;
 	}
 
 	override public function run():Int {
@@ -31,7 +32,7 @@ class GcCollections extends Benchmark {
 	}
 
 	function collect():Int {
-		for (i in 0...COLLECTIONS) {
+		for (i in 0...collections) {
 			var t0 = Timer.stamp();
 			cpp.vm.Gc.run(false);
 			latencies.push(Timer.stamp() - t0);
@@ -173,6 +174,31 @@ class GcFinalizerPromotion extends Benchmark {
 			latencies.push(Timer.stamp() - t0);
 		}
 		return finalized + objects[N - 1].id;
+	}
+}
+
+/**
+	128 retained objects and nothing else, so that a minor collection has
+	nothing to mark (libhxcpp #377).
+**/
+class GcIdleMinor extends GcCollections {
+	final objects:Array<GcKey> = [];
+
+	public function new() {
+		super("gc_idle_minor", 2000);
+	}
+
+	override public function setup() {
+		for (i in 0...128)
+			objects.push(new GcKey(i));
+		spare(4096);
+	}
+
+	override function check():Int {
+		var sum = 0;
+		for (o in objects)
+			sum = (sum * 31 + o.id) | 0;
+		return sum;
 	}
 }
 

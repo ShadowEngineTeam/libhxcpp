@@ -5282,8 +5282,11 @@ public:
       {
          mMarker.releaseJobs();
 
-         // Unleash the workers...
-         StartThreadJobs(tpjMark, MAX_GC_THREADS, true);
+         // Unleash the workers, if the roots and stacks left them anything:
+         //  a minor collection that marked nothing new paid for waking and
+         //  joining every one of them, most of its time (libhxcpp #377)
+         if (hx::sGlobalChunks.processList.load())
+            StartThreadJobs(tpjMark, MAX_GC_THREADS, true);
       }
       else
       #endif
