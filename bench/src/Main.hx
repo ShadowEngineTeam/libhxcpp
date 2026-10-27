@@ -29,7 +29,7 @@ class Main {
 		return [
 			new AllocSmall(), new AllocStrings(), new AllocArrays(), new GcPauses(), new MapInt(), new MapString(), new MapObject(),
 			new StringBuild(), new StringIndex(), new StringSubstr(), new StringSplit(), new StringCase(), new SortInt(), new SortString(),
-			new SortObject(), new GcWeakMapInt(), new GcObjectIds(), new GcLargeStackRoots(),
+			new SortObject(), new GcWeakMapInt(), new GcObjectIds(), new GcLargeStackRoots(), new GcRegexWait(),
 		];
 		#end
 	}

@@ -3,6 +3,8 @@ package;
 import haxe.Timer;
 import haxe.ds.WeakMap;
 import haxe.io.Bytes;
+import sys.thread.Lock;
+import sys.thread.Thread;
 
 class GcKey {
 	public var id:Int;
@@ -155,5 +157,52 @@ class GcLargeStackRoots extends GcCollections {
 			sum = (sum * 31 + pool[i * 1021][0]) | 0;
 		}
 		return sum;
+	}
+}
+
+/**
+	A collection that another thread asks for 5 ms into a long regular
+	expression match on this one, over a 32 MB subject (libhxcpp #330). Each
+	latency is how long that request took, the match itself is the work unit.
+**/
+class GcRegexWait extends Benchmark {
+	static inline var MATCHES = 4;
+
+	var subject:String;
+	final re = ~/^[a-z]+$/;
+	final start = new Lock();
+	final done = new Lock();
+	var requestTime = 0.0;
+
+	public function new() {
+		super("gc_regex_wait", "matches", MATCHES, true);
+	}
+
+	override public function setup() {
+		var b = Bytes.alloc(32 * 1024 * 1024);
+		b.fill(0, b.length, 97);
+		subject = b.toString();
+		Thread.create(() -> {
+			while (true) {
+				start.wait();
+				Sys.sleep(0.005);
+				var t0 = Timer.stamp();
+				cpp.vm.Gc.run(true);
+				requestTime = Timer.stamp() - t0;
+				done.release();
+			}
+		});
+	}
+
+	override public function run():Int {
+		var matched = 0;
+		for (i in 0...MATCHES) {
+			start.release();
+			if (re.match(subject))
+				matched += re.matchedPos().len;
+			done.wait();
+			latencies.push(requestTime);
+		}
+		return matched;
 	}
 }
