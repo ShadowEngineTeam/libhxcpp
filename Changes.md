@@ -2,6 +2,7 @@
 libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
+* Fixed HXCPP_GC_GENERATIONAL builds keeping released old large buffers while large allocations started collection after collection: with a small heap they were all minor, and only a full mark can free an old buffer. Once the large and native allocations since the last full mark add up to the heap it left, the next collection is full. Churning 256 MB through 1 MB buffers after releasing 64 old ones kept 91 MB and keeps 17 MB (libhxcpp #360)
 * A collection no longer frees the previous recycle cache of large buffers while every thread is stopped: a thread of its own frees it once they run again, and the bytes count as reserved until it has. A collection that dropped 16,384 cached 4 KB buffers took 8.1 ms and takes 0.06 ms. Gc.compact and other compacting collections still free them before they return (libhxcpp #332)
 * Large copies into a new buffer no longer clear it first: Bytes.sub, Array.copy, Array.slice and fromData on arrays without object pointers, strings made from bytes or other text, and NewGCBytes and NewGCPrivate with data. Copies of a 1 MB buffer run about 20% faster. Bytes.alloc and other allocations are zero-filled as before (libhxcpp #315)
 * Fixed Gc.memInfo(MEM_INFO_RESERVED) leaving out the dead large buffers a collection keeps for reuse: after a burst of large allocations it fell back to its baseline while the process still held them all. They are counted as reserved, not live, until reused or freed (libhxcpp #313)

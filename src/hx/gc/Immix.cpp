@@ -3870,6 +3870,7 @@ public:
       largeSlot(result) = mLargeList.size();
       mLargeList.push(result);
       mLargeAllocated += inSize;
+      mLargeSinceFull += inSize;
 
       // Grow-only object-pointer bounds, used to reject conservative-mark
       // candidates without scanning the list.  Stale-wide after frees is
@@ -3975,7 +3976,10 @@ public:
       if (inDelta<0)
          takeLargeAllocated((size_t)-(ptrdiff_t)inDelta);
       else
+      {
          mLargeAllocated += inDelta;
+         mLargeSinceFull += inDelta;
+      }
 
       if (do_lock)
          mLargeListLock.unlock();
@@ -5992,6 +5996,20 @@ public:
          //gByteMarkID |= 0x30;
       }
 
+      // Only a full mark frees an old large buffer, or the native memory of
+      //  an old object, so a small heap kept every collection that large
+      //  allocations started a minor one while released old buffers piled
+      //  up (libhxcpp #360). Once the large and native allocations since the
+      //  last full mark add up to the heap it left, the next one is full,
+      //  which costs no more than marking the heap that often would
+      if (!generational)
+      {
+         mLargeSinceFull = 0;
+         mLargeFullBudget = std::max((mRowsInUse<<IMMIX_LINE_BITS) + mLargeAllocated, sLargeAllocSpaceFloor);
+      }
+      else if (mLargeSinceFull > mLargeFullBudget)
+         sGcMode = gcmFull;
+
       #ifdef SHOW_MEM_EVENTS
       GCLOG("filled=%.2f%% + estimate = %.2f%% = %.2f%% -> %s\n",
             filled_ratio*100, mGenerationalRetainEstimate*100, after_gen*100, sGcMode==gcmFull?"Full":"Generational");
@@ -6349,6 +6367,10 @@ public:
    size_t mLargeAllocForceRefresh;
    // Read unlocked to decide on a collection, changed under mLargeListLock
    std::atomic_size_t mLargeAllocated;
+   // Large and native allocations since the last full mark, under
+   //  mLargeListLock, and how much they may add up to before the next
+   size_t mLargeSinceFull = 0;
+   size_t mLargeFullBudget = sLargeAllocSpaceFloor;
    size_t mLargeMin;
    size_t mLargeMax;
    // mLargeList[0..mLargeOld) survived a collection, and the rest are newer.
