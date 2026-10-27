@@ -1,0 +1,4 @@
+young unreachable reservations enter the zombie queue: true
+live old reservations stay out of the zombie queue: true
+released old reservations enter the zombie queue once: true
+drained reservations do not reappear: true

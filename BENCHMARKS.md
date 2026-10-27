@@ -112,6 +112,7 @@ These numbers are from one Windows machine; Linux and macOS results are still to
 | `gc_object_ids` | Collections with 250,000 retained objects that each have an ID from `__hxcpp_obj_id` |
 | `gc_large_stack_roots` | Collections with 65,536 retained 4 KB buffers and twelve raw pointers into them on the stack |
 | `gc_regex_wait` | A collection that another thread asks for 5 ms into a match over a 32 MB subject; the latency is how long that request took |
+| `gc_zombie_reservations` | Collections with 250,000 retained objects that are each registered with `Gc.doNotKill` |
 | `noop` | Starting the program and exiting at once (startup time, measured 20 times per runtime) |
 
 ### CPPIA

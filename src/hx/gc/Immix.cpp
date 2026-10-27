@@ -2786,6 +2786,9 @@ FILE_SCOPE hx::QuickVec<hx::Object *> &sYoungObjectIds = *new hx::QuickVec<hx::O
 
 typedef std::unordered_set<hx::Object *> MakeZombieSet;
 FILE_SCOPE MakeZombieSet &sMakeZombieSet = *new MakeZombieSet();
+// The objects given to doNotKill since the last collection, which are all a
+//  minor collection can find dead. Emptied by every collection, before any moves
+FILE_SCOPE hx::QuickVec<hx::Object *> &sYoungZombieCandidates = *new hx::QuickVec<hx::Object *>();
 
 typedef hx::QuickVec<hx::Object *> ZombieList;
 FILE_SCOPE ZombieList &sZombieList = *new ZombieList();
@@ -2817,8 +2820,36 @@ void InternalFinalizer::Detach()
    mValid = false;
 }
 
-void FindZombies(MarkContext &inContext)
+static void MakeZombie(hx::Object *inObj, MarkContext &inContext)
 {
+   sZombieList.push(inObj);
+
+   // Mark now to prevent secondary zombies...
+   inContext.init();
+   hx::MarkObjectAlloc(inObj , &inContext );
+   inContext.processMarkStack();
+}
+
+// inMinor: a minor collection, in which an old object cannot die, so only the
+//  registrations made since the last collection are looked at. Walking every
+//  one made a large stable set cost tens of milliseconds a minor collection
+//  (libhxcpp #383)
+void FindZombies(MarkContext &inContext, bool inMinor)
+{
+   if (inMinor)
+   {
+      for(int i=0;i<sYoungZombieCandidates.size();i++)
+      {
+         hx::Object *obj = sYoungZombieCandidates[i];
+         unsigned char mark = ((unsigned char *)obj)[HX_ENDIAN_MARK_ID_BYTE];
+         // A zombie already, or registered again, is no longer in the set
+         if ( mark!=gByteMarkID && sMakeZombieSet.erase(obj) )
+            MakeZombie(obj, inContext);
+      }
+      sYoungZombieCandidates.clear();
+      return;
+   }
+   sYoungZombieCandidates.clear();
    for(MakeZombieSet::iterator i=sMakeZombieSet.begin(); i!=sMakeZombieSet.end(); )
    {
       hx::Object *obj = *i;
@@ -2828,13 +2859,8 @@ void FindZombies(MarkContext &inContext)
       unsigned char mark = ((unsigned char *)obj)[HX_ENDIAN_MARK_ID_BYTE];
       if ( mark!=gByteMarkID )
       {
-         sZombieList.push(obj);
          sMakeZombieSet.erase(i);
-
-         // Mark now to prevent secondary zombies...
-         inContext.init();
-         hx::MarkObjectAlloc(obj , &inContext );
-         inContext.processMarkStack();
+         MakeZombie(obj, inContext);
       }
 
       i = next;
@@ -3257,7 +3283,8 @@ void GCDoNotKill(hx::Object *inObj)
       throw Dynamic(HX_CSTRING("doNotKill - invalid const object"));
 
    std::lock_guard<hx::FastMutex> lock(*gSpecialObjectLock);
-   sMakeZombieSet.insert(inObj);
+   if (sMakeZombieSet.insert(inObj).second)
+      sYoungZombieCandidates.push(inObj);
 }
 
 hx::Object *GCGetNextZombie()
@@ -5265,7 +5292,7 @@ public:
       // An object that only a weak hash value keeps is not a zombie while its key lives,
       // and a zombie can keep more keys alive
       MarkWeakHashValues();
-      hx::FindZombies(mMarker);
+      hx::FindZombies(mMarker, inGenerational);
       MarkWeakHashValues();
 
       if (sgCensus)

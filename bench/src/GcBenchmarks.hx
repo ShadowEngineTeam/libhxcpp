@@ -112,6 +112,33 @@ class GcObjectIds extends GcCollections {
 	}
 }
 
+/** 250,000 retained objects, each given to Gc.doNotKill (libhxcpp #383). **/
+class GcZombieReservations extends GcCollections {
+	static inline var N = 250000;
+
+	final objects:Array<GcKey> = [];
+
+	public function new() {
+		super("gc_zombie_reservations");
+	}
+
+	override public function setup() {
+		for (i in 0...N) {
+			var o = new GcKey(i);
+			objects.push(o);
+			cpp.vm.Gc.doNotKill(o);
+		}
+		spare(N * 4);
+	}
+
+	override function check():Int {
+		var sum = cpp.vm.Gc.getNextZombie() == null ? 0 : 1;
+		for (i in 0...64)
+			sum = (sum * 31 + objects[i * 3907].id) | 0;
+		return sum;
+	}
+}
+
 /**
 	65,536 retained 4 KB buffers, with twelve raw pointers into them on the stack
 	while the collections run, so the stack scan looks them up (libhxcpp #365).
