@@ -864,10 +864,20 @@ String _hx_std_sys_exe_path()
    Windows::Storage::StorageFolder^ installedLocation = package->InstalledLocation;
    return(String::create(installedLocation->Path->Data()));
 #elif defined(NEKO_WINDOWS)
-   wchar_t path[MAX_PATH];
-   if( GetModuleFileNameW(NULL,path,MAX_PATH) == 0 )
-      return null();
-   return String::create(path);
+   // A path that fills the buffer was cut short, so grow it and ask again:
+   // a MAX_PATH buffer gave the first 259 characters of a longer path
+   std::vector<wchar_t> path(MAX_PATH);
+   while( true )
+   {
+      DWORD len = GetModuleFileNameW(NULL,&path[0],(DWORD)path.size());
+      if( len == 0 )
+         return null();
+      if( len < path.size() )
+         return String::create(&path[0],len);
+      if( path.size() >= 32768 )
+         return null();
+      path.resize(path.size()*2);
+   }
 #elif defined(NEKO_MAC) && !defined(IPHONE) && !defined(APPLETV) && !defined(HX_APPLEWATCH)
    char path[PATH_MAX+1];
    uint32_t path_len = PATH_MAX;
