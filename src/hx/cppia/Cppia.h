@@ -566,6 +566,7 @@ void LinkExpressions(Expressions &ioExpressions, CppiaModule &data);
 
 CppiaExpr *createEnumField(CppiaStream &stream,bool inWithArgs);
 
+int TypeAlignment(ExprType type);
 void AlignOffset(ExprType type, int &ioOffset);
 
 struct CppiaVar : public CppiaOwned<CppiaVar>
@@ -610,6 +611,7 @@ struct CppiaVar : public CppiaOwned<CppiaVar>
    Dynamic setStaticValue(Dynamic inValue);
    CppiaExpr *createAccess(CppiaExpr *inSrc);
    void linkVarTypes(CppiaModule &cppia, int &ioOffset);
+   int fieldAlignment(CppiaModule &cppia);
    void createDynamic(hx::Object *inBase);
    Dynamic getValue(hx::Object *inThis);
    Dynamic setValue(hx::Object *inThis, Dynamic inValue);

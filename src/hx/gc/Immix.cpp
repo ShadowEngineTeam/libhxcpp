@@ -1536,7 +1536,13 @@ namespace hx
 {
 
 
-
+// Kept out of line: inlined with its report, it made GetLocalAlloc too large to
+// inline into InternalNew and the other allocation paths
+#if defined(_MSC_VER)
+__declspec(noinline)
+#else
+__attribute__((noinline))
+#endif
 void BadImmixAlloc()
 {
 
