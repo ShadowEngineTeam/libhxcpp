@@ -1,9 +1,12 @@
 package;
 
 import AllocBenchmarks;
+import CffiBenchmarks;
+import EnumBenchmarks;
 import MapBenchmarks;
 import SortBenchmarks;
 import StringBenchmarks;
+import ThreadBenchmarks;
 import cpp.vm.Gc;
 import haxe.Json;
 import haxe.Timer;
@@ -28,7 +31,7 @@ class Main {
 		return [
 			new AllocSmall(), new AllocStrings(), new AllocArrays(), new GcPauses(), new MapInt(), new MapString(), new MapObject(),
 			new StringBuild(), new StringIndex(), new StringSubstr(), new StringSplit(), new StringCase(), new SortInt(), new SortString(),
-			new SortObject(),
+			new SortObject(), new DequePush(), new DequeBurst(), new CffiCallVector(), new CffiStringView(), new EnumFormat(),
 		];
 		#end
 	}

@@ -424,6 +424,39 @@ static void startFailed(int inErr)
 {
    hx::Throw(HX_CSTRING("Could not start process: ") + String(strerror(inErr)));
 }
+
+// A child forked by another thread between pipe() and FD_CLOEXEC kept the
+// pipe ends across exec, so one process's stdout could stay open in an
+// unrelated child and never deliver EOF.  pipe2 creates the ends with
+// close-on-exec already set.  Where it is missing (macOS) or the kernel lacks
+// it, the ends are created and flagged under sForkLock held shared, and this
+// runtime forks under it held exclusively, so none of its own forks lands in
+// between
+#if defined(__linux__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
+#define HX_PROCESS_HAS_PIPE2
+#endif
+static pthread_rwlock_t sForkLock = PTHREAD_RWLOCK_INITIALIZER;
+
+static int cloexecPipe(int outFds[2])
+{
+   #ifdef HX_PROCESS_HAS_PIPE2
+   if (pipe2(outFds, O_CLOEXEC) == 0)
+      return 0;
+   if (errno != ENOSYS)
+      return -1;
+   #endif
+   pthread_rwlock_rdlock(&sForkLock);
+   int result = pipe(outFds);
+   if (result == 0)
+   {
+      fcntl(outFds[0], F_SETFD, FD_CLOEXEC);
+      fcntl(outFds[1], F_SETFD, FD_CLOEXEC);
+   }
+   int err = errno;
+   pthread_rwlock_unlock(&sForkLock);
+   errno = err;
+   return result;
+}
 #endif
 
 Dynamic _hx_std_process_run( String cmd, Array<String> vargs, int inShowParam )
@@ -573,42 +606,32 @@ Dynamic _hx_std_process_run( String cmd, Array<String> vargs, int inShowParam )
    }
    #else // not windows ...
    {
-   // The child writes exec's errno to status; a successful exec closes it
+   // The child writes exec's errno to status; a successful exec closes it.
+   // All four are close-on-exec; dup2 onto 0/1/2 in the child clears the
+   // flag on the std fds
    int input[2], output[2], error[2], status[2];
-   if( pipe(input) )
+   if( cloexecPipe(input) )
       startFailed(errno);
-   if( pipe(output) )
+   if( cloexecPipe(output) )
    {
       int err = errno;
       do_close(input[0]); do_close(input[1]);
       startFailed(err);
    }
-   if( pipe(error) )
+   if( cloexecPipe(error) )
    {
       int err = errno;
       do_close(input[0]); do_close(input[1]);
       do_close(output[0]); do_close(output[1]);
       startFailed(err);
    }
-   if( pipe(status) )
+   if( cloexecPipe(status) )
    {
       int err = errno;
       do_close(input[0]); do_close(input[1]);
       do_close(output[0]); do_close(output[1]);
       do_close(error[0]); do_close(error[1]);
       startFailed(err);
-   }
-
-   // Close-on-exec: without it a concurrent spawn's child inherits these
-   // descriptors, holding this child's stdout/stderr write ends open so
-   // its streams never deliver EOF until the unrelated child also exits.
-   // dup2 onto 0/1/2 in the child clears the flag on the std fds
-   for(int i=0;i<2;i++)
-   {
-      fcntl(input[i], F_SETFD, FD_CLOEXEC);
-      fcntl(output[i], F_SETFD, FD_CLOEXEC);
-      fcntl(error[i], F_SETFD, FD_CLOEXEC);
-      fcntl(status[i], F_SETFD, FD_CLOEXEC);
    }
 
    hx::strbuf buf;
@@ -633,7 +656,11 @@ Dynamic _hx_std_process_run( String cmd, Array<String> vargs, int inShowParam )
    for(int i=0;i<values.size();i++)
       argv[i] = values[i].c_str();
 
+   // The child execs or exits holding its copy of the lock
+   pthread_rwlock_wrlock(&sForkLock);
    int pid = fork();
+   if( pid != 0 )
+      pthread_rwlock_unlock(&sForkLock);
    if( pid == -1 )
    {
       int err = errno;

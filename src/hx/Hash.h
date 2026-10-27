@@ -103,9 +103,10 @@ public:
    }
    inline unsigned int getHash() { return hash; }
 
-   Value                value;
+   // hash beside a 4-byte value fills what would be padding (see TStringElement)
    Key                  key;
    unsigned int         hash;
+   Value                value;
    TInt64Element<VALUE> *next;
 };
 
@@ -135,9 +136,11 @@ public:
    }
    inline unsigned int getHash() { return hash; }
 
-   Value                  value;
+   // With value first, an Int value and the hash each left 4 bytes of
+   //  padding: 40 bytes on 64-bit where 32 hold the same fields
    Key                    key;
    unsigned int           hash;
+   Value                  value;
    TStringElement<VALUE>  *next;
 };
 
@@ -231,9 +234,10 @@ public:
    }
    inline unsigned int getHash() { return hash; }
 
-   Value                        value;
+   // hash beside a 4-byte value fills what would be padding (see TStringElement)
    Key                          key;
    unsigned int                 hash;
+   Value                        value;
    TDynamicElement<VALUE,WEAK>  *next;
 };
 
@@ -298,6 +302,30 @@ struct HashRoot : public Object
    virtual bool markWeakValues(MarkContext *__inCtx) = 0;
 
    inline int getSize() { return size; }
+};
+
+// How many maps this thread is formatting, one inside another.  A map that
+//  held itself, directly or through other maps, recursed until the native
+//  stack overflowed; past 5, as for arrays and anonymous objects, a map
+//  formats as "...".  Per thread, and given back when a key or value's
+//  toString throws
+int &HashToStringDepth();
+
+struct ToStringDepth
+{
+   bool tooDeep;
+   ToStringDepth()
+   {
+      int &depth = HashToStringDepth();
+      tooDeep = depth >= 5;
+      if (!tooDeep)
+         depth++;
+   }
+   ~ToStringDepth()
+   {
+      if (!tooDeep)
+         HashToStringDepth()--;
+   }
 };
 
 template<typename KEY>
@@ -971,6 +999,9 @@ struct Hash : public HashBase< typename ELEMENT::Key >
 
    String toString() HXCPP_OVERRIDE
    {
+      ToStringDepth depth;
+      if (depth.tooDeep)
+         return HX_CSTRING("...");
       StringBuilder builder(getSize());
       iterate(builder);
       return builder.toString();
@@ -979,6 +1010,9 @@ struct Hash : public HashBase< typename ELEMENT::Key >
 
    String toStringRaw() HXCPP_OVERRIDE
    {
+      ToStringDepth depth;
+      if (depth.tooDeep)
+         return HX_CSTRING("...");
       StringBuilder builder(getSize(),true);
       iterate(builder);
       return builder.toString();

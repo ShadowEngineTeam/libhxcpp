@@ -1,0 +1,2 @@
+unrelated process pipes excluded from concurrent child: true
+atomic close-on-exec control: true
