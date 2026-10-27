@@ -6336,7 +6336,11 @@ void MarkConservative(int *inBottom, int *inTop,hx::MarkContext *__inCtx)
             if (mem==memLarge)
             {
                unsigned char& mark{ reinterpret_cast<unsigned char*>(potentialObject)[HX_ENDIAN_MARK_ID_BYTE] };
-               if (mark != gByteMarkID)
+               // A large object's members are marked as from any other root:
+               //  setting its mark kept the object but none of what it held
+               if (reinterpret_cast<unsigned int*>(potentialObject)[-1] & IMMIX_ALLOC_IS_CONTAINER)
+                  hx::MarkObjectAlloc(reinterpret_cast<hx::Object*>(potentialObject), __inCtx);
+               else if (mark != gByteMarkID)
                {
                   if (sgCensus)
                      sgCensusDeferred->push_back(std::make_pair(reinterpret_cast<void*>(potentialObject), true));
