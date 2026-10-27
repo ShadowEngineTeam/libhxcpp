@@ -72,3 +72,4 @@ ThreadWaitTimeouts: threads
 TimerStampFirstCall: threads
 WeakAdapterDepth: threads (std::thread, which needs a pthreads build)
 WeakMapSparseCapacity: threads (std::thread, which needs a pthreads build)
+WeakMethodFinalizerOrder: threads (std::thread, which needs a pthreads build)

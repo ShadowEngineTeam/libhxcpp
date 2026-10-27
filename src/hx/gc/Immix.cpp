@@ -3093,10 +3093,28 @@ static void UpdateWeakRefs(WeakRefs &inList, WeakRefs *inOld)
    }
 }
 
+// Marks the callbacks in inList that IsWeakRefValid keeps for a live receiver
+static void KeepWeakCallbacks(WeakRefs &inList)
+{
+   for(int i=0;i<inList.size();i++)
+   {
+      WeakRef *ref = inList[i];
+      if ( ((unsigned char *)ref)[HX_ENDIAN_MARK_ID_BYTE]==gByteMarkID && ref->mRef.mPtr)
+         IsWeakRefValid(ref->mRef.mPtr);
+   }
+}
+
 // inMinor: a minor collection, which leaves the old entries alone
 void RunFinalizers(bool inMinor)
 {
    finalizerCount = 0;
+
+   // A weak reference keeps a callback while its receiver lives, marking it
+   //  only when asked. Ask before choosing what to finalize: asked after, in
+   //  UpdateWeakRefs, it kept callbacks whose finalizers had run (libhxcpp #376)
+   if (!inMinor)
+      KeepWeakCallbacks(sOldWeakRefs);
+   KeepWeakCallbacks(sWeakRefs);
 
    if (!inMinor)
       RunInternalFinalizers(*sgOldFinalizers, 0);
