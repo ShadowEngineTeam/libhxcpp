@@ -2463,7 +2463,9 @@ void MarkObjectAllocUnchecked(hx::Object *inPtr,hx::MarkContext *__inCtx)
             #if (HXCPP_GC_DEBUG_LEVEL>0)
             inPtr->__Mark(__inCtx);
             #else
-            if (gCollectTrace)
+            // Printing a path needs it on the native stack. Counting does
+            //  not, and recursing would overflow that stack on a deep graph
+            if (gCollectTrace && gCollectTraceDoPrint)
                inPtr->__Mark(__inCtx);
             else
                __inCtx->pushObj(inPtr);
@@ -5193,7 +5195,14 @@ public:
       MEM_STAMP(tMarkLocalEnd);
 
       #ifdef HX_MULTI_THREAD_MARKING
-      if (!sgCensus)
+      // Gc.trace counts objects as it marks them, so like a census it
+      //  marks on one thread, where nothing is marked twice
+      #ifdef HXCPP_DEBUG
+      bool tracing = gCollectTrace;
+      #else
+      bool tracing = false;
+      #endif
+      if (!sgCensus && !tracing)
       {
          mMarker.releaseJobs();
 
