@@ -199,6 +199,13 @@ void __scriptable_load_neko(String inName);
 void __scriptable_load_cppia(String inCode);
 ::hx::CppiaLoadedModule __scriptable_cppia_from_string(String inCode);
 ::hx::CppiaLoadedModule __scriptable_cppia_from_data(Array<unsigned char> inBytes);
+// Teaches the cppia loader another script format. A script given to
+// __scriptable_cppia_from_data or _from_string (Module.fromData and fromString,
+// so Host.runFile too) that starts with inMagic, and not with CPPIA or CPPIB,
+// goes to inTranslate as bytes, and the cppia that returns is loaded in its
+// place: text as a String, or text or binary cppia as bytes. Registering a
+// magic again replaces its translator, and null removes the format
+void __scriptable_cppia_register_format(String inMagic, Dynamic inTranslate);
 void __scriptable_load_neko_bytes(Array<unsigned char> inBytes);
 void __scriptable_load_abc(Array<unsigned char> inBytes);
 // Modules whose native memory has not been freed yet
