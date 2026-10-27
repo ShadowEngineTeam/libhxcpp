@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 #include <string>
 #include <vector>
 #include <time.h>
@@ -147,12 +148,17 @@ void _hx_std_put_env( String e, String v )
 
    // Convert before taking the lock - conversion can allocate, and an
    // allocation must not happen under it (see _hx_std_get_env)
+   // The C library reads TZ in tzset, and some of its local time calls never
+   //  run it again, so a new zone took effect only sometimes (libhxcpp #392)
+   bool zone = e.length==2 && toupper(e.cca(0))=='T' && toupper(e.cca(1))=='Z';
    #ifdef HX_SMART_STRINGS
    if (set.isUTF16Encoded())
    {
       const wchar_t *w = set.wchar_str();
       AutoLock lock(hxEnvMutex());
       _wputenv(w);
+      if (zone)
+         _tzset();
    }
    else
    #endif
@@ -160,6 +166,8 @@ void _hx_std_put_env( String e, String v )
       const char *u = set.utf8_str();
       AutoLock lock(hxEnvMutex());
       putenv(u);
+      if (zone)
+         _tzset();
    }
 #else
    const char *name = e.utf8_str();
@@ -169,6 +177,10 @@ void _hx_std_put_env( String e, String v )
       unsetenv(name);
    else
       setenv(name,value,1);
+   // The C library reads TZ in tzset, and localtime_r need not run it again,
+   //  so a new zone took effect only sometimes (libhxcpp #392)
+   if (!strcmp(name,"TZ"))
+      tzset();
 #endif
 }
 

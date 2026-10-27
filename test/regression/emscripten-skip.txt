@@ -14,6 +14,7 @@ CppiaHostArgs: processes
 CppiaHostMismatch: checks jitted code, and Emscripten has no cppia JIT
 CppiaModuleFree: threads
 CppiaModuleRetained: threads
+DateTimezoneCache: Emscripten takes the local zone from JavaScript and ignores TZ
 ExitWithBusyWorker: processes and threads
 FileFinalizerFlush: threads (std::thread, which needs a pthreads build)
 FinalizerExceptionState: threads (std::thread, which needs a pthreads build)
