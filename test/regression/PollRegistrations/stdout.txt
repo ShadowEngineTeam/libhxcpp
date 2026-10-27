@@ -1,0 +1,24 @@
+a poll never prepared finds nothing: true
+idle: true
+ready in prepared order: true
+still ready on the next call: true
+prepared again: true
+reordered: true
+some left out: true
+put back: true
+read: true
+write only: true
+one socket both ways, idle: true
+one socket both ways, readable: true
+one socket twice: true
+read again: true
+peer closed: true
+before close: true
+new socket with a reused descriptor, idle: true
+new socket with a reused descriptor, ready: true
+before closing: true
+a socket closed after prepare is ready: true
+poll: true
+idle poll waits for its timeout: true
+one poll: true
+another poll: true

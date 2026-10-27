@@ -92,6 +92,16 @@ typedef int SocketLen;
 #   define SOCKET_ERROR (-1)
 #   define INVALID_SOCKET (-1)
 typedef socklen_t SocketLen;
+// Poll keeps its registrations in the kernel where there is a way to
+#   if defined(NEKO_LINUX) && !defined(__EMSCRIPTEN__)
+#      include <sys/epoll.h>
+#      define HX_POLL_QUEUE
+#      define HX_POLL_EPOLL
+#   elif defined(NEKO_MAC) || defined(NEKO_BSD)
+#      include <sys/event.h>
+#      define HX_POLL_QUEUE
+#      define HX_POLL_KQUEUE
+#   endif
 #endif
 
 #if (defined(NEKO_WINDOWS) || defined(NEKO_MAC)) && !defined(MSG_NOSIGNAL)
@@ -1835,6 +1845,312 @@ namespace
 
 static int pollType = 0;
 
+SOCKET wrapped_sock(Dynamic inWrapper)
+{
+   return inWrapper.mPtr ? static_cast<SocketWrapper *>(inWrapper.mPtr)->socket : INVALID_SOCKET;
+}
+
+#ifdef HX_POLL_QUEUE
+// A poll's registrations, kept in the kernel from one events call to the
+// next, with epoll on Linux and kqueue on macOS and the BSDs. poll() is
+// handed every descriptor on every call, and takes as long as they take to
+// look at, ready or not: 4,096 idle sockets cost 0.3 ms a call. prepare
+// tells the kernel what changed since the last prepare, and an events call
+// costs what is ready. The results are as poll() gives them: each ready
+// index once, in the order prepared, a hang-up or error as ready both ways,
+// and a socket closed after prepare as ready, as poll() reported its
+// descriptor.
+struct PollQueue
+{
+   enum { READ = 1, WRITE = 2 };
+
+   // One descriptor, for every read and write index that names it
+   struct Slot
+   {
+      int fd;
+      // Of the socket the descriptor was registered for: one that has the
+      //  number of a closed socket is not registered yet
+      unsigned int serial;
+      int want;
+      int registered;
+      int firstRead;
+      int firstWrite;
+   };
+
+   // For a descriptor, its slot and the slot a prepare in progress gives it,
+   //  each plus one, or 0
+   struct FdSlots
+   {
+      int registered;
+      int pending;
+   };
+
+   int fd;
+   std::vector<Slot> slots;
+   std::vector<Slot> previous;
+   std::vector<FdSlots> slotOf;
+   // The read and write indexes of each slot, linked
+   std::vector<int> nextRead;
+   std::vector<int> nextWrite;
+   // The descriptor each index had at prepare, or -1
+   std::vector<int> readFds;
+   std::vector<int> writeFds;
+   // Indexes ready on every call: those the kernel would not register, as
+   //  poll() reports a descriptor it cannot poll, and those closed since
+   std::vector<int> failedReads;
+   std::vector<int> failedWrites;
+   std::vector<int> closedReads;
+   std::vector<int> closedWrites;
+   unsigned int closedSeen;
+   // What the last wait found ready, sorted
+   std::vector<int> readyReads;
+   std::vector<int> readyWrites;
+   #ifdef HX_POLL_EPOLL
+   std::vector<struct epoll_event> events;
+   #else
+   std::vector<struct kevent> events;
+   #endif
+
+   static PollQueue *create()
+   {
+      #ifdef HX_POLL_EPOLL
+      #if defined(__ANDROID__) && __ANDROID_API__ < 21
+      int q = epoll_create(1);
+      if (q >= 0)
+         fcntl(q,F_SETFD,FD_CLOEXEC);
+      #else
+      int q = epoll_create1(EPOLL_CLOEXEC);
+      #endif
+      #else
+      int q = kqueue();
+      if (q >= 0)
+         fcntl(q,F_SETFD,FD_CLOEXEC);
+      #endif
+      if (q < 0)
+         return 0;
+      PollQueue *queue = new PollQueue();
+      queue->fd = q;
+      queue->closedSeen = 0;
+      // Room for a wait before the first prepare
+      queue->events.resize(1);
+      return queue;
+   }
+
+   ~PollQueue()
+   {
+      close(fd);
+   }
+
+   // Tells the kernel a descriptor's interest changed from inFrom to inTo
+   bool change(int inFd, int inFrom, int inTo)
+   {
+      #ifdef HX_POLL_EPOLL
+      struct epoll_event ev;
+      memset(&ev,0,sizeof(ev));
+      ev.events = ((inTo & READ) ? EPOLLIN : 0) | ((inTo & WRITE) ? EPOLLOUT : 0);
+      ev.data.fd = inFd;
+      int op = inTo==0 ? EPOLL_CTL_DEL : inFrom==0 ? EPOLL_CTL_ADD : EPOLL_CTL_MOD;
+      if (epoll_ctl(fd, op, inFd, &ev) == 0)
+         return true;
+      // A registration the kernel still has for a descriptor that was
+      //  closed and given out again
+      if (op == EPOLL_CTL_ADD && errno == EEXIST)
+         return epoll_ctl(fd, EPOLL_CTL_MOD, inFd, &ev) == 0;
+      return false;
+      #else
+      bool ok = true;
+      static const int filters[2] = { EVFILT_READ, EVFILT_WRITE };
+      for(int f=0;f<2;f++)
+      {
+         int bit = f==0 ? READ : WRITE;
+         if ((inFrom & bit) == (inTo & bit))
+            continue;
+         struct kevent ev;
+         EV_SET(&ev, inFd, filters[f], (inTo & bit) ? EV_ADD : EV_DELETE, 0, 0, 0);
+         if (kevent(fd, &ev, 1, 0, 0, 0) < 0 && (inTo & bit))
+            ok = false;
+      }
+      return ok;
+      #endif
+   }
+
+   void add(int inIndex, SocketWrapper *inWrap, bool inRead)
+   {
+      int sock = inWrap ? inWrap->socket : INVALID_SOCKET;
+      (inRead ? readFds : writeFds)[inIndex] = sock;
+      if (sock < 0)
+         return;
+      if ((size_t)sock >= slotOf.size())
+      {
+         FdSlots none = { 0, 0 };
+         slotOf.resize(sock + 1 + sock/2, none);
+      }
+      FdSlots &at = slotOf[sock];
+      if (!at.pending)
+      {
+         Slot slot = { sock, inWrap->serial, 0, 0, -1, -1 };
+         slots.push_back(slot);
+         at.pending = (int)slots.size();
+      }
+      Slot &slot = slots[at.pending-1];
+      if (inRead)
+      {
+         nextRead[inIndex] = slot.firstRead;
+         slot.firstRead = inIndex;
+         slot.want |= READ;
+      }
+      else
+      {
+         nextWrite[inIndex] = slot.firstWrite;
+         slot.firstWrite = inIndex;
+         slot.want |= WRITE;
+      }
+   }
+
+   void prepare(Array<Dynamic> inReads, Array<Dynamic> inWrites)
+   {
+      int len = inReads.mPtr ? inReads->length : 0;
+      int wlen = inWrites.mPtr ? inWrites->length : 0;
+      previous.swap(slots);
+      slots.clear();
+      readFds.assign(len, -1);
+      writeFds.assign(wlen, -1);
+      nextRead.assign(len, -1);
+      nextWrite.assign(wlen, -1);
+      failedReads.clear();
+      failedWrites.clear();
+      closedReads.clear();
+      closedWrites.clear();
+      closedSeen = sSocketsClosed.load();
+
+      for(int i=0;i<len;i++)
+         add(i, static_cast<SocketWrapper *>(inReads[i].mPtr), true);
+      for(int i=0;i<wlen;i++)
+         add(i, static_cast<SocketWrapper *>(inWrites[i].mPtr), false);
+
+      // The last prepare's registrations carry over for the same socket.
+      //  Those of a socket left out, or closed and its number given to
+      //  another, go: a closed descriptor's is gone already, and taking out
+      //  one the kernel no longer has fails harmlessly.
+      for(size_t j=0;j<previous.size();j++)
+      {
+         Slot &old = previous[j];
+         FdSlots &at = slotOf[old.fd];
+         at.registered = 0;
+         if (at.pending && slots[at.pending-1].serial==old.serial)
+            slots[at.pending-1].registered = old.registered;
+         else if (old.registered)
+            change(old.fd, old.registered, 0);
+      }
+
+      for(size_t j=0;j<slots.size();j++)
+      {
+         Slot &slot = slots[j];
+         FdSlots &at = slotOf[slot.fd];
+         at.registered = (int)j + 1;
+         at.pending = 0;
+         if (slot.registered == slot.want)
+            continue;
+         if (change(slot.fd, slot.registered, slot.want))
+            slot.registered = slot.want;
+         else
+         {
+            change(slot.fd, slot.want, 0);
+            slot.registered = 0;
+            for(int i=slot.firstRead;i>=0;i=nextRead[i])
+               failedReads.push_back(i);
+            for(int i=slot.firstWrite;i>=0;i=nextWrite[i])
+               failedWrites.push_back(i);
+         }
+      }
+      std::sort(failedReads.begin(), failedReads.end());
+      std::sort(failedWrites.begin(), failedWrites.end());
+
+      #ifdef HX_POLL_EPOLL
+      events.resize(slots.size() ? slots.size() : 1);
+      #else
+      events.resize(slots.size() ? slots.size()*2 : 1);
+      #endif
+   }
+
+   // The indexes whose socket was closed after prepare. Looked for only
+   //  after a socket was closed somewhere.
+   void findClosed(Array<Dynamic> inReads, Array<Dynamic> inWrites)
+   {
+      unsigned int closed = sSocketsClosed.load();
+      if (closed == closedSeen)
+         return;
+      closedSeen = closed;
+      closedReads.clear();
+      closedWrites.clear();
+      for(size_t i=0;i<readFds.size();i++)
+         if (readFds[i] >= 0 && wrapped_sock(inReads[i]) == INVALID_SOCKET)
+            closedReads.push_back((int)i);
+      for(size_t i=0;i<writeFds.size();i++)
+         if (writeFds[i] >= 0 && wrapped_sock(inWrites[i]) == INVALID_SOCKET)
+            closedWrites.push_back((int)i);
+   }
+
+   // Waits as poll() would, and fills readyReads and readyWrites: false
+   //  when the wait failed
+   bool wait(int inWaitMs, double inTimeout, double inDeadline)
+   {
+      readyReads.clear();
+      readyWrites.clear();
+      int waitMs = inWaitMs;
+      int n;
+      hx::EnterGCFreeZone();
+      while(true)
+      {
+         #ifdef HX_POLL_EPOLL
+         n = epoll_wait(fd, &events[0], (int)events.size(), waitMs);
+         #else
+         struct timespec ts;
+         ts.tv_sec = waitMs / 1000;
+         ts.tv_nsec = (waitMs % 1000) * 1000000L;
+         n = kevent(fd, 0, 0, &events[0], (int)events.size(), waitMs < 0 ? 0 : &ts);
+         #endif
+         if (n >= 0 || errno != EINTR)
+            break;
+         if (inTimeout >= 0)
+         {
+            double left = inDeadline - monotonicSeconds();
+            waitMs = left > 0 ? (int)(left * 1000) + 1 : 0;
+         }
+      }
+      hx::ExitGCFreeZone();
+      if (n < 0)
+         return false;
+
+      for(int e=0;e<n;e++)
+      {
+         #ifdef HX_POLL_EPOLL
+         int ready = events[e].data.fd;
+         unsigned int flags = events[e].events;
+         bool readable = flags & (EPOLLIN | EPOLLHUP | EPOLLERR);
+         bool writable = flags & (EPOLLOUT | EPOLLHUP | EPOLLERR);
+         #else
+         int ready = (int)events[e].ident;
+         bool readable = events[e].filter == EVFILT_READ;
+         bool writable = events[e].filter == EVFILT_WRITE;
+         #endif
+         if (ready < 0 || (size_t)ready >= slotOf.size() || !slotOf[ready].registered)
+            continue;
+         Slot &slot = slots[slotOf[ready].registered-1];
+         if (readable)
+            for(int i=slot.firstRead;i>=0;i=nextRead[i])
+               readyReads.push_back(i);
+         if (writable)
+            for(int i=slot.firstWrite;i>=0;i=nextWrite[i])
+               readyWrites.push_back(i);
+      }
+      std::sort(readyReads.begin(), readyReads.end());
+      std::sort(readyWrites.begin(), readyWrites.end());
+      return true;
+   }
+};
+#endif
+
 struct polldata : public hx::Object
 {
    HX_IS_INSTANCE_OF enum { _hx_ClassId = hx::clsIdPollData };
@@ -1853,6 +2169,10 @@ struct polldata : public hx::Object
    struct pollfd *fds;
    int rcount;
    int wcount;
+   #ifdef HX_POLL_QUEUE
+   // Null where the kernel would not make one, and the poll uses poll()
+   PollQueue *queue;
+   #endif
    #endif
    Array<int> ridx;
    Array<int> widx;
@@ -1880,6 +2200,9 @@ struct polldata : public hx::Object
       fds = (struct pollfd*)malloc(sizeof(struct pollfd) * max);
       rcount = 0;
       wcount = 0;
+      #ifdef HX_POLL_QUEUE
+      queue = PollQueue::create();
+      #endif
       #endif
 
       ridx = Array_obj<int>::__new(max+1,max+1);
@@ -1907,8 +2230,11 @@ struct polldata : public hx::Object
          free(outw);
          free(oute);
          #else
-         // ???
          free(fds);
+         #ifdef HX_POLL_QUEUE
+         delete queue;
+         queue = 0;
+         #endif
          #endif
       }
    }
@@ -1945,11 +2271,6 @@ polldata *val_poll(Dynamic o)
    if (!o.mPtr || o->__GetType()!=pollType)
       hx::Throw(HX_CSTRING("Invalid polldata:") + o);
    return static_cast<polldata *>(o.mPtr);
-}
-
-SOCKET wrapped_sock(Dynamic inWrapper)
-{
-   return inWrapper.mPtr ? static_cast<SocketWrapper *>(inWrapper.mPtr)->socket : INVALID_SOCKET;
 }
 
 // The read indexes of the sockets holding bytes read ahead, which the
@@ -2038,6 +2359,17 @@ Array<Dynamic> _hx_std_socket_poll_prepare( Dynamic pdata, Array<Dynamic> rsocks
    p->fdw->fd_count = len;
 
    #else
+
+   #ifdef HX_POLL_QUEUE
+   if (p->queue)
+   {
+      p->queue->prepare(rwraps, wwraps);
+      Array<Dynamic> a = Array_obj<Dynamic>::__new(2,2);
+      a[0] = p->ridx;
+      a[1] = p->widx;
+      return a;
+   }
+   #endif
 
    for(int i=0;i<len;i++)
    {
@@ -2226,10 +2558,29 @@ void _hx_std_socket_poll_events(Dynamic pdata, double timeout)
    p->widx[k] = -1;
 
 #else
-   int tot = p->rcount + p->wcount;
-
    int waitMs = (int)(timeout * 1000);
    double deadline = monotonicSeconds() + timeout;
+
+   #ifdef HX_POLL_QUEUE
+   if (p->queue)
+   {
+      PollQueue *q = p->queue;
+      q->findClosed(p->rsockets, p->wsockets);
+      if (!q->failedReads.empty() || !q->failedWrites.empty() || !q->closedReads.empty() || !q->closedWrites.empty())
+         waitMs = 0;
+      q->wait(waitMs, timeout, deadline);
+      int k = merge_indexes(p->ridx, 0, q->readyReads);
+      int kw = merge_indexes(p->widx, 0, q->readyWrites);
+      k = merge_indexes(p->ridx, k, held);
+      k = merge_indexes(p->ridx, k, q->failedReads);
+      merge_indexes(p->ridx, k, q->closedReads);
+      kw = merge_indexes(p->widx, kw, q->failedWrites);
+      merge_indexes(p->widx, kw, q->closedWrites);
+      return;
+   }
+   #endif
+
+   int tot = p->rcount + p->wcount;
    hx::EnterGCFreeZone();
 poll_events_again:
    if (poll(p->fds, tot, waitMs) < 0)
