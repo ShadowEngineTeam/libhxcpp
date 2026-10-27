@@ -1,0 +1,4 @@
+recycled buffers have the size asked for: true
+recycled buffers are zero-filled: true
+no buffer is handed out twice: true
+a retained buffer survives the churn: true

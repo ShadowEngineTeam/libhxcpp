@@ -2,6 +2,7 @@
 libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
+* A large allocation takes a recycled buffer of its size without looking at the other sizes cached: the recycle cache keeps a list for each size. 20,000 resizes from a cache holding 8,192 buffers of another size took 218 ms and take 13 ms (libhxcpp #300)
 * Releasing a large buffer, as an exact resize of an Array or BytesBuffer growth does, no longer searches every other large allocation for it: each allocation keeps its place in the allocator's list. 20,000 resizes of a buffer made before 8,192 others took 77 ms and take 12 ms (libhxcpp #298)
 * Fixed a copy of an hx::Ref not keeping its object alive: copying one of the same type shared the original's GC root, so once the original went the collector could free the object the copy still held (libhxcpp #355)
 * Fixed hx::Ref::setPtr leaving its GC root at the old offset when it moved to another interface of the same object, so the collector could free the object while the reference still held it (libhxcpp #361)

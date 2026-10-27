@@ -3315,6 +3315,9 @@ typedef hx::QuickVec<BlockDataInfo *> BlockList;
 
 typedef hx::QuickVec<unsigned int *> LargeList;
 
+// The first of the recycled large buffers of each size
+typedef std::unordered_map<unsigned int, unsigned int *> RecycleLists;
+
 enum MemType { memUnmanaged, memBlock, memLarge };
 
 
@@ -3525,6 +3528,7 @@ public:
       mLargeOldMax = 0;
       mLargeOldReleased = false;
       mRecycleSize = 0;
+      mRecycleBytes = 0;
       mLargeAllocSpace = sLargeAllocSpaceFloor;
       mLargeAllocForceRefresh = mLargeAllocSpace;
       // Start at 1 Meg...
@@ -3622,16 +3626,17 @@ public:
 #endif
 
       ((unsigned char *)inLarge)[HX_ENDIAN_MARK_ID_BYTE] = 0;
+      unsigned int *blob = ((unsigned int *)inLarge) - 2;
       mLargeListLock.lock();
       // With no room to recycle it, the sweep frees it instead, so the next
-      //  sweep must look at the old allocations too
-      if (!largeObjectRecycle.hasExtraCapacity(1))
+      //  sweep must look at the old allocations too. The cache holds up to
+      //  the large allocation allowance
+      if (mRecycleBytes + *blob > mLargeAllocSpace.load(std::memory_order_relaxed))
       {
          mLargeOldReleased = true;
          mLargeListLock.unlock();
          return;
       }
-      unsigned int *blob = ((unsigned int *)inLarge) - 2;
       // The buffer names its place in the list. Searching for it took time
       //  in the number of other large allocations (libhxcpp #298). One not
       //  in the list, such as one released twice, is left alone
@@ -3643,9 +3648,50 @@ public:
       }
       takeLargeAllocated(*blob);
       eraseLarge(idx);
-      largeObjectRecycle.push(blob);
-      mRecycleSize.store((int)largeObjectRecycle.size(), std::memory_order_relaxed);
+      pushRecycle(blob);
       mLargeListLock.unlock();
+   }
+
+   // The next buffer of the same size in the recycle cache, in the first
+   //  word of the dead buffer's data
+   static unsigned int *&recycleNext(unsigned int *inBlob)
+   {
+      return *(unsigned int **)(inBlob + 2);
+   }
+
+   // Under mLargeListLock or in a collection
+   void pushRecycle(unsigned int *inBlob)
+   {
+      unsigned int *&head = mRecycle[inBlob[0]];
+      recycleNext(inBlob) = head;
+      head = inBlob;
+      mRecycleBytes += inBlob[0];
+      mRecycleSize.store(mRecycleSize.load(std::memory_order_relaxed)+1, std::memory_order_relaxed);
+   }
+
+   // Under mLargeListLock
+   unsigned int *popRecycle(size_t inSize)
+   {
+      RecycleLists::iterator list = mRecycle.find((unsigned int)inSize);
+      if (list==mRecycle.end() || !list->second)
+         return 0;
+      unsigned int *result = list->second;
+      list->second = recycleNext(result);
+      mRecycleBytes -= result[0];
+      mRecycleSize.store(mRecycleSize.load(std::memory_order_relaxed)-1, std::memory_order_relaxed);
+      return result;
+   }
+
+   static void freeRecycle(RecycleLists &ioLists)
+   {
+      for(RecycleLists::iterator list=ioLists.begin(); list!=ioLists.end(); ++list)
+         for(unsigned int *blob=list->second; blob; )
+         {
+            unsigned int *next = recycleNext(blob);
+            HxFree(blob);
+            blob = next;
+         }
+      ioLists.clear();
    }
 
    void *AllocLarge(size_t inSize, bool inClear, bool inContainer=false)
@@ -3676,9 +3722,10 @@ public:
       bool isLocked{};
 
 
-      // Probe the count only - scanning the vector itself unlocked raced
-      // with concurrent push/qerase under the lock (and the old recheck
-      // 'continue' skipped the entry swapped into the current slot)
+      // Probe the count only - the lists themselves change under the lock.
+      //  They are kept by size: a search through every cached buffer for
+      //  one of this size took time in the number of other sizes cached
+      //  (libhxcpp #300)
       if (mRecycleSize.load(std::memory_order_relaxed))
       {
          if (do_lock && !isLocked)
@@ -3686,16 +3733,7 @@ public:
             mLargeListLock.lock();
             isLocked = true;
          }
-         for(int i=0;i<largeObjectRecycle.size();i++)
-         {
-            if ( largeObjectRecycle[i][0] == inSize )
-            {
-               result = largeObjectRecycle[i];
-               largeObjectRecycle.qerase(i);
-               mRecycleSize.store((int)largeObjectRecycle.size(), std::memory_order_relaxed);
-               break;
-            }
-         }
+         result = popRecycle(inSize);
          // A recycled buffer is out of the shared list now, so it is cleared
          // below without the lock, as a fresh one is; there is no safe point
          // before it is published, so no collection can miss it
@@ -5589,10 +5627,10 @@ public:
 
       // Manage recycle size ?
       //  clear old frames recycle objects
-      int l2 = largeObjectRecycle.size();
-      for(int i=0;i<largeObjectRecycle.size();i++)
-         HxFree(largeObjectRecycle[i]);
-      largeObjectRecycle.setSize(0);
+      int l2 = mRecycleSize.load(std::memory_order_relaxed);
+      freeRecycle(mRecycle);
+      mRecycleBytes = 0;
+      mRecycleSize.store(0, std::memory_order_relaxed);
 
       size_t recycleRemaining = 0;
       #ifdef RECYCLE_LARGE
@@ -5627,7 +5665,7 @@ public:
             if (size < recycleRemaining)
             {
                recycleRemaining -= size;
-               largeObjectRecycle.push(blob);
+               pushRecycle(blob);
             }
             else
             {
@@ -5658,7 +5696,6 @@ public:
       mLargeOld = mLargeList.size();
       mLargeOldMin = mLargeMin = largeMin;
       mLargeOldMax = mLargeMax = largeMax;
-      mRecycleSize.store((int)largeObjectRecycle.size(), std::memory_order_relaxed);
 
       int l1 = mLargeList.size();
 
@@ -6254,7 +6291,9 @@ public:
    hx::FastMutex mLargeListLock;
    hx::QuickVec<LocalAllocator *> mLocalAllocs;
    LocalAllocator *mLocalPool[LOCAL_POOL_SIZE];
-   hx::QuickVec<unsigned int *> largeObjectRecycle;
+   // Dead large buffers kept for reuse, by size, under mLargeListLock
+   RecycleLists mRecycle;
+   size_t mRecycleBytes;
 
    void ForEachStackContext(void (*inFunc)(hx::StackContext *, void *), void *inData);
    // Lock-free probe for AllocLarge - only read unlocked, maintained under
