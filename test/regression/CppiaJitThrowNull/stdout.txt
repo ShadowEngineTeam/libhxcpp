@@ -1,0 +1,156 @@
+throw null: Dynamic null
+null direct: Dynamic null
+null deep: Dynamic null
+null rethrow: Dynamic null
+null unmatched: Dynamic null
+null closure: Dynamic null
+null closure catch: Dynamic null
+null native: Dynamic null
+null host: Dynamic null
+null host closure: Dynamic null
+null host frames: Dynamic null
+empty direct: String ''
+empty deep: String ''
+empty rethrow: String ''
+  inner String ''
+empty unmatched: nothing
+empty closure: String ''
+empty closure catch: String ''
+empty native: String ''
+empty host: String ''
+empty host closure: String ''
+empty host frames: String ''
+abc direct: String 'abc'
+abc deep: String 'abc'
+abc rethrow: String 'abc'
+  inner String 'abc'
+abc unmatched: nothing
+abc closure: String 'abc'
+abc closure catch: String 'abc'
+abc native: String 'abc'
+abc host: String 'abc'
+abc host closure: String 'abc'
+abc host frames: String 'abc'
+7 direct: Int 7
+7 deep: Int 7
+7 rethrow: Int 7
+  inner Int 7
+7 unmatched: nothing
+7 closure: Int 7
+7 closure catch: Int 7
+7 native: Int 7
+7 host: Int 7
+7 host closure: Int 7
+7 host frames: Int 7
+1.5 direct: Float 1.5
+1.5 deep: Float 1.5
+1.5 rethrow: Float 1.5
+1.5 unmatched: Float 1.5
+1.5 closure: Float 1.5
+1.5 closure catch: Float 1.5
+1.5 native: Float 1.5
+1.5 host: Float 1.5
+1.5 host closure: Float 1.5
+1.5 host frames: Float 1.5
+true direct: Bool true
+true deep: Bool true
+true rethrow: Bool true
+true unmatched: Bool true
+true closure: Bool true
+true closure catch: Bool true
+true native: Bool true
+true host: Bool true
+true host closure: Bool true
+true host frames: Bool true
+[1,2] direct: Dynamic '[1,2]'
+[1,2] deep: Dynamic '[1,2]'
+[1,2] rethrow: Dynamic '[1,2]'
+[1,2] unmatched: Dynamic '[1,2]'
+[1,2] closure: Dynamic '[1,2]'
+[1,2] closure catch: Dynamic '[1,2]'
+[1,2] native: Dynamic '[1,2]'
+[1,2] host: Dynamic '[1,2]'
+[1,2] host closure: Dynamic '[1,2]'
+[1,2] host frames: Dynamic '[1,2]'
+native catch null: null
+native catch empty: ''
+native catch host null: null
+host caught null
+throw null: Dynamic null
+null direct: Dynamic null
+null deep: Dynamic null
+null rethrow: Dynamic null
+null unmatched: Dynamic null
+null closure: Dynamic null
+null closure catch: Dynamic null
+null native: Dynamic null
+null host: Dynamic null
+null host closure: Dynamic null
+null host frames: Dynamic null
+empty direct: String ''
+empty deep: String ''
+empty rethrow: String ''
+  inner String ''
+empty unmatched: nothing
+empty closure: String ''
+empty closure catch: String ''
+empty native: String ''
+empty host: String ''
+empty host closure: String ''
+empty host frames: String ''
+abc direct: String 'abc'
+abc deep: String 'abc'
+abc rethrow: String 'abc'
+  inner String 'abc'
+abc unmatched: nothing
+abc closure: String 'abc'
+abc closure catch: String 'abc'
+abc native: String 'abc'
+abc host: String 'abc'
+abc host closure: String 'abc'
+abc host frames: String 'abc'
+7 direct: Int 7
+7 deep: Int 7
+7 rethrow: Int 7
+  inner Int 7
+7 unmatched: nothing
+7 closure: Int 7
+7 closure catch: Int 7
+7 native: Int 7
+7 host: Int 7
+7 host closure: Int 7
+7 host frames: Int 7
+1.5 direct: Float 1.5
+1.5 deep: Float 1.5
+1.5 rethrow: Float 1.5
+1.5 unmatched: Float 1.5
+1.5 closure: Float 1.5
+1.5 closure catch: Float 1.5
+1.5 native: Float 1.5
+1.5 host: Float 1.5
+1.5 host closure: Float 1.5
+1.5 host frames: Float 1.5
+true direct: Bool true
+true deep: Bool true
+true rethrow: Bool true
+true unmatched: Bool true
+true closure: Bool true
+true closure catch: Bool true
+true native: Bool true
+true host: Bool true
+true host closure: Bool true
+true host frames: Bool true
+[1,2] direct: Dynamic '[1,2]'
+[1,2] deep: Dynamic '[1,2]'
+[1,2] rethrow: Dynamic '[1,2]'
+[1,2] unmatched: Dynamic '[1,2]'
+[1,2] closure: Dynamic '[1,2]'
+[1,2] closure catch: Dynamic '[1,2]'
+[1,2] native: Dynamic '[1,2]'
+[1,2] host: Dynamic '[1,2]'
+[1,2] host closure: Dynamic '[1,2]'
+[1,2] host frames: Dynamic '[1,2]'
+native catch null: null
+native catch empty: ''
+native catch host null: null
+host caught null

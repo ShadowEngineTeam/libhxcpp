@@ -589,7 +589,7 @@ void ScriptCallable::runFunction(CppiaCtx *ctx)
       }
       if (ctx->exception)
       {
-         Dynamic caught = ctx->exception;
+         Dynamic caught = fromPendingException(ctx->exception);
          ctx->exception = nullptr;
          HX_STACK_DO_THROW(caught);
       }
@@ -638,7 +638,7 @@ void ScriptCallable::runFunctionClosure(CppiaCtx *ctx)
       }
       if (ctx->exception)
       {
-         Dynamic caught = ctx->exception;
+         Dynamic caught = fromPendingException(ctx->exception);
          ctx->exception = nullptr;
          HX_STACK_DO_THROW(caught);
       }
@@ -875,7 +875,7 @@ public:
          }
          if (ctx->exception)
          {
-            Dynamic caught = ctx->exception;
+            Dynamic caught = fromPendingException(ctx->exception);
             ctx->exception = nullptr;
             HX_STACK_DO_THROW(caught);
          }

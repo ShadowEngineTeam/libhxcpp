@@ -929,6 +929,14 @@ struct BCRReturn
 };
 
 
+// Compiled code keeps a pending exception in StackContext::exception, where 0
+//  means there is none, so a thrown null waits there as gThrownNull. A catch
+//  that takes it, or a return to code that throws it again, gets null back
+extern hx::Object *const gThrownNull;
+inline hx::Object *toPendingException(hx::Object *inThrown) { return inThrown ? inThrown : gThrownNull; }
+inline hx::Object *fromPendingException(hx::Object *inPending) { return inPending == gThrownNull ? 0 : inPending; }
+
+
 #define BCR_CHECK if (ctx->breakContReturn || ctx->exception) return BCRReturn();
 #define BCR_CHECK_RET(x) if (ctx->breakContReturn || ctx->exception) return x;
 #define BCR_VCHECK if (ctx->breakContReturn || ctx->exception) return;

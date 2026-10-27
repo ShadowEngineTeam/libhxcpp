@@ -496,7 +496,7 @@ public:
             }
             if (ctx->exception)
             {
-               hx::Object *e = ctx->exception;
+               hx::Object *e = fromPendingException(ctx->exception);
                ctx->exception = 0;
                hx::Throw( Dynamic(e) );
             }
