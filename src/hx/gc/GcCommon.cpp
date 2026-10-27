@@ -133,7 +133,7 @@ HX_CHAR *NewString(int inLen)
    // bytes after the terminator, where String::hash() memoizes the hash on
    // first use
    bool hashSlot = inLen >= HX_GC_STRING_HASH_SLOT_MIN_LEN;
-   char *result =  (char *)hx::InternalNew( (inLen+1)*sizeof(char) + (hashSlot ? 4 : 0), false );
+   char *result =  (char *)hx::InternalNewString( (inLen+1)*sizeof(char) + (hashSlot ? 4 : 0) );
    result[inLen] = '\0';
    if (hashSlot)
       ((unsigned int *)result)[-1] |= HX_GC_STRING_HASH_SLOT;
@@ -147,7 +147,7 @@ HX_CHAR *NewString(int inLen)
 char *NewStringUncleared(int inLen)
 {
    bool hashSlot = inLen >= HX_GC_STRING_HASH_SLOT_MIN_LEN;
-   char *result =  (char *)hx::InternalNewUncleared( (inLen+1)*sizeof(char) + (hashSlot ? 4 : 0) );
+   char *result =  (char *)hx::InternalNewString( (inLen+1)*sizeof(char) + (hashSlot ? 4 : 0), false );
    // The terminator and the hash slot, which the caller does not fill
    memset(result + inLen, 0, 1 + (hashSlot ? 4 : 0));
    if (hashSlot)

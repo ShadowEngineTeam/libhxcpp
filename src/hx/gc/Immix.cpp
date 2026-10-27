@@ -1352,18 +1352,24 @@ struct BlockDataInfo
          size_t last{ scan + mRanges[h].length };
          if (inOffset<last)
          {
-            #ifdef HXCPP_ALIGN_ALLOC
-            // Make sure header scan is odd-int aligned so the following object will be even-int
-            // aligned
-            if (!(scan & 0x4))
-               scan += 4;
-            #endif
-
             // Found hole that the object was possibly allocated in
             while(scan<=inOffset)
             {
                // Trace along the hole...
                unsigned int header{ *reinterpret_cast<unsigned int*>(mPtr->mData + scan) };
+               #ifdef HXCPP_ALIGN_ALLOC
+               // The hole was zeroed before use, so a zero word here is the
+               //  padding that started the next allocation 8-byte aligned.
+               //  String data skips it (libhxcpp #370), so a header can
+               //  start at any int
+               if (!header)
+               {
+                  scan += 4;
+                  if (scan>inOffset || scan>=last)
+                     break;
+                  header = *reinterpret_cast<unsigned int*>(mPtr->mData + scan);
+               }
+               #endif
                unsigned int size{
                   !(header & 0xff000000)
                      ? (header & 0x0000ffff)
@@ -1397,12 +1403,6 @@ struct BlockDataInfo
                   return allocString;
                }
                scan = end;
-               #ifdef HXCPP_ALIGN_ALLOC
-               // Make sure scan is odd-int aligned so the following object will be even-int
-               // aligned
-               if (!(scan & 0x4))
-                  scan += 4;
-               #endif
             }
             break;
          }
@@ -1636,10 +1636,10 @@ void GCCheckPointer(void *inPtr)
 }
 
 
-void GCOnNewPointer(void *inPtr)
+void GCOnNewPointer(void *inPtr, bool inAligned)
 {
    #ifdef HXCPP_ALIGN_ALLOC
-   if ( reinterpret_cast<uintptr_t>(inPtr) & 0x7 )
+   if ( reinterpret_cast<uintptr_t>(inPtr) & (inAligned ? 0x7 : 0x3) )
    {
       GCLOG("Misaligned pointer %p\n", inPtr);
       NullReference("Object", false);
@@ -7485,6 +7485,19 @@ public:
 
    void *CallAlloc(size_t inSize, unsigned int inObjectFlags) HXCPP_OVERRIDE
    {
+      return DoAlloc<true>(inSize, inObjectFlags);
+   }
+
+   // String data holds no atomics or doubles, so it need not start 8-byte
+   //  aligned: a short string takes 4 bytes less on average (libhxcpp #370)
+   void *CallAllocUnaligned(size_t inSize)
+   {
+      return DoAlloc<false>(inSize, 0);
+   }
+
+   template<bool ALIGN>
+   void *DoAlloc(size_t inSize, unsigned int inObjectFlags)
+   {
       #ifndef HXCPP_SINGLE_THREADED_APP
       #if HXCPP_DEBUG
       if (mGCFreeZone)
@@ -7514,7 +7527,7 @@ public:
          #ifdef HXCPP_GC_NURSERY
             unsigned char* buffer{ spaceFirst };
             #ifdef HXCPP_ALIGN_ALLOC
-            if (reinterpret_cast<uintptr_t>(buffer) & 0x4 )
+            if (ALIGN && (reinterpret_cast<uintptr_t>(buffer) & 0x4))
                buffer += 4;
             #endif
             unsigned char *end = buffer + allocSize;
@@ -7526,7 +7539,7 @@ public:
                reinterpret_cast<unsigned int*>(buffer)[-1] = static_cast<unsigned int>(allocSize) - 4 | inObjectFlags;
 
                #if defined(HXCPP_GC_CHECK_POINTER) && defined(HXCPP_GC_DEBUG_ALWAYS_MOVE)
-               hx::GCOnNewPointer(buffer);
+               hx::GCOnNewPointer(buffer, ALIGN);
                #endif
 
                return buffer;
@@ -7537,7 +7550,7 @@ public:
                *mFraggedRows += static_cast<uint16_t>((s - spaceFirst) >> IMMIX_LINE_BITS);
          #else
             #ifdef HXCPP_ALIGN_ALLOC
-            if (!(size_t{ spaceStart } & 0x4))
+            if (ALIGN && !(size_t{ spaceStart } & 0x4))
                spaceStart += 4;
             #endif
 
@@ -7560,7 +7573,7 @@ public:
                spaceStart = end;
 
                #if defined(HXCPP_GC_CHECK_POINTER) && defined(HXCPP_GC_DEBUG_ALWAYS_MOVE)
-               hx::GCOnNewPointer(buffer);
+               hx::GCOnNewPointer(buffer, ALIGN);
                #endif
 
                #ifdef HXCPP_TELEMETRY
@@ -7974,6 +7987,25 @@ void *InternalNewUncleared(size_t inSize)
       return sGlobalAlloc->AllocLarge(inSize, false);
    }
    return InternalNew(inSize, false);
+}
+
+
+void *InternalNewString(size_t inSize, bool inClear)
+{
+   if (inSize>=IMMIX_LARGE_OBJ_SIZE)
+      return inClear ? InternalNew(inSize, false) : InternalNewUncleared(inSize);
+
+   #ifdef HXCPP_DEBUG
+   if (sgSpamCollects && sgAllocsSinceLastSpam>=sgSpamCollects)
+      CollectFromThisThread(false,false);
+   sgAllocsSinceLastSpam++;
+   #endif
+
+   #if defined(HXCPP_GC_MOVING) && defined(HXCPP_M64)
+   if (inSize<8)
+      return GetLocalAlloc()->CallAllocUnaligned(8);
+   #endif
+   return GetLocalAlloc()->CallAllocUnaligned((inSize + 3) & ~size_t{3});
 }
 
 

@@ -452,7 +452,7 @@ char16_t *String::allocChar16Ptr(int len)
 {
    // See NewString - reserve a memoized-hash slot for longer strings
    bool hashSlot = len >= HX_GC_STRING_HASH_SLOT_MIN_LEN;
-   char16_t *result = (char16_t *)hx::InternalNew( (len+1)*2 + (hashSlot ? 4 : 0), false );
+   char16_t *result = (char16_t *)hx::InternalNewString( (len+1)*2 + (hashSlot ? 4 : 0) );
    ((unsigned int *)result)[-1] |= HX_GC_STRING_CHAR16_T | (hashSlot ? HX_GC_STRING_HASH_SLOT : 0);
    result[len] = 0;
    return result;
@@ -463,7 +463,7 @@ char16_t *String::allocChar16Ptr(int len)
 static char16_t *allocChar16PtrUncleared(int len)
 {
    bool hashSlot = len >= HX_GC_STRING_HASH_SLOT_MIN_LEN;
-   char16_t *result = (char16_t *)hx::InternalNewUncleared( (len+1)*2 + (hashSlot ? 4 : 0) );
+   char16_t *result = (char16_t *)hx::InternalNewString( (len+1)*2 + (hashSlot ? 4 : 0), false );
    ((unsigned int *)result)[-1] |= HX_GC_STRING_CHAR16_T | (hashSlot ? HX_GC_STRING_HASH_SLOT : 0);
    // The terminator and the hash slot
    memset(result + len, 0, 2 + (hashSlot ? 4 : 0));
@@ -2316,7 +2316,7 @@ String _hx_utf8_to_utf16(const unsigned char *ptr, int inUtf8Len, bool addHash)
    int allocSize = 2*(char16Count+1);
    if (hashSlot)
       allocSize += sizeof(int);
-   char16_t *str = (char16_t *)NewGCPrivate(0,allocSize);
+   char16_t *str = (char16_t *)hx::InternalNewString(allocSize);
 
    u = ptr;
    char16_t *o = str;

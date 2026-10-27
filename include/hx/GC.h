@@ -123,6 +123,11 @@ void *InternalNew(size_t inSize,bool inIsObject);
 // full before anything can read it: a large allocation is not cleared first
 void *InternalNewUncleared(size_t inSize);
 
+// InternalNew for string data, which holds no atomics or doubles and so
+// need not start 8-byte aligned (libhxcpp #370). With inClear false, a large
+// allocation is not cleared first, as with InternalNewUncleared
+void *InternalNewString(size_t inSize,bool inClear=true);
+
 // Used internall - realloc array data
 void *InternalRealloc(size_t inFromSize, void *inData,size_t inSize,bool inAllowExpansion=false);
 
@@ -281,7 +286,7 @@ HXCPP_EXTERN_CLASS_ATTRIBUTES void MarkPopClass(hx::MarkContext *__inCtx);
 
 // Used by runtime if it is being paranoid about pointers.  It checks that the pointer is real and alive at last collect.
 void GCCheckPointer(void *);
-void GCOnNewPointer(void *);
+void GCOnNewPointer(void *, bool inAligned=true);
 
 
 // Called internally before and GC operations
