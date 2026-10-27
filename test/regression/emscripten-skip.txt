@@ -47,6 +47,7 @@ ProcessPosixStartError: processes
 ProcessReapAfterClose: processes
 ProcessSigpipeHandler: processes
 ProcessWaitError: processes
+RegexpFailedSubjectRetention: threads (std::thread, which needs a pthreads build)
 RegexpObsoleteSubject: threads (std::thread, which needs a pthreads build)
 RegisterHeldRoots: threads
 RootWalkRace: threads (std::thread, which needs a pthreads build)

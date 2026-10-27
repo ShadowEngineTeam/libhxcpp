@@ -1,0 +1,4 @@
+failed UTF16 subject cache is bounded: true
+failed sanitized subject cache is bounded: true
+dropping the regex releases both buffers: true
+matching after a failure finds the next match: true
