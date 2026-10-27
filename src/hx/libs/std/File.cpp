@@ -219,6 +219,13 @@ Dynamic _hx_std_file_open( String fname, String r )
       file_error("file_open",fname);
    const char *mode = r.utf8_str(&buf1);
    bool readAhead = mode[0]=='r' && !strchr(mode,'+') && isRegularFile(file);
+   #ifdef NEKO_WINDOWS
+   // Not in text mode, where the CRT turns CRLF into LF as it reads: the
+   // bytes read ahead are fewer than the stream moved over, so tell and
+   // relative seeks, which take them back, landed past unread text
+   if (!strchr(mode,'b'))
+      readAhead = false;
+   #endif
    hx::ExitGCFreeZone();
 
    fio *f = new fio;
