@@ -7,6 +7,9 @@
   <depend files="hxcpp-depends"/>
   <depend name="${this_dir}/Build.xml" dateOnly="true" />
   <cache value="1" asLibrary="true" />
+  <!-- hxcpp_ssl, linked after this, calls Socket.cpp's _hx_std_socket_handle,
+       which GNU ld does not go back for -->
+  <addTwice value="1" />
 
   <file name="File.cpp"/>
   <file name="Sys.cpp"/>
