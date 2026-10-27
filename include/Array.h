@@ -866,10 +866,17 @@ public:
    }
 
 
+   // An Int start, as generated code passes it, is taken without boxing it;
+   // null() matches its own overload, since it converts to both
    int indexOf(ELEM_ inValue, Dynamic fromIndex = null())
    {
+      return indexOf(inValue, fromIndex==null() ? 0 : fromIndex->__ToInt());
+   }
+   int indexOf(ELEM_ inValue, const null &) { return indexOf(inValue, 0); }
+   int indexOf(ELEM_ inValue, int fromIndex)
+   {
       int len = length;
-      int i = fromIndex==null() ? 0 : fromIndex->__ToInt();
+      int i = fromIndex;
       ELEM_ *e = (ELEM_ *)mBase;
       if (i < 0)
       {
@@ -887,8 +894,13 @@ public:
 
    int lastIndexOf(ELEM_ inValue, Dynamic fromIndex = null())
    {
+      return lastIndexOf(inValue, fromIndex==null() ? (int)length-1 : fromIndex->__ToInt());
+   }
+   int lastIndexOf(ELEM_ inValue, const null &) { return lastIndexOf(inValue, (int)length-1); }
+   int lastIndexOf(ELEM_ inValue, int fromIndex)
+   {
       int len = length;
-      int i = fromIndex==null() ? len-1 : fromIndex->__ToInt();
+      int i = fromIndex;
       ELEM_ *e = (ELEM_ *)mBase;
       if (i >= len)
          i = len - 1;

@@ -29,6 +29,7 @@ class TestMain #if nme extends nme.display.Sprite #end {
       runner.addCase(new TestWeakHash());
       runner.addCase(new TestInt64Hash());
       runner.addCase(new TestDynamicArray());
+      runner.addCase(new TestSearch());
       #if !nme
       runner.addCase(new file.TestFile());
       #end
@@ -85,6 +86,7 @@ class TestMain #if nme extends nme.display.Sprite #end {
          new TestWeakHash(),
          new TestInt64Hash(),
          new TestDynamicArray(),
+         new TestSearch(),
          new file.TestFile(),
          new native.TestFinalizer()
       ]);

@@ -41,6 +41,7 @@ libhxcpp 6.0.0 (unreleased)
 * Fixed Int64-keyed maps walking long chains for packed pairs: the key's halves were xored before mixing, so every Int64.make(x, y) of a 256 x 256 grid shared 256 hashes and every key with equal halves hashed to 0. The high half is now multiplied in; building and reading 65,536 grid keys takes 1.1 ms instead of 88 ms, and 65,536 equal-halves keys 2.6 ms instead of 4.5 s (libhxcpp #289)
 * Array<Dynamic>.push of an Int, Float, Bool, Int64 or String no longer boxes the value only to unbox it into the array's typed storage: it is stored as an indexed write stores it, and pushing Ints and Floats is 1.7x faster (libhxcpp #294)
 * Fixed cpp.NativeArray.reserve doing nothing on an empty Array<Dynamic>, which has no storage until its first element: the capacity is now kept and given to that storage, and capacity() reports it meanwhile. Filling a reserved 1,000,000-element array is 1.2x faster and peaks at 25 MB instead of 45 MB (libhxcpp #297)
+* indexOf and lastIndexOf on typed arrays and Strings take an Int start position without boxing it, which allocated for every start past 255: searches that start each call from an offset are 2.9x faster (libhxcpp #307)
 
 libhxcpp 6.0.0-rc.1
 ------------------------------------------------------------

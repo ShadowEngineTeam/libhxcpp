@@ -1855,9 +1855,14 @@ static bool StrMatch(const char16_t *src0, const char *src1, int len)
 
 int String::indexOf(const String &inValue, Dynamic inStart) const
 {
+   return indexOf(inValue, inStart==null() ? 0 : inStart->__ToInt());
+}
+
+int String::indexOf(const String &inValue, int inStart) const
+{
    if (__s==0)
       return -1;
-   int s = inStart==null() ? 0 : inStart->__ToInt();
+   int s = inStart;
    // A negative start means "from the beginning" (matches other targets). Without
    // this clamp the search reads before the buffer (out-of-bounds) and can return
    // a bogus negative index.
@@ -1951,10 +1956,15 @@ static int TLastIndexOf(int s, const T *str, int strLen, const T *sought, int so
 
 int String::lastIndexOf(const String &inValue, Dynamic inStart) const
 {
+   return lastIndexOf(inValue, inStart==null() ? length : inStart->__ToInt());
+}
+
+int String::lastIndexOf(const String &inValue, int inStart) const
+{
    if (__s==0)
       return -1;
    int l = inValue.length;
-   int s = inStart==null() ? length : inStart->__ToInt();
+   int s = inStart;
    if (l==0) {
       return std::max(0, std::min(s, length));
    }

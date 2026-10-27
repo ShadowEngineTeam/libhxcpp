@@ -164,6 +164,12 @@ public:
     Dynamic charCodeAt(int inPos) const;
     int indexOf(const ::String &inValue, Dynamic inStart) const;
     int lastIndexOf(const ::String &inValue, Dynamic inStart) const;
+    // An Int start, as generated code passes it, is taken without boxing it;
+    // null() matches its own overload, since it converts to both
+    int indexOf(const ::String &inValue, int inStart) const;
+    int lastIndexOf(const ::String &inValue, int inStart) const;
+    inline int indexOf(const ::String &inValue, const null &) const { return indexOf(inValue, 0); }
+    inline int lastIndexOf(const ::String &inValue, const null &) const { return lastIndexOf(inValue, length); }
     Array<String> split(const ::String &inDelimiter) const;
     ::String substr(int inPos,Dynamic inLen) const;
     ::String substring(int inStartIndex, Dynamic inEndIndex) const;
