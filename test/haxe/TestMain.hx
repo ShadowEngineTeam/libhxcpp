@@ -35,6 +35,7 @@ class TestMain #if nme extends nme.display.Sprite #end {
       #if cpp
       runner.addCase(new native.TestFinalizer());
       runner.addCase(new native.TestCffiStringView());
+      runner.addCase(new native.TestCffiCallVector());
       #end
 
       final report = Report.create(runner);
@@ -86,7 +87,8 @@ class TestMain #if nme extends nme.display.Sprite #end {
          new TestDeque(),
          new file.TestFile(),
          new native.TestFinalizer(),
-         new native.TestCffiStringView()
+         new native.TestCffiStringView(),
+         new native.TestCffiCallVector()
       ]);
    }
    #end
