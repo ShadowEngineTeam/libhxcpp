@@ -1,0 +1,3 @@
+positive seed replays the 32-bit sequence: true
+negative seed replays the 32-bit sequence: true
+minimum seed replays the 32-bit sequence: true
