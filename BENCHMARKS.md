@@ -155,6 +155,20 @@ haxe --run Run --readme              # publish: this page and the README summary
 
 `--readme` needs every benchmark, both runtimes and a committed tree, so the published numbers always name the commit they were measured on. The driver's [doc comment](bench/Run.hx) lists every option.
 
+## Tracking changes in CI
+
+The [bench workflow](.github/workflows/bench.yml) runs [bench/ci.sh](bench/ci.sh), which builds the suite against a change and against the commit it is based on, on the same runner, and runs them in turns as above. `--base <checkout>` makes Run.hx compare with another libhxcpp checkout instead of stock hxcpp, and [bench/Compare.hx](bench/Compare.hx) reports throughput, tail pauses (p99.9 work unit time) and peak memory separately. Every benchmark the suite lists is included, so new ones are tracked without changing the workflow.
+
+A difference only counts past its noise: twice the larger run-to-run spread of the two builds, and at least 5% for speed (the code layout band above), 25% for tail pauses and 5% for memory. A regression past that is a warning and a line in the job summary; it does not fail the job. Shared runners vary from run to run, so the daily scheduled run compares main with itself, and that A/A spread is what any merge gate would be set from.
+
+Pull requests are compared with the commit they branched from and leave out CPPIA; pushes to main are compared with the commit before. Every run keeps its raw results as an artifact for 90 days, and runs on main append a line to `history.jsonl` on the `bench-history` branch, with each benchmark's numbers and its ratios to the base.
+
+```sh
+bash bench/ci.sh HEAD~1                    # this checkout against its parent
+bash bench/ci.sh HEAD --no-cppia           # an A/A run of this checkout
+haxe --run Compare .work/results.json      # the report again, from bench/
+```
+
 ## Adding a benchmark
 
 1. Add the class to [bench/src](bench/src) and register it in `Main.hx`. For a CPPIA workload, add its script implementation in `bench/cppia/Script.hx` and register both modes in `CppiaBenchmarks.all()`.
