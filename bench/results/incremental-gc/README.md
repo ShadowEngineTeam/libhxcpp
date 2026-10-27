@@ -56,6 +56,8 @@ Linux under WSL, Haxe 4.3.3 and GCC 13.3 passed ASan and UBSan builds of the sli
 
 The independent verifier fixture deliberately omits a reachable descendant's mark in a child process and requires rejection. The epoch recovery assertion failed before the recovery fix, and the allocation cursor assertion failed before preserving allocator ranges across partial slices.
 
+The isolated haxelib installation, setup, update and off checks passed on Windows and Linux. Their synthetic package includes the configuration macro referenced by `extraParams.hxml`.
+
 Local TSan did not reach a usable test run: the installed GCC runtime rejected the repository suppression syntax and, without suppressions, failed under WSL before the workload ran. TSan and other platform results remain for CI. CI configuration includes incremental regressions and stress in the sanitizer jobs and a native incremental job on supported Haxe 4 configurations.
 
 ## Remaining gates
