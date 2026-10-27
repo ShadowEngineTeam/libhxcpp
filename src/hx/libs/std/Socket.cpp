@@ -2,6 +2,9 @@
 #include <hxcpp.h>
 #include <chrono>
 #include <atomic>
+#include <mutex>
+#include <vector>
+#include <algorithm>
 #include <hx/OS.h>
 
 #include <string.h>
@@ -89,6 +92,16 @@ typedef int SocketLen;
 #   define SOCKET_ERROR (-1)
 #   define INVALID_SOCKET (-1)
 typedef socklen_t SocketLen;
+// Poll keeps its registrations in the kernel where there is a way to
+#   if defined(NEKO_LINUX) && !defined(__EMSCRIPTEN__)
+#      include <sys/epoll.h>
+#      define HX_POLL_QUEUE
+#      define HX_POLL_EPOLL
+#   elif defined(NEKO_MAC) || defined(NEKO_BSD)
+#      include <sys/event.h>
+#      define HX_POLL_QUEUE
+#      define HX_POLL_KQUEUE
+#   endif
 #endif
 
 #if (defined(NEKO_WINDOWS) || defined(NEKO_MAC)) && !defined(MSG_NOSIGNAL)
@@ -102,13 +115,180 @@ namespace
 
 static int socketType = 0;
 
+// The stream sockets holding bytes read ahead, so that select and poll look
+// for them only while there are some
+static std::atomic<int> sReadAheadHeld(0);
+// Counts socket_close calls, so that a poll that keeps its registrations
+// looks for a closed socket only after one was closed
+static std::atomic<unsigned int> sSocketsClosed(0);
+static std::atomic<unsigned int> sNextSocketSerial(0);
+
+static const int SOCKET_READ_AHEAD = 4096;
+
+// The bytes a stream socket received past those asked for. A byte at a time,
+// socket_recv_char called recv for each one in its own GC-free zone, 0.6 us
+// a byte; it takes up to SOCKET_READ_AHEAD bytes the kernel already has
+// instead, and every other read takes these first. recv with a larger
+// buffer returns as soon as one byte is there, so blocking, timeouts and
+// nonblocking reads are as they were. select and poll report a socket that
+// holds bytes as readable, and a socket handed to TLS reads ahead no more.
+//
+// One read at a time holds readers, from before it looks at the bytes held
+// until after its recv, so two threads reading the same stream each see
+// their bytes in order: one whose recv returned later than another thread
+// took bytes ahead could otherwise have gone on to take bytes from before
+// its own. close and shutdown never wait for it, since a read blocked in
+// recv can be waiting for exactly that.
+#ifndef HXCPP_SINGLE_THREADED_APP
+#ifdef NEKO_WINDOWS
+// std::mutex on MSVC goes through the C++ runtime and tracks its owner, a
+// quarter of the time a byte took
+struct ReadersMutex
+{
+   SRWLOCK lock_;
+   ReadersMutex() { InitializeSRWLock(&lock_); }
+   bool try_lock() { return TryAcquireSRWLockExclusive(&lock_) != 0; }
+   void lock() { AcquireSRWLockExclusive(&lock_); }
+   void unlock() { ReleaseSRWLockExclusive(&lock_); }
+};
+#else
+typedef std::mutex ReadersMutex;
+#endif
+#endif
+
+struct ReadAhead
+{
+   #ifndef HXCPP_SINGLE_THREADED_APP
+   ReadersMutex readers;
+   #endif
+   unsigned char *bytes;
+   int pos;
+   int end;
+   // Read without the lock: bytes are held, for select and poll
+   std::atomic<bool> held;
+   // No more reading ahead, after the socket was handed to TLS
+   std::atomic<bool> stopped;
+   // What is held is thrown away, after close, or a shutdown for reading
+   // that drops what the kernel holds too
+   std::atomic<bool> discarded;
+   // Held bytes thrown away still count as readable, as Windows reports bytes
+   // it will no longer give after a shutdown for reading
+   std::atomic<bool> stillReadable;
+
+   ReadAhead() : bytes(0), pos(0), end(0), held(false), stopped(false), discarded(false), stillReadable(false) { }
+   ~ReadAhead()
+   {
+      setHeld(false);
+      free(bytes);
+   }
+
+   void setHeld(bool inHeld)
+   {
+      if (inHeld)
+      {
+         if (!held.exchange(true))
+            sReadAheadHeld++;
+      }
+      else if (held.exchange(false))
+         sReadAheadHeld--;
+   }
+
+   // Called by the reader that holds the lock
+   int unread()
+   {
+      if (discarded)
+      {
+         pos = end = 0;
+         if (!stillReadable)
+            setHeld(false);
+      }
+      return end - pos;
+   }
+
+   int take(unsigned char *outBytes, int inLen)
+   {
+      int n = end - pos;
+      if (n > inLen)
+         n = inLen;
+      memcpy(outBytes, bytes + pos, n);
+      pos += n;
+      if (pos == end)
+         setHeld(false);
+      return n;
+   }
+
+   // Without the lock: a reader clears what it holds when it next looks,
+   // and held is clear either way, whichever comes first
+   void discard(bool inStillReadable = false)
+   {
+      stopped = true;
+      stillReadable = inStillReadable;
+      discarded = true;
+      if (!inStillReadable)
+         setHeld(false);
+   }
+};
+
+// The lock a read takes. Waiting for it is in a GC-free zone, so that a
+// collection never waits on a read blocked in recv.
+struct ReadAheadLock
+{
+   ReadAhead *ahead;
+   ReadAheadLock(ReadAhead *inAhead) : ahead(inAhead)
+   {
+      #ifndef HXCPP_SINGLE_THREADED_APP
+      if (ahead && !ahead->readers.try_lock())
+      {
+         hx::EnterGCFreeZone();
+         ahead->readers.lock();
+         hx::ExitGCFreeZone();
+      }
+      #endif
+   }
+   ~ReadAheadLock()
+   {
+      #ifndef HXCPP_SINGLE_THREADED_APP
+      if (ahead)
+         ahead->readers.unlock();
+      #endif
+   }
+};
+
+static void forgetHanded(ReadAhead *inAhead);
+
 struct SocketWrapper : public hx::Object
 {
    HX_IS_INSTANCE_OF enum { _hx_ClassId = hx::clsIdSocket };
 
    SOCKET socket;
+   bool stream;
+   // Tells a socket from one that has the descriptor it had, for a poll
+   unsigned int serial;
+   // Made by the first read of a stream socket, and freed with the wrapper,
+   // so that a read never finds it gone
+   std::atomic<ReadAhead *> ahead;
 
    int __GetType() const HXCPP_OVERRIDE { return socketType; }
+
+   ReadAhead *readAhead()
+   {
+      ReadAhead *a = ahead.load(std::memory_order_acquire);
+      if (!a && stream)
+      {
+         ReadAhead *made = new ReadAhead();
+         if (ahead.compare_exchange_strong(a, made))
+            a = made;
+         else
+            delete made;
+      }
+      return a;
+   }
+
+   bool holdsBytes()
+   {
+      ReadAhead *a = ahead.load(std::memory_order_acquire);
+      return a && a->held.load(std::memory_order_relaxed);
+   }
 
    // A socket that is dropped without close still releases its descriptor
    static void finalize(Dynamic inObj)
@@ -119,19 +299,29 @@ struct SocketWrapper : public hx::Object
          closesocket(wrap->socket);
          wrap->socket = INVALID_SOCKET;
       }
+      ReadAhead *ahead = wrap->ahead.exchange(0);
+      if (ahead)
+      {
+         forgetHanded(ahead);
+         delete ahead;
+      }
    }
 
-   static SocketWrapper *create(SOCKET inSocket)
+   static SocketWrapper *create(SOCKET inSocket, bool inStream)
    {
       SocketWrapper *wrap = new SocketWrapper();
       wrap->socket = inSocket;
+      wrap->stream = inStream;
+      wrap->serial = ++sNextSocketSerial;
+      wrap->ahead = 0;
       _hx_set_finalizer(wrap, finalize);
       return wrap;
    }
 };
 
 
-SOCKET val_sock(Dynamic inValue)
+// The wrapper of a handle, or null for a sys.net.Socket without one
+SocketWrapper *val_wrapper(Dynamic inValue)
 {
    if (inValue.mPtr)
    {
@@ -140,18 +330,25 @@ SOCKET val_sock(Dynamic inValue)
       {
          inValue = inValue->__Field( HX_CSTRING("__s"), hx::paccNever );
          if (inValue.mPtr==0)
-            // Not 0 - on posix that is stdin and operations would silently
-            // target the console instead of failing
-            return INVALID_SOCKET;
+            return 0;
          type = inValue->__GetType();
       }
 
       if (type==socketType)
-         return static_cast<SocketWrapper *>(inValue.mPtr)->socket;
+         return static_cast<SocketWrapper *>(inValue.mPtr);
    }
 
    hx::Throw(HX_CSTRING("Invalid socket handle"));
    return 0;
+}
+
+
+SOCKET val_sock(Dynamic inValue)
+{
+   SocketWrapper *wrap = val_wrapper(inValue);
+   // Not 0 - on posix that is stdin and operations would silently
+   // target the console instead of failing
+   return wrap ? wrap->socket : INVALID_SOCKET;
 }
 
 
@@ -209,10 +406,89 @@ static void block_error()
 
 }
 
-// For SSL.cpp: the native socket in a handle, or a throw if it is not one
+namespace
+{
+// Sockets handed to TLS holding bytes read ahead, until TLS has read them:
+// it reads from the descriptor
+struct HandedSocket
+{
+   SOCKET socket;
+   ReadAhead *ahead;
+};
+static std::mutex sHandedLock;
+static std::vector<HandedSocket> sHanded;
+static std::atomic<int> sHandedCount(0);
+
+static void forgetHanded(ReadAhead *inAhead)
+{
+   if (!sHandedCount.load())
+      return;
+   std::lock_guard<std::mutex> lock(sHandedLock);
+   for(size_t i=0;i<sHanded.size();i++)
+      if (sHanded[i].ahead==inAhead)
+      {
+         sHanded.erase(sHanded.begin()+i);
+         sHandedCount--;
+         return;
+      }
+}
+}
+
+// For SSL.cpp: the native socket in a handle, or a throw if it is not one.
+// TLS reads from the descriptor, so the socket reads ahead no more, and the
+// bytes it holds, which TLS would have read from the kernel, go to TLS first.
 size_t _hx_std_socket_handle(Dynamic inSocket)
 {
-   return (size_t)val_sock(inSocket);
+   SocketWrapper *wrap = val_wrapper(inSocket);
+   if (!wrap)
+      return (size_t)INVALID_SOCKET;
+   ReadAhead *ahead = wrap->readAhead();
+   if (ahead)
+   {
+      ahead->stopped = true;
+      ReadAheadLock lock(ahead);
+      if (ahead->unread() && wrap->socket!=INVALID_SOCKET)
+      {
+         std::lock_guard<std::mutex> handed(sHandedLock);
+         bool listed = false;
+         for(size_t i=0;i<sHanded.size();i++)
+            listed = listed || sHanded[i].ahead==ahead;
+         if (!listed)
+         {
+            HandedSocket h = { wrap->socket, ahead };
+            sHanded.push_back(h);
+            sHandedCount++;
+         }
+      }
+   }
+   return (size_t)wrap->socket;
+}
+
+// For SSL.cpp: copies to outBytes what a socket handed to TLS still holds of
+// the bytes read ahead, and returns how many, or 0 when it holds none
+int _hx_std_socket_take_handed(size_t inSocket, unsigned char *outBytes, int inLen)
+{
+   if (!sHandedCount.load() || inLen<=0)
+      return 0;
+   ReadAhead *ahead = 0;
+   {
+      std::lock_guard<std::mutex> lock(sHandedLock);
+      for(size_t i=0;i<sHanded.size();i++)
+         if (sHanded[i].socket==(SOCKET)inSocket)
+            ahead = sHanded[i].ahead;
+   }
+   if (!ahead)
+      return 0;
+   int got = 0;
+   {
+      ReadAheadLock lock(ahead);
+      if (ahead->unread())
+         got = ahead->take(outBytes, inLen);
+      if (ahead->unread())
+         return got;
+   }
+   forgetHanded(ahead);
+   return got;
 }
 
 /**
@@ -282,7 +558,7 @@ Dynamic _hx_std_socket_new( bool udp, bool ipv6 )
       if( old >= 0 ) fcntl(s,F_SETFD,old|FD_CLOEXEC);
    #endif
 
-   return SocketWrapper::create(s);
+   return SocketWrapper::create(s,!udp);
 }
 
 /**
@@ -291,7 +567,8 @@ Dynamic _hx_std_socket_new( bool udp, bool ipv6 )
 **/
 void _hx_std_socket_close( Dynamic handle )
 {
-   SOCKET s = val_sock(handle);
+   SocketWrapper *wrap = val_wrapper(handle);
+   SOCKET s = wrap ? wrap->socket : INVALID_SOCKET;
    if( s != INVALID_SOCKET )
    {
       // No EINTR retry: posix close() releases the descriptor even when
@@ -301,8 +578,15 @@ void _hx_std_socket_close( Dynamic handle )
       hx::EnterGCFreeZone();
       closesocket(s);
       hx::ExitGCFreeZone();
+      sSocketsClosed++;
    }
    reset_sock(handle);
+   ReadAhead *ahead = wrap ? wrap->ahead.load() : 0;
+   if (ahead)
+   {
+      ahead->discard();
+      forgetHanded(ahead);
+   }
 }
 
 /**
@@ -362,10 +646,20 @@ int _hx_std_socket_send( Dynamic o, Array<unsigned char> buf, int p, int l )
 **/
 int _hx_std_socket_recv( Dynamic o, Array<unsigned char> buf, int p, int l )
 {
-   SOCKET sock = val_sock(o);
+   SocketWrapper *wrap = val_wrapper(o);
+   SOCKET sock = wrap ? wrap->socket : INVALID_SOCKET;
    int dlen = buf->length;
    if( p < 0 || l < 0 || p > dlen || l > dlen - p )
       return 0;
+
+   // An empty read returns at once when the kernel has bytes, and Windows
+   // waits for some otherwise, so one that holds bytes returns at once
+   if (l == 0 && wrap && sock != INVALID_SOCKET && wrap->holdsBytes())
+      return 0;
+   ReadAhead *ahead = wrap && l > 0 ? wrap->readAhead() : 0;
+   ReadAheadLock lock(ahead);
+   if (ahead && ahead->unread() && sock != INVALID_SOCKET)
+      return ahead->take((unsigned char *)buf->GetBase() + p, l);
 
    char * volatile base = (char *)buf->GetBase();
    hx::EnterGCFreeZone();
@@ -396,7 +690,47 @@ int _hx_std_socket_recv( Dynamic o, Array<unsigned char> buf, int p, int l )
 **/
 int _hx_std_socket_recv_char( Dynamic o )
 {
-   SOCKET sock = val_sock(o);
+   SocketWrapper *wrap = val_wrapper(o);
+   SOCKET sock = wrap ? wrap->socket : INVALID_SOCKET;
+
+   ReadAhead *ahead = wrap ? wrap->readAhead() : 0;
+   ReadAheadLock lock(ahead);
+   if (ahead && sock != INVALID_SOCKET)
+   {
+      if (ahead->unread())
+      {
+         int cc = ahead->bytes[ahead->pos++];
+         if (ahead->pos == ahead->end)
+            ahead->setHeld(false);
+         return cc;
+      }
+      if (!ahead->stopped.load() && !ahead->bytes)
+         ahead->bytes = (unsigned char *)malloc(SOCKET_READ_AHEAD);
+      if (!ahead->stopped.load() && ahead->bytes)
+      {
+         unsigned char *bytes = ahead->bytes;
+         hx::EnterGCFreeZone();
+         POSIX_LABEL(recv_ahead_again);
+         int ret = recv(sock,(char *)bytes,SOCKET_READ_AHEAD,MSG_NOSIGNAL);
+         if( ret == SOCKET_ERROR )
+         {
+            HANDLE_EINTR(recv_ahead_again);
+            block_error();
+         }
+         hx::ExitGCFreeZone();
+         if( ret == 0 )
+            hx::Throw(HX_CSTRING("Connection closed"));
+         if (ret > 1)
+         {
+            ahead->pos = 1;
+            ahead->end = ret;
+            ahead->setHeld(true);
+            // A close or shutdown while recv waited throws away what it got
+            ahead->unread();
+         }
+         return bytes[0];
+      }
+   }
 
    hx::EnterGCFreeZone();
    POSIX_LABEL(recv_char_again);
@@ -449,8 +783,17 @@ void _hx_std_socket_write( Dynamic o, Array<unsigned char> buf )
 **/
 Array<unsigned char> _hx_std_socket_read( Dynamic o )
 {
-   SOCKET sock = val_sock(o);
+   SocketWrapper *wrap = val_wrapper(o);
+   SOCKET sock = wrap ? wrap->socket : INVALID_SOCKET;
    Array<unsigned char> result = Array_obj<unsigned char>::__new();
+   ReadAhead *ahead = wrap ? wrap->readAhead() : 0;
+   ReadAheadLock lock(ahead);
+   if (ahead && sock != INVALID_SOCKET && ahead->unread())
+   {
+      int held = ahead->unread();
+      result->EnsureAppendSize(held);
+      ahead->take((unsigned char *)result->GetBase(), held);
+   }
    // Read in large chunks: a 256-byte buffer forced one recv() syscall (and
    // array append) per 256 bytes when slurping a stream to EOF. 16KB cuts that
    // ~64x while staying small enough for any thread stack and exception-safe
@@ -843,6 +1186,31 @@ static fd_set *make_socket_array( Array<Dynamic> a, fd_set *tmp, SOCKET *n )
    return tmp;
 }
 
+// Whether a socket to be read holds bytes read ahead, which select would not
+// see: those are ready, and select only adds whatever else is ready now
+static bool holds_read_ahead( Array<Dynamic> a )
+{
+   if( !a.mPtr || !sReadAheadHeld.load() )
+      return false;
+   for(int i=0;i<a->length;i++)
+   {
+      SocketWrapper *wrap = val_wrapper(a[i]);
+      if( wrap && wrap->socket != INVALID_SOCKET && wrap->holdsBytes() )
+         return true;
+   }
+   return false;
+}
+
+static void add_read_ahead( Array<Dynamic> a, fd_set *tmp )
+{
+   for(int i=0;i<a->length;i++)
+   {
+      SocketWrapper *wrap = val_wrapper(a[i]);
+      if( wrap && wrap->socket != INVALID_SOCKET && wrap->holdsBytes() && !FD_ISSET(wrap->socket,tmp) )
+         FD_SET(wrap->socket,tmp);
+   }
+}
+
 static Array<Dynamic> make_array_result( Array<Dynamic> a, fd_set *tmp )
 {
    if (!tmp || !a.mPtr)
@@ -1013,6 +1381,13 @@ Array<Dynamic> _hx_std_socket_select( Array<Dynamic> rs, Array<Dynamic> ws, Arra
          remainingTimeval(deadline, &tval);
    }
    #endif
+   bool held = holds_read_ahead(rs);
+   if (held)
+   {
+      tval.tv_sec = 0;
+      tval.tv_usec = 0;
+      tt = &tval;
+   }
 
    hx::EnterGCFreeZone();
    if( selectSockets((int)(n+1),ra,wa,ea,tt) == SOCKET_ERROR )
@@ -1035,6 +1410,8 @@ Array<Dynamic> _hx_std_socket_select( Array<Dynamic> rs, Array<Dynamic> ws, Arra
       hx::Throw( HX_CSTRING("Select error ") + String(err) );
    }
    hx::ExitGCFreeZone();
+   if (held)
+      add_read_ahead(rs,ra);
 
    Array<Dynamic> r = Array_obj<Dynamic>::__new(3,3);
    r->__unsafe_set(0, make_array_result(rs,ra));
@@ -1072,6 +1449,13 @@ void _hx_std_socket_fast_select( Array<Dynamic> rs, Array<Dynamic> ws, Array<Dyn
          remainingTimeval(deadline, &tval);
    }
    #endif
+   bool held = holds_read_ahead(rs);
+   if (held)
+   {
+      tval.tv_sec = 0;
+      tval.tv_usec = 0;
+      tt = &tval;
+   }
 
    hx::EnterGCFreeZone();
    if( selectSockets((int)(n+1),ra,wa,ea,tt) == SOCKET_ERROR )
@@ -1095,6 +1479,8 @@ void _hx_std_socket_fast_select( Array<Dynamic> rs, Array<Dynamic> ws, Array<Dyn
    }
 
    hx::ExitGCFreeZone();
+   if (held)
+      add_read_ahead(rs,ra);
    make_array_result_inplace(rs, ra);
    make_array_result_inplace(ws, wa);
    make_array_result_inplace(es, ea);
@@ -1233,7 +1619,7 @@ Dynamic _hx_std_socket_accept( Dynamic o )
    #endif
    hx::ExitGCFreeZone();
 
-   return SocketWrapper::create(s);
+   return SocketWrapper::create(s,true);
 }
 
 /**
@@ -1345,7 +1731,8 @@ void _hx_std_socket_set_timeout( Dynamic o, Dynamic t )
 **/
 void _hx_std_socket_shutdown( Dynamic o, bool r, bool w )
 {
-   SOCKET sock = val_sock(o);
+   SocketWrapper *wrap = val_wrapper(o);
+   SOCKET sock = wrap ? wrap->socket : INVALID_SOCKET;
    if( !r && !w )
       return;
 
@@ -1368,6 +1755,20 @@ void _hx_std_socket_shutdown( Dynamic o, bool r, bool w )
       return;
    }
    hx::ExitGCFreeZone();
+
+   #ifndef NEKO_LINUX
+   // Shut for reading, the kernel drops what it holds and later reads find
+   // none, or fail on Windows, so the bytes read ahead go too: Windows still
+   // reports them as readable. Linux goes on giving what it holds, and the
+   // bytes read ahead come first, as they did.
+   ReadAhead *ahead = r && wrap ? wrap->ahead.load() : 0;
+   if (ahead)
+      #ifdef NEKO_WINDOWS
+      ahead->discard(true);
+      #else
+      ahead->discard();
+      #endif
+   #endif
 }
 
 /**
@@ -1444,6 +1845,312 @@ namespace
 
 static int pollType = 0;
 
+SOCKET wrapped_sock(Dynamic inWrapper)
+{
+   return inWrapper.mPtr ? static_cast<SocketWrapper *>(inWrapper.mPtr)->socket : INVALID_SOCKET;
+}
+
+#ifdef HX_POLL_QUEUE
+// A poll's registrations, kept in the kernel from one events call to the
+// next, with epoll on Linux and kqueue on macOS and the BSDs. poll() is
+// handed every descriptor on every call, and takes as long as they take to
+// look at, ready or not: 4,096 idle sockets cost 0.3 ms a call. prepare
+// tells the kernel what changed since the last prepare, and an events call
+// costs what is ready. The results are as poll() gives them: each ready
+// index once, in the order prepared, a hang-up or error as ready both ways,
+// and a socket closed after prepare as ready, as poll() reported its
+// descriptor.
+struct PollQueue
+{
+   enum { READ = 1, WRITE = 2 };
+
+   // One descriptor, for every read and write index that names it
+   struct Slot
+   {
+      int fd;
+      // Of the socket the descriptor was registered for: one that has the
+      //  number of a closed socket is not registered yet
+      unsigned int serial;
+      int want;
+      int registered;
+      int firstRead;
+      int firstWrite;
+   };
+
+   // For a descriptor, its slot and the slot a prepare in progress gives it,
+   //  each plus one, or 0
+   struct FdSlots
+   {
+      int registered;
+      int pending;
+   };
+
+   int fd;
+   std::vector<Slot> slots;
+   std::vector<Slot> previous;
+   std::vector<FdSlots> slotOf;
+   // The read and write indexes of each slot, linked
+   std::vector<int> nextRead;
+   std::vector<int> nextWrite;
+   // The descriptor each index had at prepare, or -1
+   std::vector<int> readFds;
+   std::vector<int> writeFds;
+   // Indexes ready on every call: those the kernel would not register, as
+   //  poll() reports a descriptor it cannot poll, and those closed since
+   std::vector<int> failedReads;
+   std::vector<int> failedWrites;
+   std::vector<int> closedReads;
+   std::vector<int> closedWrites;
+   unsigned int closedSeen;
+   // What the last wait found ready, sorted
+   std::vector<int> readyReads;
+   std::vector<int> readyWrites;
+   #ifdef HX_POLL_EPOLL
+   std::vector<struct epoll_event> events;
+   #else
+   std::vector<struct kevent> events;
+   #endif
+
+   static PollQueue *create()
+   {
+      #ifdef HX_POLL_EPOLL
+      #if defined(__ANDROID__) && __ANDROID_API__ < 21
+      int q = epoll_create(1);
+      if (q >= 0)
+         fcntl(q,F_SETFD,FD_CLOEXEC);
+      #else
+      int q = epoll_create1(EPOLL_CLOEXEC);
+      #endif
+      #else
+      int q = kqueue();
+      if (q >= 0)
+         fcntl(q,F_SETFD,FD_CLOEXEC);
+      #endif
+      if (q < 0)
+         return 0;
+      PollQueue *queue = new PollQueue();
+      queue->fd = q;
+      queue->closedSeen = 0;
+      // Room for a wait before the first prepare
+      queue->events.resize(1);
+      return queue;
+   }
+
+   ~PollQueue()
+   {
+      close(fd);
+   }
+
+   // Tells the kernel a descriptor's interest changed from inFrom to inTo
+   bool change(int inFd, int inFrom, int inTo)
+   {
+      #ifdef HX_POLL_EPOLL
+      struct epoll_event ev;
+      memset(&ev,0,sizeof(ev));
+      ev.events = ((inTo & READ) ? EPOLLIN : 0) | ((inTo & WRITE) ? EPOLLOUT : 0);
+      ev.data.fd = inFd;
+      int op = inTo==0 ? EPOLL_CTL_DEL : inFrom==0 ? EPOLL_CTL_ADD : EPOLL_CTL_MOD;
+      if (epoll_ctl(fd, op, inFd, &ev) == 0)
+         return true;
+      // A registration the kernel still has for a descriptor that was
+      //  closed and given out again
+      if (op == EPOLL_CTL_ADD && errno == EEXIST)
+         return epoll_ctl(fd, EPOLL_CTL_MOD, inFd, &ev) == 0;
+      return false;
+      #else
+      bool ok = true;
+      static const int filters[2] = { EVFILT_READ, EVFILT_WRITE };
+      for(int f=0;f<2;f++)
+      {
+         int bit = f==0 ? READ : WRITE;
+         if ((inFrom & bit) == (inTo & bit))
+            continue;
+         struct kevent ev;
+         EV_SET(&ev, inFd, filters[f], (inTo & bit) ? EV_ADD : EV_DELETE, 0, 0, 0);
+         if (kevent(fd, &ev, 1, 0, 0, 0) < 0 && (inTo & bit))
+            ok = false;
+      }
+      return ok;
+      #endif
+   }
+
+   void add(int inIndex, SocketWrapper *inWrap, bool inRead)
+   {
+      int sock = inWrap ? inWrap->socket : INVALID_SOCKET;
+      (inRead ? readFds : writeFds)[inIndex] = sock;
+      if (sock < 0)
+         return;
+      if ((size_t)sock >= slotOf.size())
+      {
+         FdSlots none = { 0, 0 };
+         slotOf.resize(sock + 1 + sock/2, none);
+      }
+      FdSlots &at = slotOf[sock];
+      if (!at.pending)
+      {
+         Slot slot = { sock, inWrap->serial, 0, 0, -1, -1 };
+         slots.push_back(slot);
+         at.pending = (int)slots.size();
+      }
+      Slot &slot = slots[at.pending-1];
+      if (inRead)
+      {
+         nextRead[inIndex] = slot.firstRead;
+         slot.firstRead = inIndex;
+         slot.want |= READ;
+      }
+      else
+      {
+         nextWrite[inIndex] = slot.firstWrite;
+         slot.firstWrite = inIndex;
+         slot.want |= WRITE;
+      }
+   }
+
+   void prepare(Array<Dynamic> inReads, Array<Dynamic> inWrites)
+   {
+      int len = inReads.mPtr ? inReads->length : 0;
+      int wlen = inWrites.mPtr ? inWrites->length : 0;
+      previous.swap(slots);
+      slots.clear();
+      readFds.assign(len, -1);
+      writeFds.assign(wlen, -1);
+      nextRead.assign(len, -1);
+      nextWrite.assign(wlen, -1);
+      failedReads.clear();
+      failedWrites.clear();
+      closedReads.clear();
+      closedWrites.clear();
+      closedSeen = sSocketsClosed.load();
+
+      for(int i=0;i<len;i++)
+         add(i, static_cast<SocketWrapper *>(inReads[i].mPtr), true);
+      for(int i=0;i<wlen;i++)
+         add(i, static_cast<SocketWrapper *>(inWrites[i].mPtr), false);
+
+      // The last prepare's registrations carry over for the same socket.
+      //  Those of a socket left out, or closed and its number given to
+      //  another, go: a closed descriptor's is gone already, and taking out
+      //  one the kernel no longer has fails harmlessly.
+      for(size_t j=0;j<previous.size();j++)
+      {
+         Slot &old = previous[j];
+         FdSlots &at = slotOf[old.fd];
+         at.registered = 0;
+         if (at.pending && slots[at.pending-1].serial==old.serial)
+            slots[at.pending-1].registered = old.registered;
+         else if (old.registered)
+            change(old.fd, old.registered, 0);
+      }
+
+      for(size_t j=0;j<slots.size();j++)
+      {
+         Slot &slot = slots[j];
+         FdSlots &at = slotOf[slot.fd];
+         at.registered = (int)j + 1;
+         at.pending = 0;
+         if (slot.registered == slot.want)
+            continue;
+         if (change(slot.fd, slot.registered, slot.want))
+            slot.registered = slot.want;
+         else
+         {
+            change(slot.fd, slot.want, 0);
+            slot.registered = 0;
+            for(int i=slot.firstRead;i>=0;i=nextRead[i])
+               failedReads.push_back(i);
+            for(int i=slot.firstWrite;i>=0;i=nextWrite[i])
+               failedWrites.push_back(i);
+         }
+      }
+      std::sort(failedReads.begin(), failedReads.end());
+      std::sort(failedWrites.begin(), failedWrites.end());
+
+      #ifdef HX_POLL_EPOLL
+      events.resize(slots.size() ? slots.size() : 1);
+      #else
+      events.resize(slots.size() ? slots.size()*2 : 1);
+      #endif
+   }
+
+   // The indexes whose socket was closed after prepare. Looked for only
+   //  after a socket was closed somewhere.
+   void findClosed(Array<Dynamic> inReads, Array<Dynamic> inWrites)
+   {
+      unsigned int closed = sSocketsClosed.load();
+      if (closed == closedSeen)
+         return;
+      closedSeen = closed;
+      closedReads.clear();
+      closedWrites.clear();
+      for(size_t i=0;i<readFds.size();i++)
+         if (readFds[i] >= 0 && wrapped_sock(inReads[i]) == INVALID_SOCKET)
+            closedReads.push_back((int)i);
+      for(size_t i=0;i<writeFds.size();i++)
+         if (writeFds[i] >= 0 && wrapped_sock(inWrites[i]) == INVALID_SOCKET)
+            closedWrites.push_back((int)i);
+   }
+
+   // Waits as poll() would, and fills readyReads and readyWrites: false
+   //  when the wait failed
+   bool wait(int inWaitMs, double inTimeout, double inDeadline)
+   {
+      readyReads.clear();
+      readyWrites.clear();
+      int waitMs = inWaitMs;
+      int n;
+      hx::EnterGCFreeZone();
+      while(true)
+      {
+         #ifdef HX_POLL_EPOLL
+         n = epoll_wait(fd, &events[0], (int)events.size(), waitMs);
+         #else
+         struct timespec ts;
+         ts.tv_sec = waitMs / 1000;
+         ts.tv_nsec = (waitMs % 1000) * 1000000L;
+         n = kevent(fd, 0, 0, &events[0], (int)events.size(), waitMs < 0 ? 0 : &ts);
+         #endif
+         if (n >= 0 || errno != EINTR)
+            break;
+         if (inTimeout >= 0)
+         {
+            double left = inDeadline - monotonicSeconds();
+            waitMs = left > 0 ? (int)(left * 1000) + 1 : 0;
+         }
+      }
+      hx::ExitGCFreeZone();
+      if (n < 0)
+         return false;
+
+      for(int e=0;e<n;e++)
+      {
+         #ifdef HX_POLL_EPOLL
+         int ready = events[e].data.fd;
+         unsigned int flags = events[e].events;
+         bool readable = flags & (EPOLLIN | EPOLLHUP | EPOLLERR);
+         bool writable = flags & (EPOLLOUT | EPOLLHUP | EPOLLERR);
+         #else
+         int ready = (int)events[e].ident;
+         bool readable = events[e].filter == EVFILT_READ;
+         bool writable = events[e].filter == EVFILT_WRITE;
+         #endif
+         if (ready < 0 || (size_t)ready >= slotOf.size() || !slotOf[ready].registered)
+            continue;
+         Slot &slot = slots[slotOf[ready].registered-1];
+         if (readable)
+            for(int i=slot.firstRead;i>=0;i=nextRead[i])
+               readyReads.push_back(i);
+         if (writable)
+            for(int i=slot.firstWrite;i>=0;i=nextWrite[i])
+               readyWrites.push_back(i);
+      }
+      std::sort(readyReads.begin(), readyReads.end());
+      std::sort(readyWrites.begin(), readyWrites.end());
+      return true;
+   }
+};
+#endif
+
 struct polldata : public hx::Object
 {
    HX_IS_INSTANCE_OF enum { _hx_ClassId = hx::clsIdPollData };
@@ -1462,12 +2169,17 @@ struct polldata : public hx::Object
    struct pollfd *fds;
    int rcount;
    int wcount;
+   #ifdef HX_POLL_QUEUE
+   // Null where the kernel would not make one, and the poll uses poll()
+   PollQueue *queue;
+   #endif
    #endif
    Array<int> ridx;
    Array<int> widx;
-   // The sockets registered by the last prepare: the poll holds their
-   //  descriptors, so it must keep them, or a collection could finalize one
-   //  and close the connection while it is still being polled
+   // The wrappers of the sockets registered by the last prepare: the poll
+   //  holds their descriptors, so it must keep them, or a collection could
+   //  finalize one and close the connection while it is still being polled.
+   //  Null for a sys.net.Socket that had none.
    Array<Dynamic> rsockets;
    Array<Dynamic> wsockets;
 
@@ -1488,6 +2200,9 @@ struct polldata : public hx::Object
       fds = (struct pollfd*)malloc(sizeof(struct pollfd) * max);
       rcount = 0;
       wcount = 0;
+      #ifdef HX_POLL_QUEUE
+      queue = PollQueue::create();
+      #endif
       #endif
 
       ridx = Array_obj<int>::__new(max+1,max+1);
@@ -1515,8 +2230,11 @@ struct polldata : public hx::Object
          free(outw);
          free(oute);
          #else
-         // ???
          free(fds);
+         #ifdef HX_POLL_QUEUE
+         delete queue;
+         queue = 0;
+         #endif
          #endif
       }
    }
@@ -1555,6 +2273,35 @@ polldata *val_poll(Dynamic o)
    return static_cast<polldata *>(o.mPtr);
 }
 
+// The read indexes of the sockets holding bytes read ahead, which the
+// kernel does not count as readable
+void poll_read_ahead(polldata *p, std::vector<int> &outHeld)
+{
+   if (!sReadAheadHeld.load() || !p->rsockets.mPtr)
+      return;
+   for(int i=0;i<p->rsockets->length;i++)
+   {
+      SocketWrapper *wrap = static_cast<SocketWrapper *>(p->rsockets[i].mPtr);
+      if (wrap && wrap->socket != INVALID_SOCKET && wrap->holdsBytes())
+         outHeld.push_back(i);
+   }
+}
+
+// ioIndexes holds inCount indexes, ascending, and -1: adds inExtra, also
+// ascending, to them, once each, and returns how many there are now
+int merge_indexes(Array<int> &ioIndexes, int inCount, const std::vector<int> &inExtra)
+{
+   if (inExtra.empty())
+      return inCount;
+   int *base = (int *)ioIndexes->GetBase();
+   std::vector<int> merged(inCount + inExtra.size());
+   std::vector<int>::iterator last = std::set_union(base, base + inCount, inExtra.begin(), inExtra.end(), merged.begin());
+   int count = (int)(last - merged.begin());
+   std::copy(merged.begin(), last, base);
+   base[count] = -1;
+   return count;
+}
+
 
 } // end namespace
 
@@ -1588,28 +2335,45 @@ Array<Dynamic> _hx_std_socket_poll_prepare( Dynamic pdata, Array<Dynamic> rsocks
    if( len + wlen > p->max )
       hx::Throw(HX_CSTRING("Too many sockets in poll"));
 
-   // Copies, so that a caller changing its arrays afterwards cannot drop a
-   //  socket the poll still has the descriptor of
-   p->rsockets = len ? rsocks->copy() : null();
+   // Their own arrays, so that a caller changing its arrays afterwards
+   //  cannot drop a socket the poll still has the descriptor of
+   Array<Dynamic> rwraps = Array_obj<Dynamic>::__new(len,len);
+   for(int i=0;i<len;i++)
+      rwraps[i] = val_wrapper(rsocks[i]);
+   Array<Dynamic> wwraps = Array_obj<Dynamic>::__new(wlen,wlen);
+   for(int i=0;i<wlen;i++)
+      wwraps[i] = val_wrapper(wsocks[i]);
+   p->rsockets = len ? rwraps : null();
    HX_OBJ_WB_GET(p, p->rsockets.mPtr);
-   p->wsockets = wlen ? wsocks->copy() : null();
+   p->wsockets = wlen ? wwraps : null();
    HX_OBJ_WB_GET(p, p->wsockets.mPtr);
 
    #ifdef NEKO_WINDOWS
    for(int i=0;i<len;i++)
-      p->fdr->fd_array[i] = val_sock( rsocks[i] );
+      p->fdr->fd_array[i] = wrapped_sock( rwraps[i] );
    p->fdr->fd_count = len;
 
    len = wlen;
    for(int i=0;i<len;i++)
-      p->fdw->fd_array[i] = val_sock( wsocks[i]);
+      p->fdw->fd_array[i] = wrapped_sock( wwraps[i]);
    p->fdw->fd_count = len;
 
    #else
 
+   #ifdef HX_POLL_QUEUE
+   if (p->queue)
+   {
+      p->queue->prepare(rwraps, wwraps);
+      Array<Dynamic> a = Array_obj<Dynamic>::__new(2,2);
+      a[0] = p->ridx;
+      a[1] = p->widx;
+      return a;
+   }
+   #endif
+
    for(int i=0;i<len;i++)
    {
-      p->fds[i].fd = val_sock( rsocks[i] );
+      p->fds[i].fd = wrapped_sock( rwraps[i] );
       p->fds[i].events = POLLIN;
       p->fds[i].revents = 0;
    }
@@ -1618,7 +2382,7 @@ Array<Dynamic> _hx_std_socket_poll_prepare( Dynamic pdata, Array<Dynamic> rsocks
    for(int i=0;i<len;i++)
    {
       int k = i + p->rcount;
-      p->fds[k].fd = val_sock(wsocks[i]);
+      p->fds[k].fd = wrapped_sock(wwraps[i]);
       p->fds[k].events = POLLOUT;
       p->fds[k].revents = 0;
    }
@@ -1645,6 +2409,13 @@ void _hx_std_socket_poll_events(Dynamic pdata, double timeout)
 
    p->ridx[0] = -1;
    p->widx[0] = -1;
+
+   // Sockets holding bytes read ahead are ready, so look for the others
+   // without waiting
+   std::vector<int> held;
+   poll_read_ahead(p, held);
+   if (!held.empty())
+      timeout = 0;
 
 #ifdef NEKO_WINDOWS
    // Winsock's select fails at once with no sockets, which looked like an
@@ -1750,6 +2521,7 @@ void _hx_std_socket_poll_events(Dynamic pdata, double timeout)
       }
    }
    p->ridx[k] = -1;
+   merge_indexes(p->ridx, k, held);
 
    k = 0;
    {
@@ -1786,10 +2558,29 @@ void _hx_std_socket_poll_events(Dynamic pdata, double timeout)
    p->widx[k] = -1;
 
 #else
-   int tot = p->rcount + p->wcount;
-
    int waitMs = (int)(timeout * 1000);
    double deadline = monotonicSeconds() + timeout;
+
+   #ifdef HX_POLL_QUEUE
+   if (p->queue)
+   {
+      PollQueue *q = p->queue;
+      q->findClosed(p->rsockets, p->wsockets);
+      if (!q->failedReads.empty() || !q->failedWrites.empty() || !q->closedReads.empty() || !q->closedWrites.empty())
+         waitMs = 0;
+      q->wait(waitMs, timeout, deadline);
+      int k = merge_indexes(p->ridx, 0, q->readyReads);
+      int kw = merge_indexes(p->widx, 0, q->readyWrites);
+      k = merge_indexes(p->ridx, k, held);
+      k = merge_indexes(p->ridx, k, q->failedReads);
+      merge_indexes(p->ridx, k, q->closedReads);
+      kw = merge_indexes(p->widx, kw, q->failedWrites);
+      merge_indexes(p->widx, kw, q->closedWrites);
+      return;
+   }
+   #endif
+
+   int tot = p->rcount + p->wcount;
    hx::EnterGCFreeZone();
 poll_events_again:
    if (poll(p->fds, tot, waitMs) < 0)
@@ -1805,6 +2596,7 @@ poll_events_again:
       }
       hx::ExitGCFreeZone();
 
+      merge_indexes(p->ridx, 0, held);
       return;
    }
    hx::ExitGCFreeZone();
@@ -1818,6 +2610,7 @@ poll_events_again:
          p->ridx[k++] = i;
    }
    p->ridx[k] = -1;
+   merge_indexes(p->ridx, k, held);
 
    k = 0;
 
@@ -1905,11 +2698,23 @@ int _hx_std_socket_send_to( Dynamic o, Array<unsigned char> buf, int p, int l, D
 int _hx_std_socket_recv_from( Dynamic o, Array<unsigned char> buf, int p, int l, Dynamic outAddr)
 {
    int retry = 0;
-   SOCKET sock = val_sock(o);
+   SocketWrapper *wrap = val_wrapper(o);
+   SOCKET sock = wrap ? wrap->socket : INVALID_SOCKET;
 
    int dlen = buf->length;
    if( p < 0 || l < 0 || p > dlen || l > dlen - p )
       hx::Throw(HX_CSTRING("Invalid data position"));
+
+   // A stream socket has no sender address to give, as recvfrom gives none
+   ReadAhead *ahead = wrap && l > 0 ? wrap->readAhead() : 0;
+   ReadAheadLock lock(ahead);
+   if (ahead && ahead->unread() && sock != INVALID_SOCKET)
+   {
+      int got = ahead->take((unsigned char *)buf->GetBase() + p, l);
+      outAddr->__SetField(HX_CSTRING("host"),0, hx::paccDynamic);
+      outAddr->__SetField(HX_CSTRING("port"),0, hx::paccDynamic);
+      return got;
+   }
 
    char * volatile data = (char *)buf->GetBase();
 

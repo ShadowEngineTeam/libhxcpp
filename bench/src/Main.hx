@@ -9,6 +9,7 @@ import GcBenchmarks;
 import IoBenchmarks;
 import LargeBenchmarks;
 import MapBenchmarks;
+import SocketBenchmarks;
 import SortBenchmarks;
 import StringBenchmarks;
 import ThreadBenchmarks;
@@ -41,7 +42,8 @@ class Main {
 			new SearchFrom(), new StringLongNeedle(), new ParseNumbers(), new AnonFieldSmall(), new AnonFieldWide(), new SqliteRows(),
 			new SocketRead(), new CffiBuffer(), new LargeResize(), new LargeRecycle(), new LargeCopy(), new LargeCachePurge(),
 			new GcWeakMapInt(), new GcObjectIds(), new GcLargeStackRoots(), new GcRegexWait(), new GcZombieReservations(), new GcFinalizerPromotion(), new GcIdleMinor(), new GcRememberedBurst(), new GcObjectIdBurst(), new GcWeakMapChain(),
-		];
+			new SocketReadLine(false), new SocketReadLine(true),
+		].concat(PollIdle.all());
 		#end
 	}
 

@@ -56,6 +56,7 @@ typedef size_t socket_int;
 #define val_pkey(o) ssl_open_pkey(o)
 
 size_t _hx_std_socket_handle(Dynamic inSocket);
+int _hx_std_socket_take_handed(size_t inSocket, unsigned char *outBytes, int inLen);
 
 #ifndef HXCPP_MBEDTLS_PROVIDER
 // In project/thirdparty/config/mbedtls/memory_count.c, the allocator hxcpp
@@ -531,6 +532,10 @@ void _hx_ssl_handshake( Dynamic hssl ) {
 }
 
 int net_read( void *fd, unsigned char *buf, size_t len ){
+	// What the socket read ahead before it was handed over comes first
+	int handed = _hx_std_socket_take_handed( (size_t)fd, buf, len > 0x7fffffff ? 0x7fffffff : (int)len );
+	if( handed > 0 )
+		return handed;
 	hx::EnterGCFreeZone();
 	int r = recv((SOCKET)(socket_int)fd, (char *)buf, len, 0);
  	if( r == SOCKET_ERROR && is_block_error() )

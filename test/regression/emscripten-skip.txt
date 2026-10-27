@@ -61,6 +61,7 @@ NativeRefCopyRoot: threads (std::thread, which needs a pthreads build)
 NativeRefInterfaceRetarget: threads (std::thread, which needs a pthreads build)
 PollEmptyTimeout: sockets
 PollFailedConnect: sockets
+PollRegistrations: sockets
 PollSocketLifetime: sockets
 PollingSafePoint: threads (std::thread, which needs a pthreads build)
 ProcessClosedParentStdin: processes
@@ -82,6 +83,7 @@ SemaphoreLoopCollect: threads
 SocketEmptyBytes: sockets
 SocketIpv6Accept: sockets
 SocketIpv6ConcurrentFormat: threads (std::thread, which needs a pthreads build)
+SocketReadAhead: sockets
 SocketTinyTimeout: sockets
 SqliteNativeMemoryPressure: threads (std::thread, which needs a pthreads build)
 SqliteResultConnectionLifetime: threads (std::thread, which needs a pthreads build)

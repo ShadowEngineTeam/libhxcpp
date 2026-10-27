@@ -1,0 +1,20 @@
+readByte, readBytes, readLine and read keep the stream in order: true
+a socket holding bytes is readable by select, fast select, events and poll: true
+held bytes end a wait at once: true
+once they are read it is not: true
+the end of the stream comes after the held bytes: true
+a nonblocking read blocks after the held bytes: true
+a held byte comes at once: true
+a read past the held bytes waits out the timeout: true
+a read shutdown sees what it would have without reading ahead: true
+readiness after a read shutdown sees what it would have without reading ahead: true
+an empty read sees what it would have without reading ahead: true
+a native read after close sees what it would have without reading ahead: true
+two threads reading a byte at a time each get their bytes in order: true
+and between them every byte once: true
+select and poll beside a blocked read return: true
+the blocked read gets the byte sent: true
+the line in the clear is read: true
+the hello read ahead keeps the socket readable: true
+TLS gets the hello read ahead: true
+TLS sockets read lines both ways: true
