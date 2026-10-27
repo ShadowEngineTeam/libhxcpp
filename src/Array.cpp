@@ -459,6 +459,8 @@ void ArrayBase::Slice(ArrayBase *outResult,int inPos,int inEnd)
    int n = inEnd - inPos;
    if (n<=0)
       outResult->resize(0);
+   else if (!outResult->mBase && outResult->GetElementSize()==GetElementSize())
+      outResult->InitCopy(mBase+(size_t)inPos*GetElementSize(), n);
    else
    {
       outResult->resize(n);
@@ -482,6 +484,30 @@ void ArrayBase::RemoveElement(int inPos)
       resize(length-1);
    }
 
+}
+
+// A copy into an atomic array writes every byte, so a large buffer for it
+//  is not cleared first (libhxcpp #315)
+void ArrayBase::InitCopy(const char *inData, int inCount)
+{
+   if (inCount<=0)
+      return;
+   int elemSize = GetElementSize();
+   if ((unsigned int)inCount > 0x7fffffffU/elemSize)
+      hx::Throw( HX_CSTRING("Array allocation too large") );
+   size_t bytes = (size_t)inCount * elemSize;
+   mBase = (char *)(AllocAtomic() ? hx::InternalNewUncleared(bytes) : hx::InternalNew(bytes,false));
+   memcpy(mBase, inData, bytes);
+   length = mAlloc = inCount;
+   HX_OBJ_WB_GET(this,mBase);
+   #ifdef HXCPP_GC_GENERATIONAL
+   // The allocation can collect, leaving this array old with young elements
+   if (!AllocAtomic())
+      HX_OBJ_WB_PESSIMISTIC_GET(this);
+   #endif
+   #ifdef HXCPP_TELEMETRY
+   __hxt_new_array(mBase, bytes);
+   #endif
 }
 
 void ArrayBase::Concat(ArrayBase *outResult,const char *inSecond,int inLen)

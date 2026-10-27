@@ -2,6 +2,7 @@
 libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
+* Large copies into a new buffer no longer clear it first: Bytes.sub, Array.copy, Array.slice and fromData on arrays without object pointers, strings made from bytes or other text, and NewGCBytes and NewGCPrivate with data. Copies of a 1 MB buffer run about 20% faster. Bytes.alloc and other allocations are zero-filled as before (libhxcpp #315)
 * Fixed Gc.memInfo(MEM_INFO_RESERVED) leaving out the dead large buffers a collection keeps for reuse: after a burst of large allocations it fell back to its baseline while the process still held them all. They are counted as reserved, not live, until reused or freed (libhxcpp #313)
 * A large allocation takes a recycled buffer of its size without looking at the other sizes cached: the recycle cache keeps a list for each size. 20,000 resizes from a cache holding 8,192 buffers of another size took 218 ms and take 13 ms (libhxcpp #300)
 * Releasing a large buffer, as an exact resize of an Array or BytesBuffer growth does, no longer searches every other large allocation for it: each allocation keeps its place in the allocator's list. 20,000 resizes of a buffer made before 8,192 others took 77 ms and take 12 ms (libhxcpp #298)

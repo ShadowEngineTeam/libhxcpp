@@ -390,6 +390,9 @@ public:
 
    void Concat(hx::ArrayBase *outResult,const char *inEnd, int inLen);
 
+   // Gives an empty array a copy of inCount elements
+   void InitCopy(const char *inData, int inCount);
+
 
    void reserve(int inN) const;
 
@@ -1364,9 +1367,8 @@ Array<ELEM_> Array_obj<ELEM_>::__newConstWrapper(ELEM_ *inData,int inSize)
 template<typename ELEM_>
 Array<ELEM_> Array_obj<ELEM_>::fromData(const ELEM_ *inData,int inCount)
 {
-   Array<ELEM_> result = new Array_obj(inCount,inCount);
-   if (inCount)
-       result->memcpy(0, inData, inCount);
+   Array<ELEM_> result = new Array_obj(0,0);
+   result->InitCopy((const char *)inData, inCount);
    return result;
 }
 
@@ -1388,9 +1390,8 @@ Array<ELEM_> Array_obj<ELEM_>::concat( Array<ELEM_> inTail )
 template<typename ELEM_>
 Array<ELEM_> Array_obj<ELEM_>::copy( )
 {
-   Array_obj *result = new Array_obj((int)length,0);
-   if (length)
-      ::memcpy(result->GetBase(),GetBase(),length*sizeof(ELEM_));
+   Array_obj *result = new Array_obj(0,0);
+   result->InitCopy(GetBase(),(int)length);
    return result;
 }
 

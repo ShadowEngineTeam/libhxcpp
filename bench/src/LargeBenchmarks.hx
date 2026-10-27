@@ -89,12 +89,13 @@ class LargeRecycle extends Benchmark {
 }
 
 /**
-	Copies of an 8 MB buffer: Bytes.sub, Array.copy and an ASCII string
-	read with getString. Each fills every byte of a new large allocation.
+	Copies of a 1 MB buffer: Bytes.sub, Array.copy and an ASCII string
+	read with getString. Each fills every byte of a new large allocation,
+	mostly one recycled from the copies before it.
 **/
 class LargeCopy extends Benchmark {
-	static inline var SIZE = 8 << 20;
-	static inline var COPIES = 16;
+	static inline var SIZE = 1 << 20;
+	static inline var COPIES = 128;
 
 	var source:Bytes;
 
@@ -111,9 +112,9 @@ class LargeCopy extends Benchmark {
 	override public function run():Int {
 		var sum = 0;
 		for (i in 0...COPIES) {
-			var sub = source.sub(i, SIZE - 64);
+			var sub = source.sub(i & 63, SIZE - 64);
 			var copy = source.getData().copy();
-			var text = source.getString(i, SIZE - 64);
+			var text = source.getString(i & 63, SIZE - 64);
 			sum = (sum + sub.get(SIZE - 65) + copy[SIZE - 1] + text.length + StringTools.fastCodeAt(text, 100)) | 0;
 		}
 		return sum;

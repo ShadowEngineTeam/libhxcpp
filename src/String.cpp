@@ -457,6 +457,18 @@ char16_t *String::allocChar16Ptr(int len)
    return result;
 }
 
+// allocChar16Ptr for a string the caller fills in full, so a large one is
+//  not cleared first (libhxcpp #315)
+static char16_t *allocChar16PtrUncleared(int len)
+{
+   bool hashSlot = len >= HX_GC_STRING_HASH_SLOT_MIN_LEN;
+   char16_t *result = (char16_t *)hx::InternalNewUncleared( (len+1)*2 + (hashSlot ? 4 : 0) );
+   ((unsigned int *)result)[-1] |= HX_GC_STRING_CHAR16_T | (hashSlot ? HX_GC_STRING_HASH_SLOT : 0);
+   // The terminator and the hash slot
+   memset(result + len, 0, 2 + (hashSlot ? 4 : 0));
+   return result;
+}
+
 
 template<typename T>
 static const char *GCStringDup(const T *inStr,int inLen, int *outLen=0)
@@ -545,7 +557,7 @@ static const char *GCStringDup(const T *inStr,int inLen, int *outLen=0)
 
    if (sizeof(T)==1 || allAscii)
    {
-      char *result = hx::NewString( len );
+      char *result = hx::NewStringUncleared( len );
       if (sizeof(T)==1)
          memcpy(result,inStr,sizeof(char)*(len));
       else
@@ -555,7 +567,7 @@ static const char *GCStringDup(const T *inStr,int inLen, int *outLen=0)
    }
 
 
-   char16_t *result = String::allocChar16Ptr(len);
+   char16_t *result = allocChar16PtrUncleared(len);
    memcpy(result,inStr,2*len);
    return (const char *)result;
 }

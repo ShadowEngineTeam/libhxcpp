@@ -119,6 +119,10 @@ namespace hx
 // inIsObject specifies whether "__Mark"  should be called on the resulting object
 void *InternalNew(size_t inSize,bool inIsObject);
 
+// InternalNew for data without object pointers that the caller writes in
+// full before anything can read it: a large allocation is not cleared first
+void *InternalNewUncleared(size_t inSize);
+
 // Used internall - realloc array data
 void *InternalRealloc(size_t inFromSize, void *inData,size_t inSize,bool inAllowExpansion=false);
 
@@ -197,6 +201,9 @@ void GCRemoveRoot(hx::Object **inRoot);
 // This is used internally in hxcpp
 // It calls InternalNew, and takes care of null-terminating the result
 char *NewString(int inLen);
+
+// NewString for a string the caller fills in full
+char *NewStringUncleared(int inLen);
 
 // The concept of 'private' is from the old conservative Gc method.
 // Now with explicit marking, these functions do the same thing, which is

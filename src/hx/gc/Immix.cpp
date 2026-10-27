@@ -7482,6 +7482,23 @@ void *InternalNew(size_t inSize,bool inIsObject)
 }
 
 
+// Small allocations come from blocks cleared ahead of use, so only a large
+//  one skips a clear that the copy into it would overwrite (libhxcpp #315)
+void *InternalNewUncleared(size_t inSize)
+{
+   if (inSize>=IMMIX_LARGE_OBJ_SIZE)
+   {
+      #ifdef HXCPP_DEBUG
+      if (sgSpamCollects && sgAllocsSinceLastSpam>=sgSpamCollects)
+         CollectFromThisThread(false,false);
+      sgAllocsSinceLastSpam++;
+      #endif
+      return sGlobalAlloc->AllocLarge(inSize, false);
+   }
+   return InternalNew(inSize, false);
+}
+
+
 // Force global collection - should only be called from 1 thread.
 size_t InternalCollectBytes(bool inMajor,bool inCompact)
 {
