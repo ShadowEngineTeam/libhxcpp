@@ -3,6 +3,7 @@ libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
 * Fixed a sys.thread.Deque keeping the storage a burst grew it to once it drained: a thread mailbox that once held a million messages held 8 MB for as long as it lived. A deque that drains now gives back storage above 16,384 messages (libhxcpp #316)
+* Sped up sys.thread.Deque.push, which adds at the front and moved every queued item for each push while holding the queue's lock, so filling a deque from the front was quadratic. 65,536 pushes and pops went from 489k to 4.73M messages a second, the rate of adding at the back (libhxcpp #317)
 * Fixed a copy of an hx::Ref not keeping its object alive: copying one of the same type shared the original's GC root, so once the original went the collector could free the object the copy still held (libhxcpp #355)
 * Fixed hx::Ref::setPtr leaving its GC root at the old offset when it moved to another interface of the same object, so the collector could free the object while the reference still held it (libhxcpp #361)
 * Fixed an exception thrown by a finalizer leaving the collector paused: it unwound out of the collection with every other thread still stopped. The collection now finishes, running the other finalizers, and the first exception is thrown to the code that started it (libhxcpp #358)

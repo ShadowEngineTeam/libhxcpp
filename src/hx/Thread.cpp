@@ -66,15 +66,31 @@ struct Deque : public Array_obj<Dynamic>
 
 	void pushHead(Dynamic inValue)
 	{
-		if (head > 0)
-		{
-			Dynamic *items = (Dynamic *)mBase;
-			head--;
-			items[head] = inValue;
-			HX_OBJ_WB_GET(this, inValue.mPtr);
-		}
-		else
-			unshift(inValue);
+		if (head == 0)
+			openFront();
+		Dynamic *items = (Dynamic *)mBase;
+		head--;
+		items[head] = inValue;
+		HX_OBJ_WB_GET(this, inValue.mPtr);
+	}
+
+	// Move the items up to leave free slots in front, half as many as there
+	// are items.  unshift moved every item for each push at the front, so
+	// building an n-deep queue that way was O(n^2) while holding the lock
+	void openFront()
+	{
+		int count = length;
+		int gap = count >> 1;
+		if (gap < 16)
+			gap = 16;
+		if (count > 0x7fffffff - gap)
+			hx::Throw( HX_CSTRING("Array allocation too large") );
+		reserve(count + gap);
+		Dynamic *items = (Dynamic *)mBase;
+		::memmove(items + gap, items, count * sizeof(Dynamic));
+		::memset(items, 0, gap * sizeof(Dynamic));
+		length = count + gap;
+		head = gap;
 	}
 	static void clean(hx::Object *inObj)
 	{
