@@ -46,6 +46,7 @@ libhxcpp 6.0.0 (unreleased)
 * Fixed Sys.programPath on Windows giving the first 259 characters of an executable path longer than MAX_PATH as if it were the whole path: the path is now read into a buffer that grows until it fits (libhxcpp #354, HaxeFoundation/hxcpp#1352)
 * Fixed FileSystem.readDirectory returning the entries read so far, as if they were all of them, when the directory failed to read part way through: readdir's NULL, and FindNextFileW failing on Windows, were taken as the end. It now throws "Error reading directory" unless errno, or GetLastError's ERROR_NO_MORE_FILES on Windows, says the end was reached, after closing the directory (libhxcpp #348)
 * Semaphore works in single-threaded Emscripten builds for what needs no other thread: it keeps its initial permits, tryAcquire and acquire take one that is there, and release adds one. It threw "Unsupported platform" for all of them. With no permit, tryAcquire with a timeout sleeps it out and returns false, and acquire throws, since nothing could release one while it waited (libhxcpp #334)
+* Fixed a Lock.wait with a timeout on an empty Lock never returning in single-threaded Emscripten builds, which also stopped haxe.Timer callbacks firing, since the event loop waits on a Lock for the next one. Emscripten's pthread_cond_timedwait returns at once without pthreads, and the wait took that as a wakeup for ever. It now sleeps until the timeout, as no other thread can release the Lock (libhxcpp #339)
 
 libhxcpp 6.0.0-rc.1
 ------------------------------------------------------------
