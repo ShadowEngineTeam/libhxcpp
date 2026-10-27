@@ -1,0 +1,10 @@
+new-handshake stays within the runtime error contract: true
+new-certificate stays within the runtime error contract: true
+closed-context stays within the runtime error contract: true
+closed-config stays within the runtime error contract: true
+closed-verify-result stays within the runtime error contract: true
+closed-certificate stays within the runtime error contract: true
+closed-config-ssl-new stays within the runtime error contract: true
+closed-config-ca stays within the runtime error contract: true
+wrong-handle stays within the runtime error contract: true
+closing twice is safe: true

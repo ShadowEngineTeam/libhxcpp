@@ -48,6 +48,7 @@ ProcessPosixStartError: processes
 ProcessReapAfterClose: processes
 ProcessSigpipeHandler: processes
 ProcessWaitError: processes
+RegexpFailedSubjectRetention: threads (std::thread, which needs a pthreads build)
 RegexpObsoleteSubject: threads (std::thread, which needs a pthreads build)
 RegisterHeldRoots: threads
 RootWalkRace: threads (std::thread, which needs a pthreads build)
@@ -59,6 +60,7 @@ SocketIpv6Accept: sockets
 SocketIpv6ConcurrentFormat: threads (std::thread, which needs a pthreads build)
 SocketTinyTimeout: sockets
 SqliteResultConnectionLifetime: threads (std::thread, which needs a pthreads build)
+SslClosedState: sockets
 SslErrorCodes: sockets
 SslPeerCertificateLifetime: sockets
 SslSniLifetime: sockets

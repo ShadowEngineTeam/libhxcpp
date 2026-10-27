@@ -1,0 +1,4 @@
+native digest preserves empty input storage: true
+first empty digest matches SHA256: true
+repeated empty digest matches SHA256: true
+nonempty digest matches SHA256: true

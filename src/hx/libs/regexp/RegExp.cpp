@@ -109,6 +109,22 @@ struct pcredata : public hx::Object
       }
       return safeSubject.raw_wptr();
    }
+
+   // After a failed match nothing reads the subject, but the cache kept it,
+   // and its sanitized copy, for as long as the regex lived. Up to 1 MiB is
+   // kept, so a failed matchSub between others on the same subject need not
+   // check it again; a larger one is let go.
+   void releaseLargeSubject()
+   {
+      size_t bytes = (size_t)checkedSubject.length * sizeof(char16_t);
+      if (safeSubject.raw_ptr() != checkedSubject.raw_ptr())
+         bytes *= 2;
+      if (bytes > 1024 * 1024)
+      {
+         checkedSubject = String();
+         safeSubject = String();
+      }
+   }
    #endif
 
    void create8(pcre2_code_8 *inR, String inExpr, int inFlags)
@@ -361,6 +377,9 @@ bool _hx_regexp_match(Dynamic handle, String string, int pos, int len)
    else
    {
       d->string = String();
+      #ifdef HX_SMART_STRINGS
+      d->releaseLargeSubject();
+      #endif
       return false;
    }
 }
