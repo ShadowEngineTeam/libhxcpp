@@ -2,6 +2,7 @@
 libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
+* Fixed cpp.NativeFile.file_open with an exclusive-create mode such as "wbx" truncating a file that exists on Linux, macOS and other POSIX systems: files are opened with open(2) to make them close-on-exec, and the mode was mapped without O_EXCL. Such a mode now fails on a file that exists and leaves it as it was, and x without w fails too (libhxcpp #391)
 * Fixed the collector freeing part of a GC block, which corrupts the heap: releasing a buffer of 4000 to 16380 bytes that sat in a block, as InternalNew makes of a 3997 to 3999-byte request, queued it as a large allocation to be freed. StringTools.urlEncode on a 3998-character string with non-ASCII text could do it. Only allocations on the large list are released early now (libhxcpp #257)
 * Fixed a malformed cppia file hanging its host: a class whose super class chain led back to itself made linking walk the chain forever. Such a file now fails to load with "Class extends itself" (libhxcpp #257)
 * Fixed a malformed cppia file ending its host with out-of-memory: the loader sized a function's argument list, and the lists of expressions, object fields, variables, switch cases, catches and interfaces, from counts it had not checked, so a 602-byte file asked for 31 GB. A count larger than the data left now fails the load with "Bad count", as the string and class counts already did (libhxcpp #257)
