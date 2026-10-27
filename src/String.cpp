@@ -1095,10 +1095,273 @@ static int hxTrimZeros(const char *inDigits, int inCount)
    return inCount;
 }
 
+// Grisu3, from Florian Loitsch's "Printing Floating-Point Numbers Quickly and
+// Accurately with Integers" (2010), as in double-conversion: the shortest
+// digits that read back, and the nearest of them, with 64-bit integers in
+// place of printf and strtod (libhxcpp #390). It declines a double when its
+// precision cannot decide, about 0.5% of them in the paper, and the search
+// below does those
+struct HxDiyFp
+{
+   unsigned long long f;
+   int e;
+};
+
+static inline HxDiyFp hxDiyFp(unsigned long long inF, int inE)
+{
+   HxDiyFp result;
+   result.f = inF;
+   result.e = inE;
+   return result;
+}
+
+// The upper 64 bits of the product, rounded
+static inline HxDiyFp hxDiyTimes(const HxDiyFp &inA, const HxDiyFp &inB)
+{
+   const unsigned long long M32 = 0xFFFFFFFFULL;
+   unsigned long long a = inA.f >> 32, b = inA.f & M32;
+   unsigned long long c = inB.f >> 32, d = inB.f & M32;
+   unsigned long long ac = a*c, bc = b*c, ad = a*d, bd = b*d;
+   unsigned long long tmp = (bd >> 32) + (ad & M32) + (bc & M32) + (1ULL << 31);
+   return hxDiyFp(ac + (ad >> 32) + (bc >> 32) + (tmp >> 32), inA.e + inB.e + 64);
+}
+
+static inline HxDiyFp hxDiyNormalize(HxDiyFp inV)
+{
+   while(!(inV.f & 0xFFC0000000000000ULL))
+   {
+      inV.f <<= 10;
+      inV.e -= 10;
+   }
+   while(!(inV.f & 0x8000000000000000ULL))
+   {
+      inV.f <<= 1;
+      inV.e--;
+   }
+   return inV;
+}
+
+struct HxCachedPower
+{
+   unsigned long long f;
+   short e;
+   short decimal;
+};
+
+// 10^decimal ~ f * 2^e, for every eighth power from 10^-348 to 10^340
+static const HxCachedPower sHxCachedPowers[] = {
+   { 0xfa8fd5a0081c0288ULL, -1220, -348 },
+   { 0xbaaee17fa23ebf76ULL, -1193, -340 },
+   { 0x8b16fb203055ac76ULL, -1166, -332 },
+   { 0xcf42894a5dce35eaULL, -1140, -324 },
+   { 0x9a6bb0aa55653b2dULL, -1113, -316 },
+   { 0xe61acf033d1a45dfULL, -1087, -308 },
+   { 0xab70fe17c79ac6caULL, -1060, -300 },
+   { 0xff77b1fcbebcdc4fULL, -1034, -292 },
+   { 0xbe5691ef416bd60cULL, -1007, -284 },
+   { 0x8dd01fad907ffc3cULL, -980, -276 },
+   { 0xd3515c2831559a83ULL, -954, -268 },
+   { 0x9d71ac8fada6c9b5ULL, -927, -260 },
+   { 0xea9c227723ee8bcbULL, -901, -252 },
+   { 0xaecc49914078536dULL, -874, -244 },
+   { 0x823c12795db6ce57ULL, -847, -236 },
+   { 0xc21094364dfb5637ULL, -821, -228 },
+   { 0x9096ea6f3848984fULL, -794, -220 },
+   { 0xd77485cb25823ac7ULL, -768, -212 },
+   { 0xa086cfcd97bf97f4ULL, -741, -204 },
+   { 0xef340a98172aace5ULL, -715, -196 },
+   { 0xb23867fb2a35b28eULL, -688, -188 },
+   { 0x84c8d4dfd2c63f3bULL, -661, -180 },
+   { 0xc5dd44271ad3cdbaULL, -635, -172 },
+   { 0x936b9fcebb25c996ULL, -608, -164 },
+   { 0xdbac6c247d62a584ULL, -582, -156 },
+   { 0xa3ab66580d5fdaf6ULL, -555, -148 },
+   { 0xf3e2f893dec3f126ULL, -529, -140 },
+   { 0xb5b5ada8aaff80b8ULL, -502, -132 },
+   { 0x87625f056c7c4a8bULL, -475, -124 },
+   { 0xc9bcff6034c13053ULL, -449, -116 },
+   { 0x964e858c91ba2655ULL, -422, -108 },
+   { 0xdff9772470297ebdULL, -396, -100 },
+   { 0xa6dfbd9fb8e5b88fULL, -369, -92 },
+   { 0xf8a95fcf88747d94ULL, -343, -84 },
+   { 0xb94470938fa89bcfULL, -316, -76 },
+   { 0x8a08f0f8bf0f156bULL, -289, -68 },
+   { 0xcdb02555653131b6ULL, -263, -60 },
+   { 0x993fe2c6d07b7facULL, -236, -52 },
+   { 0xe45c10c42a2b3b06ULL, -210, -44 },
+   { 0xaa242499697392d3ULL, -183, -36 },
+   { 0xfd87b5f28300ca0eULL, -157, -28 },
+   { 0xbce5086492111aebULL, -130, -20 },
+   { 0x8cbccc096f5088ccULL, -103, -12 },
+   { 0xd1b71758e219652cULL, -77, -4 },
+   { 0x9c40000000000000ULL, -50, 4 },
+   { 0xe8d4a51000000000ULL, -24, 12 },
+   { 0xad78ebc5ac620000ULL, 3, 20 },
+   { 0x813f3978f8940984ULL, 30, 28 },
+   { 0xc097ce7bc90715b3ULL, 56, 36 },
+   { 0x8f7e32ce7bea5c70ULL, 83, 44 },
+   { 0xd5d238a4abe98068ULL, 109, 52 },
+   { 0x9f4f2726179a2245ULL, 136, 60 },
+   { 0xed63a231d4c4fb27ULL, 162, 68 },
+   { 0xb0de65388cc8ada8ULL, 189, 76 },
+   { 0x83c7088e1aab65dbULL, 216, 84 },
+   { 0xc45d1df942711d9aULL, 242, 92 },
+   { 0x924d692ca61be758ULL, 269, 100 },
+   { 0xda01ee641a708deaULL, 295, 108 },
+   { 0xa26da3999aef774aULL, 322, 116 },
+   { 0xf209787bb47d6b85ULL, 348, 124 },
+   { 0xb454e4a179dd1877ULL, 375, 132 },
+   { 0x865b86925b9bc5c2ULL, 402, 140 },
+   { 0xc83553c5c8965d3dULL, 428, 148 },
+   { 0x952ab45cfa97a0b3ULL, 455, 156 },
+   { 0xde469fbd99a05fe3ULL, 481, 164 },
+   { 0xa59bc234db398c25ULL, 508, 172 },
+   { 0xf6c69a72a3989f5cULL, 534, 180 },
+   { 0xb7dcbf5354e9beceULL, 561, 188 },
+   { 0x88fcf317f22241e2ULL, 588, 196 },
+   { 0xcc20ce9bd35c78a5ULL, 614, 204 },
+   { 0x98165af37b2153dfULL, 641, 212 },
+   { 0xe2a0b5dc971f303aULL, 667, 220 },
+   { 0xa8d9d1535ce3b396ULL, 694, 228 },
+   { 0xfb9b7cd9a4a7443cULL, 720, 236 },
+   { 0xbb764c4ca7a44410ULL, 747, 244 },
+   { 0x8bab8eefb6409c1aULL, 774, 252 },
+   { 0xd01fef10a657842cULL, 800, 260 },
+   { 0x9b10a4e5e9913129ULL, 827, 268 },
+   { 0xe7109bfba19c0c9dULL, 853, 276 },
+   { 0xac2820d9623bf429ULL, 880, 284 },
+   { 0x80444b5e7aa7cf85ULL, 907, 292 },
+   { 0xbf21e44003acdd2dULL, 933, 300 },
+   { 0x8e679c2f5e44ff8fULL, 960, 308 },
+   { 0xd433179d9c8cb841ULL, 986, 316 },
+   { 0x9e19db92b4e31ba9ULL, 1013, 324 },
+   { 0xeb96bf6ebadf77d9ULL, 1039, 332 },
+   { 0xaf87023b9bf0ee6bULL, 1066, 340 },
+};
+
+static const unsigned int sHxSmallPowersOfTen[] = { 0, 1, 10, 100, 1000, 10000, 100000,
+   1000000, 10000000, 100000000, 1000000000 };
+
+// Moves the last digit towards w while that stays inside the interval, and
+// says whether the result is certainly the nearest and certainly inside
+static bool hxGrisuRoundWeed(char *ioDigits, int inLength, unsigned long long inDistanceTooHighW,
+                             unsigned long long inUnsafeInterval, unsigned long long inRest,
+                             unsigned long long inTenKappa, unsigned long long inUnit)
+{
+   unsigned long long smallDistance = inDistanceTooHighW - inUnit;
+   unsigned long long bigDistance = inDistanceTooHighW + inUnit;
+   while(inRest < smallDistance && inUnsafeInterval - inRest >= inTenKappa &&
+         (inRest + inTenKappa < smallDistance ||
+          smallDistance - inRest >= inRest + inTenKappa - smallDistance))
+   {
+      ioDigits[inLength-1]--;
+      inRest += inTenKappa;
+   }
+   if (inRest < bigDistance && inUnsafeInterval - inRest >= inTenKappa &&
+       (inRest + inTenKappa < bigDistance ||
+        bigDistance - inRest > inRest + inTenKappa - bigDistance))
+      return false;
+   return 2*inUnit <= inRest && inRest <= inUnsafeInterval - 4*inUnit;
+}
+
+static bool hxGrisuDigitGen(HxDiyFp inLow, HxDiyFp inW, HxDiyFp inHigh, char *outDigits,
+                            int &outLength, int &outKappa)
+{
+   unsigned long long unit = 1;
+   HxDiyFp tooLow = hxDiyFp(inLow.f - unit, inLow.e);
+   HxDiyFp tooHigh = hxDiyFp(inHigh.f + unit, inHigh.e);
+   unsigned long long unsafeInterval = tooHigh.f - tooLow.f;
+   int shift = -inW.e;
+   unsigned long long one = 1ULL << shift;
+   unsigned int integrals = (unsigned int)(tooHigh.f >> shift);
+   unsigned long long fractionals = tooHigh.f & (one - 1);
+
+   int bits = 64 - shift;
+   int kappa = ((bits + 1) * 1233 >> 12) + 1;
+   if (integrals < sHxSmallPowersOfTen[kappa])
+      kappa--;
+   unsigned int divisor = sHxSmallPowersOfTen[kappa];
+
+   outLength = 0;
+   while(kappa > 0)
+   {
+      outDigits[outLength++] = (char)('0' + integrals / divisor);
+      integrals %= divisor;
+      kappa--;
+      unsigned long long rest = ((unsigned long long)integrals << shift) + fractionals;
+      if (rest < unsafeInterval)
+      {
+         outKappa = kappa;
+         return hxGrisuRoundWeed(outDigits, outLength, tooHigh.f - inW.f, unsafeInterval, rest,
+                                 (unsigned long long)divisor << shift, unit);
+      }
+      divisor /= 10;
+   }
+   while(outLength < 18)
+   {
+      fractionals *= 10;
+      unit *= 10;
+      unsafeInterval *= 10;
+      outDigits[outLength++] = (char)('0' + (int)(fractionals >> shift));
+      fractionals &= one - 1;
+      kappa--;
+      if (fractionals < unsafeInterval)
+      {
+         outKappa = kappa;
+         return hxGrisuRoundWeed(outDigits, outLength, (tooHigh.f - inW.f) * unit, unsafeInterval,
+                                 fractionals, one, unit);
+      }
+   }
+   return false;
+}
+
+// For inValue finite and positive: false when Grisu3 cannot be sure
+static bool hxGrisuDigits(double inValue, char *outDigits, int &outCount, int &outExp)
+{
+   unsigned long long bits;
+   memcpy(&bits, &inValue, sizeof(bits));
+   unsigned long long mantissa = bits & 0x000FFFFFFFFFFFFFULL;
+   int biased = (int)((bits >> 52) & 0x7FF);
+   HxDiyFp v = biased ? hxDiyFp(mantissa | 0x0010000000000000ULL, biased - 1075) :
+                        hxDiyFp(mantissa, -1074);
+
+   // The midpoints to the doubles either side, the lower one nearer just
+   // above a power of two
+   HxDiyFp plus = hxDiyNormalize(hxDiyFp((v.f << 1) + 1, v.e - 1));
+   HxDiyFp minus = (mantissa==0 && biased>1) ? hxDiyFp((v.f << 2) - 1, v.e - 2) :
+                                               hxDiyFp((v.f << 1) - 1, v.e - 1);
+   minus.f <<= minus.e - plus.e;
+   minus.e = plus.e;
+   HxDiyFp w = hxDiyNormalize(v);
+
+   // A cached power that scales w to a binary exponent from -60 to -32
+   int minExponent = -60 - (w.e + 64);
+   int k = (int)ceil((minExponent + 63) * 0.30102999566398114);
+   const HxCachedPower &power = sHxCachedPowers[(348 + k - 1) / 8 + 1];
+   HxDiyFp tenMk = hxDiyFp(power.f, power.e);
+
+   char digits[18];
+   int length = 0;
+   int kappa = 0;
+   if (!hxGrisuDigitGen(hxDiyTimes(minus, tenMk), hxDiyTimes(w, tenMk), hxDiyTimes(plus, tenMk),
+                        digits, length, kappa) || length>17)
+      return false;
+   memcpy(outDigits, digits, length);
+   outCount = hxTrimZeros(outDigits, length);
+   outExp = length - 1 - power.decimal + kappa;
+   return true;
+}
+
 // The fewest significant digits that read back as inValue, which is finite
 // and positive, choosing the nearest such digits, like std::to_chars
 static int hxShortestDigits(double inValue, char *outDigits, int &outExp)
 {
+   int count = 0;
+   if (hxGrisuDigits(inValue,outDigits,count,outExp))
+      return count;
+
+   // Rounding with printf and reading back with strtod, which decides
+   HxCNumericScope cNumeric;
    int binExp;
    bool powerOfTwo = inValue>DBL_MIN && frexp(inValue,&binExp)==0.5;
    if (inValue>=DBL_MIN && !powerOfTwo)
@@ -1149,9 +1412,9 @@ String::String(const double &inRHS)
       return;
    }
    char buf[100];
-   HxCNumericScope cNumeric;
    if (HX_DOUBLE_PATTERN_CUSTOM)
    {
+      HxCNumericScope cNumeric;
       HX_SNPRINTF_C(buf,100,HX_DOUBLE_PATTERN,inRHS);
    }
    else

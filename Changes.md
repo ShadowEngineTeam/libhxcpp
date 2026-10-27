@@ -2,6 +2,7 @@
 libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
+* Sped up converting a Float to a String, which rounded it with printf to 15, 16 and 17 digits and read each back with strtod to find the shortest digits that read back. Grisu3 finds them with integer arithmetic, and the old search does the doubles it cannot decide, about 0.5% in Loitsch's measurements. The text is the same for every value: Std.string on Floats went from 996k to 8.8M conversions a second (libhxcpp #390)
 * Fixed a thread whose cpp.Lib.load was failing crashing the process at exit on Windows, about once in a hundred exits: a failing load reads haxelib's files to look further, and exit frees the C runtime's table of open files while other threads still run. The loader reads them with Win32 calls instead (libhxcpp #371)
 * Fixed Gc.trace with path printing overflowing the native stack on a deep graph, as it marked by recursing all the way down: it now recurses 256 objects deep, and paths below that start with "... + higher". It also counts instances that are large allocations and instances with no object fields, which it missed, and prints paths through large objects from their root (libhxcpp #389)
 * Fixed val_buffer losing the text of a value after a NUL character: it measured the UTF-8 text with strlen. It now appends the text's full byte count (libhxcpp #393)
