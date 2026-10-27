@@ -1,0 +1,6 @@
+original object-map lookups remain correct: true
+frozen map keys share identity with copied graph keys: true
+frozen object-map lookups remain correct: true
+frozen object-map lookups by its own keys remain correct: true
+frozen string and integer map controls remain correct: true
+frozen object-map lookups survive collection: true

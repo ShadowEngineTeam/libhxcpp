@@ -7671,6 +7671,9 @@ public:
       copies[obj] = result;
       *ioPtr = (hx::Object *)result;
       (*ioPtr)->__Visit(this);
+      // Its keys are all copies now, and an object key's hash is its identity
+      if ((*ioPtr)->_hx_isInstanceOf(hx::clsIdHash))
+         static_cast<HashRoot *>(*ioPtr)->rehashKeys();
    }
 
    void visitAlloc(void **ioPtr) HXCPP_OVERRIDE
