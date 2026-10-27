@@ -1,0 +1,4 @@
+-cpp bin
+-m Main
+--resource cert.pem@cert
+--resource key.pem@key
