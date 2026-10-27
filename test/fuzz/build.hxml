@@ -1,0 +1,3 @@
+# The fuzz targets in replay mode, with any compiler: bin/Fuzz <target> <inputs>
+common.hxml
+--cpp bin

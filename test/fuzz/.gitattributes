@@ -1,0 +1,3 @@
+# Fuzz inputs are bytes, which line ending conversion would change
+corpus/** -text
+regressions/** -text

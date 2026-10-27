@@ -1,0 +1,6 @@
+# The fuzz targets driven by libFuzzer: run.sh adds the sanitizers
+common.hxml
+--cpp out
+-D fuzz_libfuzzer
+# Symbols, so sanitizer reports name the lines
+-D HXCPP_DEBUG_LINK
