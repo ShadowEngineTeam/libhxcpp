@@ -469,7 +469,9 @@ Array<unsigned char> _hx_std_socket_read( Dynamic o )
          break;
 
       hx::ExitGCFreeZone();
-      result->memcpy(result->length, (unsigned char *)buf, len );
+      int olen = result->length;
+      result->EnsureAppendSize(olen+len);
+      ::memcpy(result->GetBase()+olen, buf, len);
       hx::EnterGCFreeZone();
    }
 

@@ -99,13 +99,19 @@ void Anon_obj::__Visit(hx::VisitContext *__inCtx)
 }
 #endif
 
+// A literal name is looked for by its address among the fixed fields of an
+// object with up to this many, which beats hashing it. Past that the scan
+// costs more than the search by hash, and a literal name the object lacks
+// would scan every field before that search.
+static const int sMaxPointerScanFields = 40;
+
 inline int Anon_obj::findFixed(const ::String &inKey, bool inSkip5)
 {
    if (!mFixedFields || !inKey.__s)
       return -1;
    VariantKey *fixed = getFixed();
 
-   if (!inSkip5)
+   if (!inSkip5 && mFixedFields<=sMaxPointerScanFields)
       if (inKey.__s[HX_GC_CONST_ALLOC_MARK_OFFSET]  & HX_GC_CONST_ALLOC_MARK_BIT)
       {
          for(int i=0;i<mFixedFields;i++)
@@ -185,15 +191,16 @@ hx::Val Anon_obj::__Field(const String &inName, hx::PropertyAccess inCallProp)
 {
 
    #ifdef HX_SMART_STRINGS
-   if (!inName.isAsciiEncodedQ())
+   if (!inName.isAsciiEncodedQ() || mFixedFields>sMaxPointerScanFields)
+   #else
+   if (mFixedFields>sMaxPointerScanFields)
+   #endif
    {
       int fixed = findFixed(inName);
       if (fixed>=0)
          return getFixed()[fixed].value;
    }
-   else
-   #endif
-   if (mFixedFields>0)
+   else if (mFixedFields>0)
    {
       VariantKey *fixed = getFixed();
       if (inName.__s[HX_GC_CONST_ALLOC_MARK_OFFSET]  & HX_GC_CONST_ALLOC_MARK_BIT)

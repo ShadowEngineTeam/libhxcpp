@@ -643,7 +643,9 @@ Array<unsigned char> _hx_ssl_read( Dynamic hssl ) {
 			break;
 		if( len < 0 )
 			ssl_error( len );
-		result->memcpy(result->length, buf, len);
+		int olen = result->length;
+		result->EnsureAppendSize(olen+len);
+		::memcpy(result->GetBase()+olen, buf, len);
 	}
 	return result;
 }

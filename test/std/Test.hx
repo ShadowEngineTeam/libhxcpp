@@ -332,6 +332,79 @@ class Test extends utest.Test
       cnx.close();
    }
 
+   // The kind of value a row's fixed field holds: a number or text is held
+   // in the field itself, not in a box
+   static function fixedFieldKind(row:Dynamic, name:String):String
+   {
+      final count = Reflect.fields(row).length;
+      for (k in 0...count)
+      {
+         final key:String = untyped __cpp__("static_cast<hx::Anon_obj*>({0}.mPtr)->getFixed()[{1}].key", row, k);
+         if (key != name)
+            continue;
+         final type:Int = untyped __cpp__("(int)static_cast<hx::Anon_obj*>({0}.mPtr)->getFixed()[{1}].value.type", row, k);
+         if (type == untyped __cpp__("(int)cpp::Variant::typeObject")) return "object";
+         if (type == untyped __cpp__("(int)cpp::Variant::typeString")) return "string";
+         if (type == untyped __cpp__("(int)cpp::Variant::typeDouble")) return "double";
+         if (type == untyped __cpp__("(int)cpp::Variant::typeInt")) return "int";
+         if (type == untyped __cpp__("(int)cpp::Variant::typeInt64")) return "int64";
+         if (type == untyped __cpp__("(int)cpp::Variant::typeBool")) return "bool";
+         return "other";
+      }
+      return "missing";
+   }
+
+   function testSqliteInlineValues()
+   {
+      log("Test sqlite values held in the row");
+      final cnx = Sqlite.open(":memory:");
+      cnx.request("CREATE TABLE t (i INTEGER, f REAL, b BOOL, s TEXT, big INTEGER, n INTEGER, blob BLOB)");
+      cnx.request("INSERT INTO t VALUES (123456, 2.5, 1, 'héllo wörld', 1727600000000, NULL, x'00ff10')");
+      cnx.request("INSERT INTO t VALUES (-7, -0.125, 0, '', -9007199254740993, NULL, x'')");
+      final rows = [for (row in cnx.request("SELECT * FROM t ORDER BY i DESC")) row];
+      cnx.close();
+      cpp.vm.Gc.run(true);
+
+      final a:Dynamic = rows[0];
+      final b:Dynamic = rows[1];
+      Assert.equals(123456, a.i);
+      Assert.equals(2.5, a.f);
+      Assert.equals(true, a.b);
+      Assert.equals("héllo wörld", a.s);
+      Assert.equals(11, (a.s : String).length);
+      final big:haxe.Int64 = a.big;
+      Assert.isTrue(big == haxe.Int64.make(402, 1023147008));
+      Assert.isNull(a.n);
+      Assert.isTrue(Reflect.hasField(a, "n"));
+      Assert.equals("00ff10", Bytes.ofData(a.blob).toHex());
+      Assert.equals(-7, b.i);
+      Assert.equals(-0.125, b.f);
+      Assert.equals(false, b.b);
+      Assert.equals("", b.s);
+      final negative:haxe.Int64 = b.big;
+      Assert.isTrue(negative == haxe.Int64.make(-2097153, -1));
+      Assert.equals(0, Bytes.ofData(b.blob).length);
+      Assert.isTrue(Std.isOfType(a.i, Int) && Std.isOfType(a.f, Float) && Std.isOfType(a.b, Bool) && Std.isOfType(a.s, String));
+      Assert.equals(123456, Reflect.field(a, "i"));
+      Assert.equals(7, Reflect.fields(a).length);
+
+      Assert.equals("int", fixedFieldKind(b, "i"));
+      Assert.equals("double", fixedFieldKind(b, "f"));
+      Assert.equals("bool", fixedFieldKind(b, "b"));
+      Assert.equals("string", fixedFieldKind(b, "s"));
+      Assert.equals("int64", fixedFieldKind(b, "big"));
+      Assert.equals("object", fixedFieldKind(b, "n"));
+      Assert.equals("object", fixedFieldKind(b, "blob"));
+
+      a.i = 99;
+      Reflect.setField(a, "s", "changed");
+      a.extra = true;
+      cpp.vm.Gc.run(true);
+      Assert.equals(99, a.i);
+      Assert.equals("changed", a.s);
+      Assert.equals(true, a.extra);
+   }
+
    function testSqliteFailedStatement()
    {
       log("Test sqlite failed statement");
@@ -958,6 +1031,46 @@ class Test extends utest.Test
       socket.shutdown(true,true);
    }
 
+   // A whole stream read from a socket, sent by another thread that closes
+   // its end when done
+   static function readWholeStream(payload:Bytes):Bytes
+   {
+      final server = new Socket();
+      server.bind(new Host("127.0.0.1"), 0);
+      server.listen(1);
+      final port = server.host().port;
+      final sent = new sys.thread.Lock();
+      Thread.create(() -> {
+         final client = new Socket();
+         client.connect(new Host("127.0.0.1"), port);
+         client.output.writeFullBytes(payload, 0, payload.length);
+         client.close();
+         sent.release();
+      });
+      final conn = server.accept();
+      final received:BytesData = cpp.NativeSocket.socket_read(@:privateAccess conn.__s);
+      sent.wait();
+      conn.close();
+      server.close();
+      return Bytes.ofData(received);
+   }
+
+   // Reading a whole stream appends each received chunk with the growth push
+   // gets; every byte must arrive, for an empty stream and for many chunks
+   function testSocketReadWhole()
+   {
+      log("Test reading a whole stream from a socket");
+      for (size in [0, 1, 16383, 16385, 1 << 20, (3 << 20) + 7])
+      {
+         final payload = Bytes.alloc(size);
+         for (i in 0...size)
+            payload.set(i, (i * 131 + (i >> 9)) & 0xff);
+         final received = readWholeStream(payload);
+         Assert.equals(size, received.length);
+         Assert.equals(0, received.compare(payload));
+      }
+   }
+
    function testSsl()
    {
       log("Test ssl");
@@ -1092,6 +1205,46 @@ class Test extends utest.Test
       Assert.equals( 0, Std.parseInt('   -0xyz'));
       Assert.equals( 5, Std.parseInt('  5'));
       Assert.equals( 5, Std.parseInt(' \t\n5'));
+   }
+
+   // parseInt and parseFloat read only the ASCII start of a UTF-16 string,
+   // so a non-ASCII suffix must not change what the ASCII part alone gives
+   function testParseWideSuffix()
+   {
+      log("Test number parsing with a non-ASCII suffix");
+      final inputs = [
+         "123", " 123", "\t\n-42", "+7", "0x1F", "-0x10", "0X7fffffff", "12.5", "-12.5e-3", "1e5", ".5", "-.5", "5.", "Infinity",
+         "-Infinity", "+Infinity", "NaN", "nan", "inf", "", " ", "-", "+", "x12", "2147483648", "-2147483649", "99999999999999999999",
+         "1e400", "0.1e-400", "007", "1_000", "12abc", "0x", "0xg", "  0x1A", "3.14159265358979323846", "1.7976931348623157e308"
+      ];
+      final suffixes = ["α", " Zürich", " ", "１２", "\u0000", "é123", "日本"];
+      for (input in inputs)
+      {
+         final int = Std.parseInt(input);
+         final float = Std.parseFloat(input);
+         for (suffix in suffixes)
+         {
+            Assert.equals(int, Std.parseInt(input + suffix), '"$input" with a suffix');
+            final wide = Std.parseFloat(input + suffix);
+            if (Math.isNaN(float))
+               Assert.isTrue(Math.isNaN(wide), '"$input" with a suffix');
+            else
+               Assert.equals(float, wide, '"$input" with a suffix');
+         }
+      }
+
+      final buffer = new StringBuf();
+      for (i in 0...4096)
+         buffer.add("α");
+      final suffix = buffer.toString();
+      Assert.equals(123, Std.parseInt("123 " + suffix));
+      Assert.equals(1.5, Std.parseFloat("1.5 " + suffix));
+      Assert.isNull(Std.parseInt(suffix + "123"));
+      Assert.isTrue(Math.isNaN(Std.parseFloat(suffix + "1.5")));
+      Assert.isNull(Std.parseInt(" " + "5"));
+      Assert.isTrue(Math.isNaN(Std.parseFloat("　" + "5")));
+      Assert.isNull(Std.parseInt("１２３"));
+      Assert.isTrue(Math.isNaN(Std.parseFloat("１.５")));
    }
 
    public static function main()

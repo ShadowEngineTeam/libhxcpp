@@ -666,7 +666,7 @@ void buffer_append(buffer inBuffer,const char *inStr)
    ByteArray b = (ByteArray)inBuffer;
    int olen = b->length;
    int len = strlen(inStr);
-   b->__SetSize(olen+len);
+   b->EnsureAppendSize(olen+len);
    memcpy(b->GetBase()+olen,inStr,len);
 
 }
@@ -690,7 +690,7 @@ void buffer_append_sub(buffer inBuffer,const char *inStr,int inLen)
 {
    ByteArray b = (ByteArray)inBuffer;
    int olen = b->length;
-   b->__SetSize(olen+inLen);
+   b->EnsureAppendSize(olen+inLen);
    memcpy(b->GetBase()+olen,inStr,inLen);
 }
 

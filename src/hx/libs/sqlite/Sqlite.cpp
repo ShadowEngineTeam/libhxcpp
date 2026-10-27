@@ -382,7 +382,9 @@ Dynamic _hx_sqlite_result_next(Dynamic handle)
          for(int slot=0;slot<r->ncols;slot++)
          {
             int i = r->order[slot];
-            Dynamic f;
+            // A Variant, not a Dynamic, so a number or text is kept in the
+            // row itself instead of in a box each cell holds on to
+            cpp::Variant f;
             switch( sqlite3_column_type(r->r,i) )
             {
             case SQLITE_NULL:
@@ -402,7 +404,7 @@ Dynamic _hx_sqlite_result_next(Dynamic handle)
                   if( v >= -2147483647LL - 1 && v <= 2147483647LL )
                      f = int(v);
                   else
-                     f = Dynamic( (cpp::Int64)v );
+                     f = (cpp::Int64)v;
                }
                break;
             case SQLITE_FLOAT:

@@ -165,3 +165,117 @@ class MapObject extends Benchmark {
 		return sum;
 	}
 }
+
+/**
+	An Int64-keyed map through the runtime's Int64 hash, which Haxe 4.3 has
+	no Map class for (Haxe 5's Int64Map calls the same functions).
+**/
+class Int64Table {
+	var h:Dynamic;
+
+	public function new() {}
+
+	public function setInt(key:haxe.Int64, value:Int):Void
+		untyped __global__.__int64_hash_set_int(__cpp__("HX_MAP_THIS"), key, value);
+
+	public function set(key:haxe.Int64, value:Dynamic):Void
+		untyped __global__.__int64_hash_set(__cpp__("HX_MAP_THIS"), key, value);
+
+	public inline function getInt(key:haxe.Int64):Int
+		return untyped __global__.__int64_hash_get_int(h, key);
+
+	public inline function getInt64(key:haxe.Int64):haxe.Int64
+		return untyped __global__.__int64_hash_get_int64(h, key);
+
+	public inline function exists(key:haxe.Int64):Bool
+		return untyped __global__.__int64_hash_exists(h, key);
+
+	public inline function remove(key:haxe.Int64):Bool
+		return untyped __global__.__int64_hash_remove(h, key);
+}
+
+/**
+	Int64 keys that pack an (x, y) cell of a 256 x 256 grid, the usual way
+	to key a map by coordinates: N sets, N hits, N misses, N/2 removes.
+**/
+class MapInt64 extends Benchmark {
+	static inline var SIDE = 256;
+	static inline var N = SIDE * SIDE;
+	static inline var REPS = 4;
+
+	final keys:Array<haxe.Int64> = [];
+	final misses:Array<haxe.Int64> = [];
+
+	public function new() {
+		super("map_int64", "map operations", N * 3.5 * REPS);
+	}
+
+	override public function setup() {
+		for (x in 0...SIDE)
+			for (y in 0...SIDE) {
+				keys.push(haxe.Int64.make(x, y));
+				misses.push(haxe.Int64.make(x + SIDE, y));
+			}
+	}
+
+	override public function run():Int {
+		var sum = 0;
+		for (r in 0...REPS)
+			sum = (sum * 31 + cycle()) | 0;
+		return sum;
+	}
+
+	function cycle():Int {
+		var m = new Int64Table();
+		for (i in 0...N)
+			m.setInt(keys[i], i);
+		var sum = 0;
+		for (i in 0...N)
+			sum = (sum * 7 + m.getInt(keys[i])) | 0;
+		for (i in 0...N)
+			if (m.exists(misses[i]))
+				sum++;
+		for (i in 0...(N >> 1))
+			if (m.remove(keys[i]))
+				sum++;
+		return sum;
+	}
+}
+
+/**
+	Int64 values stored through the Dynamic setter, as generic code stores
+	them, in maps that stay alive across collections, then read back typed.
+**/
+class MapInt64Values extends Benchmark {
+	static inline var N = 200000;
+	static inline var MAPS = 4;
+
+	final keys:Array<haxe.Int64> = [];
+
+	public function new() {
+		super("map_int64_values", "map operations", N * 2 * MAPS);
+	}
+
+	override public function setup() {
+		for (i in 0...N)
+			keys.push(haxe.Int64.make(i >> 10, i * 0x9E3779B1));
+	}
+
+	override public function run():Int {
+		var maps = [for (m in 0...MAPS) new Int64Table()];
+		for (m in 0...MAPS) {
+			var map = maps[m];
+			for (i in 0...N) {
+				var value:Dynamic = haxe.Int64.make(m + 1, i);
+				map.set(keys[i], value);
+			}
+		}
+		var sum = 0;
+		for (m in 0...MAPS)
+			for (i in 0...N) {
+				var v = maps[m].getInt64(keys[i]);
+				sum = (sum + v.low + v.high) | 0;
+			}
+		return sum;
+	}
+}

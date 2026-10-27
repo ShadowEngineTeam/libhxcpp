@@ -1,8 +1,11 @@
 package;
 
 import AllocBenchmarks;
+import AnonBenchmarks;
+import ArrayBenchmarks;
 import CffiBenchmarks;
 import EnumBenchmarks;
+import IoBenchmarks;
 import MapBenchmarks;
 import SortBenchmarks;
 import StringBenchmarks;
@@ -32,6 +35,9 @@ class Main {
 			new AllocSmall(), new AllocStrings(), new AllocArrays(), new GcPauses(), new MapInt(), new MapString(), new MapObject(),
 			new StringBuild(), new StringIndex(), new StringSubstr(), new StringSplit(), new StringCase(), new SortInt(), new SortString(),
 			new SortObject(), new DequePush(), new DequeBurst(), new CffiCallVector(), new CffiStringView(), new EnumFormat(),
+			new SortObject(), new MapInt64(), new MapInt64Values(), new ArrayPushDynamic(), new ArrayReserveDynamic(), new ArrayPop(),
+			new SearchFrom(), new StringLongNeedle(), new ParseNumbers(), new AnonFieldSmall(), new AnonFieldWide(), new SqliteRows(),
+			new SocketRead(), new CffiBuffer(),
 		];
 		#end
 	}

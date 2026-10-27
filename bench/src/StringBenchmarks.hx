@@ -157,3 +157,85 @@ class StringCase extends Benchmark {
 		return sum;
 	}
 }
+
+/**
+	split and lastIndexOf with a multipart-style boundary: a run of dashes
+	and a token, in a text that also holds rules of dashes.
+**/
+class StringLongNeedle extends Benchmark {
+	static inline var N = 400;
+
+	var text:String;
+	var boundary:String;
+
+	public function new() {
+		super("string_long_needle", "searches", N * 2);
+	}
+
+	override public function setup() {
+		var dashes = new StringBuf();
+		for (i in 0...200)
+			dashes.addChar("-".code);
+		var rule = dashes.toString();
+		boundary = rule.substr(0, 70) + "boundary7MA4YWxk";
+		var b = new StringBuf();
+		for (part in 0...16) {
+			b.add(boundary);
+			b.add("\r\nContent-Type: text/plain\r\n\r\n");
+			for (line in 0...40) {
+				b.add(Corpus.text(8, part * 64 + line));
+				b.add("\r\n");
+				b.add(rule);
+				b.add("\r\n");
+			}
+		}
+		b.add(boundary);
+		b.add("--\r\n");
+		text = b.toString();
+	}
+
+	override public function run():Int {
+		var sum = 0;
+		for (i in 0...N) {
+			var parts = text.split(boundary);
+			sum = (sum + parts.length + parts[1 + (i % 16)].length) | 0;
+			sum = (sum + text.lastIndexOf(boundary, text.length - 1 - i * 50)) | 0;
+		}
+		return sum;
+	}
+}
+
+/** Std.parseInt and Std.parseFloat on lines that start with a number and go on in non-ASCII text. **/
+class ParseNumbers extends Benchmark {
+	static inline var N = 1000000;
+
+	final intLines:Array<String> = [];
+	final floatLines:Array<String> = [];
+
+	public function new() {
+		super("parse_numbers", "parses", N * 2);
+	}
+
+	override public function setup() {
+		var notes = ["Zürich ⇒ Genève, prix réduit", "東京から大阪まで", "Größe × Breite ≈ Fläche", "Ελληνικά κείμενα"];
+		for (i in 0...64) {
+			var note = notes[i & 3] + " " + Corpus.text(10, i + 1);
+			intLines.push((i * 7919) + "\t" + note);
+			floatLines.push((i * 31.25) + "\t" + note);
+		}
+	}
+
+	override public function run():Int {
+		var sum = 0;
+		var fsum = 0.0;
+		for (i in 0...N) {
+			var v:Null<Int> = Std.parseInt(intLines[i & 63]);
+			if (v != null) {
+				var iv:Int = v;
+				sum = (sum + iv) | 0;
+			}
+			fsum += Std.parseFloat(floatLines[i & 63]);
+		}
+		return (sum + Std.int(fsum)) | 0;
+	}
+}
