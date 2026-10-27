@@ -7688,6 +7688,8 @@ public:
 
       unsigned int s = ObjectSizeSafe(data);
       void *result = InternalCreateConstBuffer(data,s,false);
+      // A UTF-16 string's encoding is in its header, not its data
+      ((unsigned int *)result)[-1] |= ((unsigned int *)data)[-1] & HX_GC_STRING_CHAR16_T;
       copies[data] = result;
       *ioPtr = result;
    }
