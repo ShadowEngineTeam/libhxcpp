@@ -20,9 +20,9 @@ FinalizerExceptionState: threads (std::thread, which needs a pthreads build)
 FinalizersAcrossFreeZones: threads
 GcConcurrentCensus: threads (std::thread, which needs a pthreads build)
 GcFinalizerPromotion: threads (std::thread, which needs a pthreads build)
+GcFreeZoneNestedGuard: single-threaded Emscripten builds have no GC-free zones, so a guard enters none
 GcHeapGrows: expects the desktop 20 MB working target; other platforms, Emscripten included, use 8 MB
 GcIdentityBurst: threads (std::thread, which needs a pthreads build)
-GcFreeZoneNestedGuard: single-threaded Emscripten builds have no GC-free zones, so a guard enters none
 GcLargeInteriorRoot: threads (std::thread, which needs a pthreads build)
 GcNativePressureBoundary: threads (std::thread, which needs a pthreads build)
 GcReleaseEmptyBlocks: threads
@@ -48,9 +48,9 @@ Issue1063: needs a file creation time, which Emscripten's stat does not have, so
 Issue971: threads
 LargeAllocThreads: threads
 LargeAllowanceDecays: threads
+LargeBufferRootLookup: threads (std::thread, which needs a pthreads build)
 LargeRecyclePurgeLifecycle: threads (std::thread, which needs a pthreads build)
 LargeRecycleReservedMemory: threads (std::thread, which needs a pthreads build)
-LargeBufferRootLookup: threads (std::thread, which needs a pthreads build)
 NativeRefCopyRoot: threads (std::thread, which needs a pthreads build)
 NativeRefInterfaceRetarget: threads (std::thread, which needs a pthreads build)
 PollEmptyTimeout: sockets
@@ -58,17 +58,17 @@ PollFailedConnect: sockets
 PollSocketLifetime: sockets
 PollingSafePoint: threads (std::thread, which needs a pthreads build)
 ProcessClosedParentStdin: processes
-ProcessConcurrentPipeInheritance: processes and threads
 ProcessCommunicate: processes and threads
+ProcessConcurrentPipeInheritance: processes and threads
 ProcessEmptyBuffer: processes
 ProcessExitCodeTwice: processes
 ProcessPosixStartError: processes
 ProcessReapAfterClose: processes
 ProcessSigpipeHandler: processes
 ProcessWaitError: processes
+RegexpConcurrentCollection: threads
 RegexpFailedSubjectRetention: threads (std::thread, which needs a pthreads build)
 RegexpNativeMemoryPressure: threads (std::thread, which needs a pthreads build)
-RegexpConcurrentCollection: threads
 RegexpObsoleteSubject: threads (std::thread, which needs a pthreads build)
 RegisterHeldRoots: threads
 RootWalkRace: threads (std::thread, which needs a pthreads build)
