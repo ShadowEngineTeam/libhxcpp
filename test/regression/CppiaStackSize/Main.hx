@@ -8,10 +8,31 @@
 @:cppFileCode('
 #include <thread>
 #include <hx/Native.h>
+#ifndef HX_WINDOWS
+#include <pthread.h>
+#endif
+// Recursing through 768 KB of script stack takes more native stack than the
+// 128 KB musl gives a thread, so the thread gets 8 MB, as glibc gives
+#ifdef HX_WINDOWS
 static void runJoined(Dynamic callback) {
  std::thread worker([callback]() mutable { hx::NativeAttach attach; callback(); });
  hx::AutoGCFreeZone freeZone; worker.join();
 }
+#else
+static void *runCallback(void *inCallback) {
+ hx::NativeAttach attach; (*(Dynamic *)inCallback)();
+ return 0;
+}
+static void runJoined(Dynamic callback) {
+ pthread_attr_t attr;
+ pthread_attr_init(&attr);
+ pthread_attr_setstacksize(&attr, 8*1024*1024);
+ pthread_t worker;
+ pthread_create(&worker, &attr, runCallback, &callback);
+ pthread_attr_destroy(&attr);
+ hx::AutoGCFreeZone freeZone; pthread_join(worker, 0);
+}
+#endif
 ')
 class Main {
 	static function stackSize():Int
