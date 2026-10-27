@@ -14,7 +14,8 @@ CffiQuietMissingPrimitive: loads an ndll it builds, and Emscripten links statica
 CppiaArrayAccess: its host is the first --next section, which -D emscripten does not reach
 CppiaBreakpoints: threads
 CppiaHostArgs: processes
-CppiaHostMismatch: checks jitted code, and Emscripten has no cppia JIT
+CppiaHostFunctionOrder: its host is the first --next section, which -D emscripten does not reach
+CppiaHostMismatch: its host is the first --next section, which -D emscripten does not reach, and it checks jitted code, and Emscripten has no cppia JIT
 CppiaLazyJit: threads, and Emscripten has no cppia JIT
 CppiaModuleFree: threads
 CppiaModuleRetained: threads
