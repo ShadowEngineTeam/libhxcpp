@@ -63,8 +63,17 @@ else
       export PATH="$(dirname "$dll"):$PATH"
    else
       export CXX=${CXX:-clang++}
-      # libFuzzer without its main, which Fuzz.main replaces
-      lib=$(ls "$($CXX --print-runtime-dir)"/libclang_rt.fuzzer_no_main*.a 2>/dev/null | head -1)
+      # libFuzzer without its main, which Fuzz.main replaces. The runtime
+      # directory can hold one archive per architecture, named for it, and
+      # the i386 one sorts first, so take the one for this machine
+      rt=$($CXX --print-runtime-dir)
+      lib=
+      for candidate in "$rt/libclang_rt.fuzzer_no_main.a" "$rt/libclang_rt.fuzzer_no_main-$(uname -m).a"; do
+         if [ -f "$candidate" ]; then
+            lib=$candidate
+            break
+         fi
+      done
       if [ -z "$lib" ]; then
          echo "No libclang_rt.fuzzer_no_main in $($CXX --print-runtime-dir); install compiler-rt for $CXX" >&2
          exit 1
