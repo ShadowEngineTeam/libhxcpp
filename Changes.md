@@ -2,6 +2,7 @@
 libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
+* Fixed the collector's elapsed-time stamps following the wall clock on Linux, Android, Emscripten and other POSIX systems, where gettimeofday came before the monotonic clock: a clock correction made HXCPP_GC_SUMMARY, PROFILE_COLLECT and telemetry times negative or a minute long, and threw off HXCPP_GC_DYNAMIC_SIZE's collection ratios. One of the uses HaxeFoundation/hxcpp#887 reports (libhxcpp #347)
 * Fixed __hxcpp_gc_census calls made at the same time counting too few objects, often none of a class that was held: each call published its counts through globals the other replaced or cleared, and one that found another collection running returned without its own. Calls now take turns, and each waits for a full collection to fill its counts (libhxcpp #363)
 * Fixed a copy of an hx::Ref not keeping its object alive: copying one of the same type shared the original's GC root, so once the original went the collector could free the object the copy still held (libhxcpp #355)
 * Fixed hx::Ref::setPtr leaving its GC root at the old offset when it moved to another interface of the same object, so the collector could free the object while the reference still held it (libhxcpp #361)
