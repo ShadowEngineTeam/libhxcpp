@@ -1474,6 +1474,19 @@ void CppiaClassInfo::compile()
    for(size_t i=0;i<interfaceAdapters.size();i++)
       interfaceAdapters[i]->compile();
 }
+
+// The same functions as compile, left to compile when each is first called
+void CppiaClassInfo::markLazy()
+{
+   for(int i=0;i<staticFunctions.size();i++)
+      staticFunctions[i]->markLazy();
+   if (newFunc)
+      newFunc->markLazy();
+   for(int i=0;i<memberFunctions.size();i++)
+      memberFunctions[i]->markLazy();
+   for(size_t i=0;i<interfaceAdapters.size();i++)
+      interfaceAdapters[i]->lazy = true;
+}
 #endif
 
 void CppiaClassInfo::link()

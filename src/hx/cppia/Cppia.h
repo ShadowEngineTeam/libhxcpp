@@ -314,6 +314,8 @@ struct ScriptCallable : public CppiaDynamicExpr
    #ifdef CPPIA_JIT
    CppiaFunc compiled;
    bool ownsCompiled;
+   // Compiled when it is first called rather than when its module loads
+   bool lazy;
    #endif
 
    #ifdef HXCPP_STACK_SCRIPTABLE
@@ -346,6 +348,7 @@ struct ScriptCallable : public CppiaDynamicExpr
 
    #ifdef CPPIA_JIT
    void compile();
+   void compileLazy();
    void genDefaults(CppiaCompiler *compiler);
    #ifdef HXCPP_DEBUGGER
    void genZeroLocals(CppiaCompiler *compiler);
@@ -457,6 +460,7 @@ public:
 
    void link();
    void compile();
+   void markLazy();
    void setDebug(CppiaExpr *outExpr, int inFileId, int inLine);
    void boot(CppiaCtx *ctx);
    void where(CppiaExpr *e);
@@ -518,6 +522,7 @@ struct CppiaFunction : public CppiaOwned<CppiaFunction>
    void load(CppiaStream &stream,bool inExpectBody);
    void link( );
    void compile();
+   void markLazy();
 };
 
 
@@ -787,6 +792,7 @@ public:
 
    #ifdef CPPIA_JIT
    void compile();
+   void markLazy();
    #endif
 
    void link();
