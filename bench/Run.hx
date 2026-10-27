@@ -26,6 +26,8 @@ using StringTools;
 	                        and installed with haxelib, as Lime's CI does; haxelib's
 	                        own registry stops at 4.3.2.
 	  --stock-dev <path>    use a stock hxcpp checkout instead of a release
+	  --define <list>       defines for both builds, comma-separated, such as
+	                        HXCPP_GC_GENERATIONAL for the collector workloads
 	  --runtimes <list>     libhxcpp,stock (default both)
 	  --only <list>         benchmark names, comma-separated
 	  --runs <n>            processes per benchmark and runtime (default 3)
@@ -78,6 +80,7 @@ class Run {
 
 	static var stockVersion = "4.3.53";
 	static var stockDev:Null<String> = null;
+	static var defines:Array<String> = [];
 	static var runtimeNames = ["libhxcpp", "stock"];
 	static var only:Null<Array<String>> = null;
 	static var runs = 3;
@@ -209,6 +212,8 @@ class Run {
 					stockVersion = value();
 				case "--stock-dev":
 					stockDev = FileSystem.absolutePath(value());
+				case "--define":
+					defines = value().split(",");
 				case "--runtimes":
 					runtimeNames = value().split(",");
 					for (n in runtimeNames)
@@ -303,6 +308,8 @@ class Run {
 		// Stock hxcpp builds 32-bit by default on Windows and libhxcpp builds 64-bit,
 		// so ask both for 64-bit. Elsewhere both already default to the host word size.
 		var flags = Sys.systemName() == "Windows" ? " -D HXCPP_M64" : "";
+		for (d in defines)
+			flags += ' -D $d';
 		var code = inDir(rt.dir, () -> Sys.command('haxe -cp "${benchDir}/src" -main Main -cpp out$flags > build.log 2>&1'));
 		if (code != 0) {
 			var log = File.getContent(rt.dir + "/build.log").split("\n");

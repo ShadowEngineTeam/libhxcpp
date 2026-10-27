@@ -109,6 +109,7 @@ These numbers are from one Windows machine; Linux and macOS results are still to
 | `sort_string` | `Array<String>` sorted with `Reflect.compare` |
 | `sort_object` | Objects sorted by an Int field, with repeated keys |
 | `gc_weak_map_int` | Collections with an unchanged `WeakMap` of 262,144 retained keys to Int values; each collection's duration is recorded |
+| `gc_object_ids` | Collections with 250,000 retained objects that each have an ID from `__hxcpp_obj_id` |
 | `noop` | Starting the program and exiting at once (startup time, measured 20 times per runtime) |
 
 ### CPPIA
@@ -151,6 +152,7 @@ haxe --run Run                       # every benchmark, both runtimes
 haxe --run Run --only map_int,sort_int
 haxe --run Run --only cppia_interp_native_call,cppia_jit_native_call
 haxe --run Run --no-build            # reuse the last builds
+haxe --run Run --only gc_object_ids --define HXCPP_GC_GENERATIONAL
 haxe --run Run --readme              # publish: this page and the README summary
 ```
 

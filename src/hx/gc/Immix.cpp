@@ -2776,6 +2776,9 @@ typedef std::unordered_map<hx::Object *,int> ObjectIdMap;
 typedef hx::QuickVec<hx::Object *> IdObjectMap;
 FILE_SCOPE ObjectIdMap &sObjectIdMap = *new ObjectIdMap();
 FILE_SCOPE IdObjectMap &sIdObjectMap = *new IdObjectMap();
+// The objects given an ID since the last collection, which are all a minor
+//  collection can find dead. Emptied by every collection, before any moves
+FILE_SCOPE hx::QuickVec<hx::Object *> &sYoungObjectIds = *new hx::QuickVec<hx::Object *>();
 
 typedef std::unordered_set<hx::Object *> MakeZombieSet;
 FILE_SCOPE MakeZombieSet &sMakeZombieSet = *new MakeZombieSet();
@@ -3142,22 +3145,46 @@ void RunFinalizers(bool inMinor)
 
    MEM_STAMP(hx::tFinalizers);
 
-   for(ObjectIdMap::iterator i=sObjectIdMap.begin(); i!=sObjectIdMap.end(); )
+   // A minor collection frees no old object, so only the IDs given since the
+   //  last collection can belong to a dead one. Walking every registration
+   //  made a large stable table cost tens of milliseconds a minor collection
+   //  (libhxcpp #357)
+   if (inMinor)
    {
-      ObjectIdMap::iterator next = i;
-      next++;
-
-      hx::Object *o = i->first;
-      unsigned char mark = ((unsigned char *)o)[HX_ENDIAN_MARK_ID_BYTE];
-      if ( mark!=gByteMarkID && !(((unsigned int *)o)[-1] & HX_GC_CONST_ALLOC_BIT))
+      for(int i=0;i<sYoungObjectIds.size();i++)
       {
-         sFreeObjectIds.push(i->second);
-         sIdObjectMap[i->second] = 0;
-         sObjectIdMap.erase(i);
+         hx::Object *o = sYoungObjectIds[i];
+         unsigned char mark = ((unsigned char *)o)[HX_ENDIAN_MARK_ID_BYTE];
+         if ( mark!=gByteMarkID && !(((unsigned int *)o)[-1] & HX_GC_CONST_ALLOC_BIT))
+         {
+            ObjectIdMap::iterator id = sObjectIdMap.find(o);
+            if (id!=sObjectIdMap.end())
+            {
+               sFreeObjectIds.push(id->second);
+               sIdObjectMap[id->second] = 0;
+               sObjectIdMap.erase(id);
+            }
+         }
       }
-
-      i = next;
    }
+   else
+      for(ObjectIdMap::iterator i=sObjectIdMap.begin(); i!=sObjectIdMap.end(); )
+      {
+         ObjectIdMap::iterator next = i;
+         next++;
+
+         hx::Object *o = i->first;
+         unsigned char mark = ((unsigned char *)o)[HX_ENDIAN_MARK_ID_BYTE];
+         if ( mark!=gByteMarkID && !(((unsigned int *)o)[-1] & HX_GC_CONST_ALLOC_BIT))
+         {
+            sFreeObjectIds.push(i->second);
+            sIdObjectMap[i->second] = 0;
+            sObjectIdMap.erase(i);
+         }
+
+         i = next;
+      }
+   sYoungObjectIds.clear();
 
    for(int i=0;i<sWeakHashList.size();    )
    {
@@ -4601,6 +4628,7 @@ public:
       }
       hx::sObjectIdMap[(hx::Object *)inPtr] = id;
       hx::sIdObjectMap[id] = (hx::Object *)inPtr;
+      hx::sYoungObjectIds.push((hx::Object *)inPtr);
       return id;
    }
 

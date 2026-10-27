@@ -78,3 +78,33 @@ class GcWeakMapInt extends GcCollections {
 		return sum;
 	}
 }
+
+/** 250,000 retained objects, each given an ID with __hxcpp_obj_id (libhxcpp #357). **/
+class GcObjectIds extends GcCollections {
+	static inline var N = 250000;
+
+	final objects:Array<GcKey> = [];
+	final ids:Array<Int> = [];
+
+	public function new() {
+		super("gc_object_ids");
+	}
+
+	override public function setup() {
+		for (i in 0...N) {
+			var o = new GcKey(i);
+			objects.push(o);
+			ids.push(untyped __global__.__hxcpp_obj_id(o));
+		}
+		spare(N * 4);
+	}
+
+	override function check():Int {
+		var sum = 0;
+		for (i in 0...64) {
+			var o = objects[i * 3907];
+			sum = (sum * 31 + o.id + (untyped __global__.__hxcpp_obj_id(o) == ids[i * 3907] ? 1 : 0)) | 0;
+		}
+		return sum;
+	}
+}
