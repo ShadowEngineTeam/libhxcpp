@@ -20,6 +20,7 @@ test/telemetry/cpp
 test/anon/cpp
 test/extern-lib/gen-externs
 test/cffi/project/ndll
+test/regression/CffiNekoValueTags/native/ndll
 test/regression/CffiPrimeUnicodeFallback/native/ndll
 test/regression/CffiQuietMissingPrimitive/native/ndll
 test/snippets/messagebox/cpp
