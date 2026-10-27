@@ -53,6 +53,7 @@ SemaphoreCollected: Semaphore is unsupported in single-threaded Emscripten build
 SemaphoreLargeCount: Semaphore is unsupported in single-threaded Emscripten builds (libhxcpp #334)
 SemaphoreLoopCollect: threads
 SocketEmptyBytes: sockets
+SocketIpv6Accept: sockets
 SocketTinyTimeout: sockets
 SqliteResultConnectionLifetime: threads (std::thread, which needs a pthreads build)
 SslErrorCodes: sockets

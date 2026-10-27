@@ -1072,7 +1072,9 @@ void _hx_std_socket_bind_ipv6( Dynamic o, Array<unsigned char> host, int port )
 Dynamic _hx_std_socket_accept( Dynamic o )
 {
    SOCKET sock = val_sock(o);
-   struct sockaddr_in addr;
+   // Room for any family's peer address: an IPv6 one does not fit a
+   // sockaddr_in, and Windows fails the accept with WSAEFAULT
+   struct sockaddr_storage addr;
    SockLen addrlen = sizeof(addr);
    SOCKET s;
    hx::EnterGCFreeZone();
