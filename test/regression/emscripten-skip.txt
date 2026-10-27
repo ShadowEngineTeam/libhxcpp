@@ -58,6 +58,7 @@ SemaphoreLargeCount: Semaphore is unsupported in single-threaded Emscripten buil
 SemaphoreLoopCollect: threads
 SocketEmptyBytes: sockets
 SocketTinyTimeout: sockets
+SqliteNativeMemoryPressure: threads (std::thread, which needs a pthreads build)
 SqliteResultConnectionLifetime: threads (std::thread, which needs a pthreads build)
 SslErrorCodes: sockets
 SslPeerCertificateLifetime: sockets

@@ -1,0 +1,8 @@
+database fixture retains native pages: true
+native database pages contribute to GC pressure: true
+retained database remains usable: true
+close releases native database pages: true
+close removes reported native pressure: true
+abandoned databases contribute to GC pressure: true
+finalization removes reported native pressure: true
+finalization closes abandoned databases: true
