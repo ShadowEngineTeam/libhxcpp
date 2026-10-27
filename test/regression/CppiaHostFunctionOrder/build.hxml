@@ -1,0 +1,12 @@
+-cp host
+--main Main
+-cpp bin
+-D scriptable
+-D dll_export=bin/host.info
+--dce no
+--next
+-cp script
+-cp host
+--main Script
+-D dll_import=bin/host.info
+-cppia bin/script.cppia
