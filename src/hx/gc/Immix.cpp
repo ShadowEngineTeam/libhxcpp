@@ -3631,7 +3631,7 @@ public:
       // With no room to recycle it, the sweep frees it instead, so the next
       //  sweep must look at the old allocations too. The cache holds up to
       //  the large allocation allowance
-      if (mRecycleBytes + *blob > mLargeAllocSpace.load(std::memory_order_relaxed))
+      if (mRecycleBytes.load(std::memory_order_relaxed) + *blob > mLargeAllocSpace.load(std::memory_order_relaxed))
       {
          mLargeOldReleased = true;
          mLargeListLock.unlock();
@@ -3665,7 +3665,7 @@ public:
       unsigned int *&head = mRecycle[inBlob[0]];
       recycleNext(inBlob) = head;
       head = inBlob;
-      mRecycleBytes += inBlob[0];
+      mRecycleBytes.fetch_add(inBlob[0], std::memory_order_relaxed);
       mRecycleSize.store(mRecycleSize.load(std::memory_order_relaxed)+1, std::memory_order_relaxed);
    }
 
@@ -3677,7 +3677,7 @@ public:
          return 0;
       unsigned int *result = list->second;
       list->second = recycleNext(result);
-      mRecycleBytes -= result[0];
+      mRecycleBytes.fetch_sub(result[0], std::memory_order_relaxed);
       mRecycleSize.store(mRecycleSize.load(std::memory_order_relaxed)-1, std::memory_order_relaxed);
       return result;
    }
@@ -5629,7 +5629,7 @@ public:
       //  clear old frames recycle objects
       int l2 = mRecycleSize.load(std::memory_order_relaxed);
       freeRecycle(mRecycle);
-      mRecycleBytes = 0;
+      mRecycleBytes.store(0, std::memory_order_relaxed);
       mRecycleSize.store(0, std::memory_order_relaxed);
 
       size_t recycleRemaining = 0;
@@ -6144,9 +6144,12 @@ public:
       return mLargeAllocated;
    }
 
+   // With the dead large buffers kept for reuse, which are still the
+   //  process's memory (libhxcpp #313)
    size_t MemReserved()
    {
-      return mLargeAllocated + (mAllBlocksCount*IMMIX_USEFUL_LINES<<IMMIX_LINE_BITS);
+      return mLargeAllocated + mRecycleBytes.load(std::memory_order_relaxed) +
+             (mAllBlocksCount*IMMIX_USEFUL_LINES<<IMMIX_LINE_BITS);
    }
 
    size_t MemCurrent()
@@ -6293,7 +6296,8 @@ public:
    LocalAllocator *mLocalPool[LOCAL_POOL_SIZE];
    // Dead large buffers kept for reuse, by size, under mLargeListLock
    RecycleLists mRecycle;
-   size_t mRecycleBytes;
+   // Their data bytes, read unlocked for the reserved memory figure
+   std::atomic_size_t mRecycleBytes;
 
    void ForEachStackContext(void (*inFunc)(hx::StackContext *, void *), void *inData);
    // Lock-free probe for AllocLarge - only read unlocked, maintained under
