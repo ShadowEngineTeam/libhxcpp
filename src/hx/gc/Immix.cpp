@@ -2547,7 +2547,9 @@ void MarkObjectAllocUnchecked(hx::Object *inPtr,hx::MarkContext *__inCtx)
             #if (HXCPP_GC_DEBUG_LEVEL>0)
             inPtr->__Mark(__inCtx);
             #else
-            if (gCollectTrace)
+            // Printing a path needs it on the native stack. Counting does
+            //  not, and recursing would overflow that stack on a deep graph
+            if (gCollectTrace && gCollectTraceDoPrint)
                inPtr->__Mark(__inCtx);
             else
                __inCtx->pushObj(inPtr);
@@ -3252,10 +3254,28 @@ static void TrimObjectIds()
       ObjectIdMap(sObjectIdMap.begin(), sObjectIdMap.end()).swap(sObjectIdMap);
 }
 
+// Marks the callbacks in inList that IsWeakRefValid keeps for a live receiver
+static void KeepWeakCallbacks(WeakRefs &inList)
+{
+   for(int i=0;i<inList.size();i++)
+   {
+      WeakRef *ref = inList[i];
+      if ( ((unsigned char *)ref)[HX_ENDIAN_MARK_ID_BYTE]==gByteMarkID && ref->mRef.mPtr)
+         IsWeakRefValid(ref->mRef.mPtr);
+   }
+}
+
 // inMinor: a minor collection, which leaves the old entries alone
 void RunFinalizers(bool inMinor)
 {
    finalizerCount = 0;
+
+   // A weak reference keeps a callback while its receiver lives, marking it
+   //  only when asked. Ask before choosing what to finalize: asked after, in
+   //  UpdateWeakRefs, it kept callbacks whose finalizers had run (libhxcpp #376)
+   if (!inMinor)
+      KeepWeakCallbacks(sOldWeakRefs);
+   KeepWeakCallbacks(sWeakRefs);
 
    if (!inMinor)
       RunInternalFinalizers(*sgOldFinalizers, 0);
@@ -5532,7 +5552,14 @@ public:
       MEM_STAMP(tMarkLocalEnd);
 
       #ifdef HX_MULTI_THREAD_MARKING
-      if (!sgCensus)
+      // Gc.trace counts objects as it marks them, so like a census it
+      //  marks on one thread, where nothing is marked twice
+      #ifdef HXCPP_DEBUG
+      bool tracing = gCollectTrace;
+      #else
+      bool tracing = false;
+      #endif
+      if (!sgCensus && !tracing)
       {
          mMarker.releaseJobs();
 
@@ -6548,7 +6575,29 @@ public:
       return false;
    }
 
-   MemType GetMemType(uintptr_t inPtr)
+   // The large allocation in sorted inIndex that starts inReach bytes or less
+   //  below inPtr, or 0
+   static uintptr_t FindLarge(const std::vector<uintptr_t> &inIndex, uintptr_t inPtr, size_t inReach)
+   {
+      std::vector<uintptr_t>::const_iterator above = std::upper_bound(inIndex.begin(), inIndex.end(), inPtr);
+      if (above==inIndex.begin())
+         return 0;
+      uintptr_t base = *(above-1);
+      return IsLargeAt(base, inPtr, inReach) ? base : 0;
+   }
+
+   // Whether inPtr is inBase or at most inReach bytes into its allocation
+   static bool IsLargeAt(uintptr_t inBase, uintptr_t inPtr, size_t inReach)
+   {
+      uintptr_t offset = inPtr - inBase;
+      return offset==0 || (offset<=inReach && offset<reinterpret_cast<unsigned int *>(inBase)[-2]);
+   }
+
+   // With outBase, a pointer up to sgCheckInternalOffset bytes into a large
+   //  allocation finds it too, as GetEnclosingAllocType does in a block, and
+   //  outBase is set to where it starts. Native code may hold only a field's
+   //  address, which kept a small object alive but not a large one (libhxcpp #373)
+   MemType GetMemType(uintptr_t inPtr, uintptr_t *outBase = nullptr)
    {
       BlockData* block{ reinterpret_cast<BlockData*>(inPtr & IMMIX_BLOCK_BASE_MASK) };
 
@@ -6558,10 +6607,13 @@ public:
          return memBlock;
 
       // Most stack words are nowhere near the large allocations - reject on
-      // the cached bounds before paying for the full list scan
+      // the cached bounds before paying for the full list scan. The bounds
+      // are of the starts, so a pointer into the highest reaches past them
+      size_t reach = outBase ? sgCheckInternalOffset : 0;
       size_t p = (size_t)inPtr;
-      if (p < mLargeMin || p > mLargeMax)
+      if (p < mLargeMin || p > mLargeMax + reach)
          return memUnmanaged;
+      uintptr_t base = 0;
 
       // Only the collector looks up while marking, with the list fixed, so once
       // a collection has seen several candidates in range it sorts the bases
@@ -6578,14 +6630,17 @@ public:
          mLargeIndexReady = true;
       }
       if (mLargeIndexReady)
-      {
-         if (std::binary_search(mLargeIndex.begin(), mLargeIndex.end(), inPtr))
-            return memLarge;
-      }
+         base = FindLarge(mLargeIndex, inPtr, reach);
       else
-         for(int i=0;i<mLargeOld;i++)
-            if (reinterpret_cast<uintptr_t>(mLargeList[i] + 2)==inPtr)
-               return memLarge;
+         for(int i=0;i<mLargeOld && !base;i++)
+            if (IsLargeAt(reinterpret_cast<uintptr_t>(mLargeList[i] + 2), inPtr, reach))
+               base = reinterpret_cast<uintptr_t>(mLargeList[i] + 2);
+      if (base)
+      {
+         if (outBase)
+            *outBase = base;
+         return memLarge;
+      }
 
       // Those made since the last collection, which change in each
       int young = mLargeList.size() - mLargeOld;
@@ -6598,16 +6653,20 @@ public:
          mYoungLargeIndexReady = true;
       }
       if (mYoungLargeIndexReady)
-         return std::binary_search(mYoungLargeIndex.begin(), mYoungLargeIndex.end(), inPtr) ? memLarge : memUnmanaged;
+         base = FindLarge(mYoungLargeIndex, inPtr, reach);
+      else
+         for(int i=mLargeOld;i<mLargeList.size() && !base;i++)
+         {
+            uintptr_t blob{ reinterpret_cast<uintptr_t>(mLargeList[i] + 2) };
+            if (IsLargeAt(blob, inPtr, reach))
+               base = blob;
+         }
 
-      for(int i=mLargeOld;i<mLargeList.size();i++)
-      {
-         uintptr_t blob{ reinterpret_cast<uintptr_t>(mLargeList[i] + 2) };
-         if (blob==inPtr)
-            return memLarge;
-      }
-
-      return memUnmanaged;
+      if (!base)
+         return memUnmanaged;
+      if (outBase)
+         *outBase = base;
+      return memLarge;
    }
 
 
@@ -6753,7 +6812,8 @@ void MarkConservative(int *inBottom, int *inTop,hx::MarkContext *__inCtx)
          #ifdef PROFILE_COLLECT
          hx::localCount++;
          #endif
-         MemType mem{ sGlobalAlloc->GetMemType(potentialObject) };
+         uintptr_t largeBase{};
+         MemType mem{ sGlobalAlloc->GetMemType(potentialObject, &largeBase) };
 
          #ifdef HX_WATCH
          isWatch = false;
@@ -6769,6 +6829,8 @@ void MarkConservative(int *inBottom, int *inTop,hx::MarkContext *__inCtx)
          {
             if (mem==memLarge)
             {
+               // A pointer into it, as into an object in a block, marks it
+               potentialObject = largeBase;
                unsigned char& mark{ reinterpret_cast<unsigned char*>(potentialObject)[HX_ENDIAN_MARK_ID_BYTE] };
                // A large object's members are marked as from any other root:
                //  setting its mark kept the object but none of what it held
@@ -8143,6 +8205,9 @@ public:
       copies[obj] = result;
       *ioPtr = (hx::Object *)result;
       (*ioPtr)->__Visit(this);
+      // Its keys are all copies now, and an object key's hash is its identity
+      if ((*ioPtr)->_hx_isInstanceOf(hx::clsIdHash))
+         static_cast<HashRoot *>(*ioPtr)->rehashKeys();
    }
 
    void visitAlloc(void **ioPtr) HXCPP_OVERRIDE
@@ -8160,6 +8225,8 @@ public:
 
       unsigned int s = ObjectSizeSafe(data);
       void *result = InternalCreateConstBuffer(data,s,false);
+      // A UTF-16 string's encoding is in its header, not its data
+      ((unsigned int *)result)[-1] |= ((unsigned int *)data)[-1] & HX_GC_STRING_CHAR16_T;
       copies[data] = result;
       *ioPtr = result;
    }

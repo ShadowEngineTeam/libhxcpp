@@ -1,0 +1,8 @@
+source Unicode string is runtime allocated: true
+frozen Unicode field preserves text: true
+frozen Unicode array element preserves text: true
+frozen Unicode strings stay shared: true
+frozen Unicode character decoding remains correct: true
+frozen Unicode string hashes as its source: true
+frozen ASCII string control remains correct: true
+frozen Unicode text survives collection: true

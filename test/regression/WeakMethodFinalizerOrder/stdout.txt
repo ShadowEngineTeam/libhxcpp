@@ -1,0 +1,7 @@
+weak callback remains callable with a live receiver: true
+preserved weak callback is not finalized: true
+weak adapter remains callable with a live receiver: true
+preserved weak adapter is not finalized: true
+strong callback is not finalized: true
+unreachable plain target finalizes once: true
+released callbacks clear and finalize once: true

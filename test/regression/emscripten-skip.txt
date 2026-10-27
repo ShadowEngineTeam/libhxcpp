@@ -22,6 +22,8 @@ GcConcurrentCensus: threads (std::thread, which needs a pthreads build)
 GcFinalizerPromotion: threads (std::thread, which needs a pthreads build)
 GcHeapGrows: expects the desktop 20 MB working target; other platforms, Emscripten included, use 8 MB
 GcIdentityBurst: threads (std::thread, which needs a pthreads build)
+GcFreeZoneNestedGuard: single-threaded Emscripten builds have no GC-free zones, so a guard enters none
+GcLargeInteriorRoot: threads (std::thread, which needs a pthreads build)
 GcNativePressureBoundary: threads (std::thread, which needs a pthreads build)
 GcReleaseEmptyBlocks: threads
 GcRememberedBurst: threads (std::thread, which needs a pthreads build)
@@ -29,6 +31,7 @@ GcRunKeepsHeap: expects the desktop 20 MB working target; other platforms, Emscr
 GcScopeOwnership: counts thread attachments, which single-threaded Emscripten builds do not make
 GcSmallNursery: threads (std::thread, which needs a pthreads build)
 GcStackLargeContainer: threads (std::thread, which needs a pthreads build)
+GcTraceDeepGraph: processes (runs itself) and threads (std::thread, which needs a pthreads build)
 GcWeakMapChain: threads
 GenerationalArrayYoungLog: threads
 GenerationalBlockAccounting: threads (std::thread, which needs a pthreads build)
@@ -91,3 +94,4 @@ WeakAdapterDepth: threads (std::thread, which needs a pthreads build)
 WeakMapIndirectChain: threads (std::thread, which needs a pthreads build)
 WeakMapSparseCapacity: threads (std::thread, which needs a pthreads build)
 WeakMapValueStorage: threads (std::thread, which needs a pthreads build)
+WeakMethodFinalizerOrder: threads (std::thread, which needs a pthreads build)

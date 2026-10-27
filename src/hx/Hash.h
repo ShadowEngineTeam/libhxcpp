@@ -315,6 +315,9 @@ struct HashRoot : public Object
    virtual bool markWeakValues(MarkContext *__inCtx) = 0;
    // Marks the value of an element that markWeakValues passed to EphemeronWait
    virtual void markWeakElement(void *inElement, MarkContext *__inCtx) = 0;
+   // _hx_gc_freeze copied the keys into new objects, which hash differently
+   //  where the hash is the object's identity
+   virtual void rehashKeys() = 0;
 
    inline int getSize() { return size; }
 };
@@ -631,6 +634,21 @@ struct Hash : public HashBase< typename ELEMENT::Key >
                head = &e.next;
          }
       }
+   }
+
+   template<typename V,bool W>
+   void rehashElement(TDynamicElement<V,W> &e) { e.hash = keyHash(e.key); }
+   template<typename E>
+   void rehashElement(E &) { }
+
+   void rehashKeys() HXCPP_OVERRIDE
+   {
+      if (IgnoreHash || !bucket)
+         return;
+      for(int b=0;b<bucketCount;b++)
+         for(Element *e=bucket[b]; e; e=e->next)
+            rehashElement(*e);
+      redistribute(bucketCount);
    }
 
    void switchToMixedHash()

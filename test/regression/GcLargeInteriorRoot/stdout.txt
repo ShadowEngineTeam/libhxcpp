@@ -1,0 +1,4 @@
+small object survives through a field pointer: true
+large object survives through a field pointer: true
+large object survives through a base pointer: true
+released objects finalize exactly once: true

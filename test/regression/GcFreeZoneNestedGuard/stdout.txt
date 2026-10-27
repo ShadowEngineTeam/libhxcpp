@@ -1,0 +1,5 @@
+inner destruction preserves the outer GC-free zone: true
+inner close preserves the outer GC-free zone: true
+borrowed guard preserves an existing GC-free zone: true
+an owning guard leaves the zone on destruction: true
+collection works after all guard scopes complete: true
