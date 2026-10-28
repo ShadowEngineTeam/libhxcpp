@@ -10,6 +10,26 @@
    #define HXCPP_API_LEVEL 0
 #endif
 
+#ifdef HXCPP_GC_INCREMENTAL
+   #if !defined(HXCPP_GC_INCREMENTAL_BARRIERS) || !defined(HXCPP_GC_GENERATIONAL)
+      #error "Incremental GC requires regenerated C++ with -lib hxcpp -D HXCPP_GC_INCREMENTAL"
+   #endif
+   #if defined(HXCPP_GC_MOVING) || defined(HXCPP_GC_DEBUG_ALWAYS_MOVE) || HXCPP_GC_DEBUG_LEVEL > 0 || defined(HXCPP_GC_NURSERY) || defined(HXCPP_SCRIPTABLE) || defined(__EMSCRIPTEN__) || HXCPP_API_LEVEL < 430 || HXCPP_API_LEVEL >= 500
+      #error "Unsupported incremental GC configuration"
+   #endif
+   // The Haxe define requests generated setter barriers. Native code uses
+   // non-nursery headers and the incremental barrier implementation below.
+   #include <vector>
+#endif
+
+#if (defined(HXCPP_GC_INCREMENTAL_VERIFY) || defined(HXCPP_GC_INCREMENTAL_TEST)) && !defined(HXCPP_GC_INCREMENTAL)
+   #error "Incremental GC diagnostics require HXCPP_GC_INCREMENTAL"
+#endif
+
+#if defined(HXCPP_GC_GENERATIONAL) && !defined(HXCPP_GC_INCREMENTAL)
+   #define HXCPP_GC_GENERATIONAL_RUNTIME
+#endif
+
 #include "hx/HeaderVersion.h"
 
 #if defined(_MSC_VER) || defined(__BORLANDC__)
@@ -307,7 +327,7 @@ public:
 
 typedef ::cpp::Variant Val;
 
-#ifdef HXCPP_GC_GENERATIONAL
+#ifdef HXCPP_GC_GENERATIONAL_RUNTIME
   #define HXCPP_GC_NURSERY
 #endif
 

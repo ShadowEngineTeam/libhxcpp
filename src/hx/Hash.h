@@ -659,6 +659,7 @@ struct Hash : public HashBase< typename ELEMENT::Key >
 
    void switchToMixedHash()
    {
+      HX_INCREMENTAL_MUTATION(this);
       mixIntKeys = true;
       if (bucketCount)
          redistribute(bucketCount);
@@ -697,6 +698,7 @@ struct Hash : public HashBase< typename ELEMENT::Key >
 
    bool remove(Key inKey) HXCPP_OVERRIDE
    {
+      HX_INCREMENTAL_MUTATION(this);
       if (!bucket)
          return false;
       releaseOversizedBuckets();
@@ -848,6 +850,14 @@ struct Hash : public HashBase< typename ELEMENT::Key >
    //  the map decides, so it is remembered whole
    void rememberYoung(const void *inA, const void *inB, const void *inC)
    {
+      #ifdef HXCPP_GC_INCREMENTAL
+      if (Element::WeakKeys) hx::IncrementalRemember(this,nullptr,HX_CTX_GET);
+      else {
+         if (inA) hx::IncrementalRemember(this,inA,HX_CTX_GET);
+         if (inB) hx::IncrementalRemember(this,inB,HX_CTX_GET);
+         if (inC) hx::IncrementalRemember(this,inC,HX_CTX_GET);
+      }
+      #else
       unsigned char &mark =  ((unsigned char *)(this))[ HX_ENDIAN_MARK_ID_BYTE];
       if (mark == hx::gByteMarkID && (IsNursery(inA) || IsNursery(inB) || IsNursery(inC)) )
       {
@@ -862,6 +872,7 @@ struct Hash : public HashBase< typename ELEMENT::Key >
             hx::YoungStore(this, this->mYoungLogged, size, values, 3, HX_CTX_GET);
          }
       }
+      #endif
    }
    #endif
 
@@ -891,6 +902,7 @@ struct Hash : public HashBase< typename ELEMENT::Key >
          #endif
          return;
       }
+      HX_INCREMENTAL_MUTATION(this);
       el = allocElement();
       // Growth in allocElement can switch an int map to the mixed hash.
       if (IgnoreHash)
@@ -916,6 +928,7 @@ struct Hash : public HashBase< typename ELEMENT::Key >
 
    void clear() HXCPP_OVERRIDE
    {
+      HX_INCREMENTAL_MUTATION(this);
       bucket = 0;
       bucketsOversized = false;
       size = 0;
@@ -1102,9 +1115,34 @@ struct Hash : public HashBase< typename ELEMENT::Key >
    {
       HX_MARK_ARRAY(bucket);
 
+      #ifdef HXCPP_GC_INCREMENTAL
+      if (size > 256 && hx::IncrementalRange(this,IncrementalScan,__inCtx)) return;
+      #endif
+
       HashMarker marker(__inCtx);
       iterate(marker);
    }
+
+   #ifdef HXCPP_GC_INCREMENTAL
+   static bool IncrementalScan(hx::Object *inOwner, size_t &ioBucket, size_t &ioItem, hx::MarkContext *__inCtx) {
+      Hash *hash = static_cast<Hash *>(inOwner);
+      HashMarker marker(__inCtx);
+      Element *element = reinterpret_cast<Element *>(ioItem);
+      unsigned int work = 0;
+      while (ioBucket < static_cast<size_t>(hash->bucketCount) && work < 256) {
+         if (!element) element = hash->bucket[ioBucket];
+         if (!element) { ioBucket++; work++; continue; }
+         while (element && work < 256) {
+            marker(element);
+            element = element->next;
+            work++;
+         }
+         if (!element) ioBucket++;
+      }
+      ioItem = reinterpret_cast<size_t>(element);
+      return ioBucket >= static_cast<size_t>(hash->bucketCount);
+   }
+   #endif
 
 #ifdef HXCPP_VISIT_ALLOCS
 

@@ -9,6 +9,9 @@ Defines affecting how the code is generated.  These need to be in the command li
 |-------------------------|--------------------|
 | *HXCPP_DEBUGGER*        | Add extra macros required by debugger.  Usually added automatically be debugger haxelib |
 | *HXCPP_GC_GENERATIONAL* | Enable experimental generational garbage collector |
+| *HXCPP_GC_INCREMENTAL* | Enable experimental incremental marking on native Haxe 4 C++ builds. Use `-lib hxcpp` and regenerate all C++. The existing generator's barriers are enabled automatically; do not combine with the generational, nursery or moving collectors, cppia or Emscripten. See [Incremental GC](../IncrementalGc.md) for scheduling hooks and limits |
+| *HXCPP_GC_INCREMENTAL_VERIFY* | Independently retrace roots and descendants before an incremental cycle reclaims memory. Adds substantial memory and pause overhead; use for correctness checks, not timing results |
+| *HXCPP_GC_INCREMENTAL_TEST* | Enable deterministic phase and failure controls used by the incremental GC regression fixtures. Requires `HXCPP_GC_INCREMENTAL`; omit from application and performance builds |
 | *annotate_source*       | Add additional annotations to source code - useful for developing hxcpp |
 | *dll_export*            | Export hxcpp runtime symbols |
 | *file_extension*        | Set the extension (without the dot) of generated files.  eg "-D file_extension=mm" for objc++ code  |
