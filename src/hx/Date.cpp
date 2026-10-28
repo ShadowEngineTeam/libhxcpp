@@ -123,6 +123,13 @@ static bool hx_time_t_holds(double inSeconds)
    return sizeof(time_t) >= 8 || (inSeconds >= -2147483648.0 && inSeconds < 2147483648.0);
 }
 
+// A time that is not a number, or whose year a tm cannot hold, gives the
+//  fields of the epoch: converting it to whole seconds is undefined
+static double hx_field_seconds(double inSeconds)
+{
+   return fabs(inSeconds) < 6.0e16 ? inSeconds : 0.0;
+}
+
 static void hx_civil_from_days(long long z, long long *outY, int *outM, int *outD)
 {
    z += 719468;
@@ -311,6 +318,7 @@ static void hx_read_zone(hx_zone_state *outState)
  */
 void __internal_localtime(double inSeconds, struct tm* time)
 {
+   inSeconds = hx_field_seconds(inSeconds);
    // Date field getters (getHours, getMinutes, getFullYear, ...) each call this
    // on the SAME timestamp, so formatting one date would do N localtime() calls.
    // localtime is expensive (timezone lookup, CRT lock on Windows); a 1-entry
@@ -351,6 +359,7 @@ void __internal_localtime(double inSeconds, struct tm* time)
  */
 void __internal_gmtime(double inSeconds, struct tm* time)
 {
+   inSeconds = hx_field_seconds(inSeconds);
    // Same rationale as __internal_localtime: cache the last conversion so the
    // UTC field getters don't each re-run gmtime for one timestamp.
    static thread_local double sLastSeconds = 0;
