@@ -555,11 +555,14 @@ public:
    {
       hx::Object *module;
       ReleaseFunc(hx::Object *inModule) : module(inModule) { }
-      Dynamic __run() HXCPP_OVERRIDE
+      Dynamic __Run(const Array<Dynamic> &inArgs) HXCPP_OVERRIDE
       {
          static_cast<CppiaObject *>(module)->release();
          return null();
       }
+      #if (HXCPP_API_LEVEL<500)
+      Dynamic __run() HXCPP_OVERRIDE { return __Run(null()); }
+      #endif
       int __ArgCount() const HXCPP_OVERRIDE { return 0; }
       void __Mark(hx::MarkContext *__inCtx) HXCPP_OVERRIDE { HX_MARK_MEMBER(module); }
       #ifdef HXCPP_VISIT_ALLOCS

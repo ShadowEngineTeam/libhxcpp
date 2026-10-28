@@ -14,7 +14,10 @@ struct TestAdapter : public ::hx::LocalFunc
 	::Dynamic wrapped;
 	TestAdapter(::Dynamic w) : wrapped(w) {}
 	void *__GetHandle() const override { return wrapped.mPtr; }
+	::Dynamic __Run(const Array< ::Dynamic> &inArgs) override { return wrapped->__Run(inArgs); }
+#if (HXCPP_API_LEVEL<500)
 	::Dynamic __run() override { return wrapped(); }
+#endif
 	int __ArgCount() const override { return 0; }
 	void __Mark(::hx::MarkContext *__inCtx) override { HX_MARK_MEMBER(wrapped); }
 	#ifdef HXCPP_VISIT_ALLOCS
