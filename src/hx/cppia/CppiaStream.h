@@ -102,10 +102,28 @@ struct CppiaStream
    }
 
 
+   // The largest op: a CppiaOp holds no value past it, so a cast from a
+   //  larger number is undefined
+   static int maxOp()
+   {
+      int result = 0;
+      #define CPPIA_OP(ident,name,id) if (id>result) result = id;
+      #include "CppiaOps.inc"
+      #undef CPPIA_OP
+      return result;
+   }
+
    CppiaOp getOp()
    {
       if (binary)
-         return (CppiaOp) getInt();
+      {
+         static const int limit = maxOp();
+         // A malformed file can give any number
+         int op = getInt();
+         if (op<0 || op>limit)
+            throw "Unknown op";
+         return (CppiaOp)op;
+      }
       std::string tok = getAsciiToken();
       CppiaOp result = (CppiaOp)opMap[tok];
       if (result==0)

@@ -51,7 +51,10 @@ class Main {
 		untyped __cpp__("runJoined({0})", populate);
 		Gc.run(true);
 		untyped __cpp__("runJoined({0})", release);
-		untyped __cpp__("runJoined({0})", churn);
+		// On the main thread, whose stack never held the buffers: glibc gives a
+		// new thread the stack of one that ended, and words the populating
+		// thread left there kept the old buffers alive through the churn
+		churn();
 		Sys.stderr().writeString('drops=$drops retained=${Std.int(retained / MB)} MB\n');
 		Sys.println("large allocation pressure starts collections: " + (drops > 0));
 		Sys.println("large pressure reclaims released old buffers: " + (retained < 48 * MB));

@@ -356,6 +356,12 @@ class Fuzz {
 	static function serializer(b:Bytes) {
 		if (nesting(b, "aolbqMcwj", "hg") > MAX_NESTING)
 			return;
+		// A reference can make a List that holds itself in a few bytes, and the
+		// std's List.toString has no guard against one: the Unserializer turns
+		// a class or enum name it was given into a String, so such a List as a
+		// name prints until the stack overflows, on every target
+		if (b.toString().indexOf("l") >= 0 && b.toString().indexOf("r") >= 0)
+			return;
 		var v1 = attempt(() -> haxe.Unserializer.run(b.toString()));
 		var s1:String = v1 == null ? null : attempt(() -> serialize(v1));
 		var v2 = s1 == null ? null : attempt(() -> haxe.Unserializer.run(s1));
