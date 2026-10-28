@@ -2,7 +2,7 @@
 libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
-* Fixed programs that use sys.ssl without sockets failing to link on Linux with an undefined reference to hxcpp_alloc_kind: hxcpp_std, linked a second time after hxcpp_ssl, came after the runtime's second copy. Libraries linked twice are now added again last group first, so the runtime's copy follows the libraries that call into it
+* Fixed programs that use sys.ssl without sockets failing to link on Linux with an undefined reference to hxcpp_alloc_kind: hxcpp_std, linked a second time after hxcpp_ssl, came after the runtime's second copy. The runtime is linked once more after all the libraries linked twice, which keep their order
 * Fixed closing, reading or polling a socket handle that a library made in stock hxcpp's layout, as CrossByte's accept does, reading past the handle: the runtime took its own wrapper's later fields from it, and a close wrote through what followed it in memory. Only the descriptor is read from such a handle, and the runtime's wrapper no longer shares its name, and with it its vtable, with a library's
 * Fixed a map that two marking threads marked at once being left unable to fold its buckets: the marker counted itself as a walk over the map without a lock, so the count could stay above zero. Marking no longer counts as a walk, as folding only happens after it (follow-up to libhxcpp #204)
 * Fixed the moving collector storing a moved object's new address as a pointer at an address only 4-byte aligned, which is undefined and which UBSan reported once string data stopped being 8-byte aligned. The address is copied in and out
