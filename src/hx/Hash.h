@@ -948,6 +948,14 @@ struct Hash : public HashBase< typename ELEMENT::Key >
    void iterate(F &inFunc)
    {
       AutoWalk walk(this);
+      iterateBuckets(inFunc);
+   }
+
+   // Without counting a walk, for the collector: it folds only after marking,
+   //  and mark threads can mark one map at once, so their ++ and -- would race
+   template<typename F>
+   void iterateBuckets(F &inFunc)
+   {
       for(int b=0;b<bucketCount;b++)
       {
          Element *el = bucket[b];
@@ -1120,7 +1128,7 @@ struct Hash : public HashBase< typename ELEMENT::Key >
       #endif
 
       HashMarker marker(__inCtx);
-      iterate(marker);
+      iterateBuckets(marker);
    }
 
    #ifdef HXCPP_GC_INCREMENTAL
