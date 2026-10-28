@@ -83,17 +83,25 @@ static bool hasPipe(int inInode)
    closedir(dir);
    return found;
 }
+#else
+// The pipe hooks are for Linux, where the program checks for the pipes
+static void armHook() { }
+static bool hookPaused() { return false; }
+static void releaseHook() { }
+static ::String hookInode() { return ::String("0"); }
+static ::String controlPipe() { return ::String("0"); }
+static bool hasPipe(int inInode) { return false; }
 #endif
 ')
 class Main {
 	static function main() {
 		var args = Sys.args();
-		#if linux
+		// Haxe defines no linux, only the C++ build does, so the system is
+		// asked at run time
 		if (args.length == 2 && args[0] == "child") {
 			Sys.print(untyped __cpp__('hasPipe({0})', Std.parseInt(args[1])) ? "inherited" : "excluded");
 			return;
 		}
-		#end
 		if (Sys.systemName() != "Linux") {
 			Sys.println("unrelated process pipes excluded from concurrent child: true");
 			Sys.println("atomic close-on-exec control: true");
@@ -103,7 +111,6 @@ class Main {
 	}
 
 	static function run() {
-		#if linux
 		var main = Thread.current();
 		Thread.create(() -> {
 			untyped __cpp__('armHook()');
@@ -126,7 +133,6 @@ class Main {
 		Sys.println("atomic close-on-exec control: " + (child(control) == "excluded"));
 		untyped __cpp__('releaseHook()');
 		Thread.readMessage(true);
-		#end
 	}
 
 	static function child(inode:String):String {
