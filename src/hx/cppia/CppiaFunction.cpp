@@ -1168,10 +1168,12 @@ void CppiaFunction::load(CppiaStream &stream,bool inExpectBody)
    }
    if (inExpectBody)
    {
-      // A malformed file can give any expression as the body
-      funExpr = dynamic_cast<ScriptCallable *>(createCppiaExpr(stream));
-      if (!funExpr)
+      // A body is a function, or for an abstract function a bare RETURN. A
+      //  malformed file can give any other expression
+      CppiaExpr *body = createCppiaExpr(stream);
+      if (!dynamic_cast<ScriptCallable *>(body) && std::string(body->getName())!="RetVal")
          throw "Function body is not a function";
+      funExpr = (ScriptCallable *)body;
    }
    stream.module->creatingFunction = 0;
 }
