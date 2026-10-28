@@ -1,6 +1,8 @@
 import sys.io.Process;
 import sys.io.File;
 import sys.FileSystem;
+import sys.thread.Lock;
+import sys.thread.Thread;
 
 using StringTools;
 
@@ -12,13 +14,35 @@ final nodeWithTimeout = "const r = require('child_process').spawnSync(process.ex
 	+ "process.exit(r.status);";
 final emscriptenTimeoutSeconds = 120;
 
+// What the last test wrote to stderr, shown if it fails
+var lastStderr = "";
+
+function printStderr() {
+	if (lastStderr == "") {
+		return;
+	}
+	// The end of it, where a crash or a sanitizer leaves its report
+	final limit = 8000;
+	Sys.println("Stderr:");
+	Sys.println(lastStderr.length > limit ? "..." + lastStderr.substr(lastStderr.length - limit) : lastStderr);
+}
+
 function runOutput(test:String, emscripten:Bool):String {
 	final slash = Sys.systemName() == "Windows" ? "\\" : "/";
 	final proc = emscripten
 		? new Process("node", ["-e", nodeWithTimeout, '$test/bin/Main.js', Std.string(emscriptenTimeoutSeconds * 1000)])
 		: new Process([test, "bin", 'Main'].join(slash));
+	// Read while stdout is, so a test that fills the stderr pipe does not stop
+	final stderrRead = new Lock();
+	var stderr = "";
+	Thread.create(() -> {
+		stderr = proc.stderr.readAll().toString();
+		stderrRead.release();
+	});
 	final stdout = proc.stdout.readAll().toString();
 	final code = proc.exitCode();
+	stderrRead.wait();
+	lastStderr = stderr.replace("\r\n", "\n");
 
 	if (emscripten && code == 124) {
 		throw 'timed out after $emscriptenTimeoutSeconds s';
@@ -98,10 +122,12 @@ function main() {
 		}
 
 		final expectedStdout = File.getContent('$test/stdout.txt').replace("\r\n", "\n");
+		lastStderr = "";
 		final actualStdout = try {
 			runOutput(test, emscripten);
 		} catch (e) {
 			Sys.println('Test $test failed: $e');
+			printStderr();
 			continue;
 		};
 
@@ -112,6 +138,7 @@ function main() {
 			Sys.println(expectedStdout);
 			Sys.println("Actual stdout:");
 			Sys.println(actualStdout);
+			printStderr();
 			continue;
 		}
 
