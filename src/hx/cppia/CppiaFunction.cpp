@@ -1167,7 +1167,12 @@ void CppiaFunction::load(CppiaStream &stream,bool inExpectBody)
       DBGLOG("    arg %c%s:%s\n", arg.optional?'?':' ', cppia.identStr(arg.nameId), cppia.typeStr(arg.typeId) );
    }
    if (inExpectBody)
-      funExpr = (ScriptCallable *)createCppiaExpr(stream);
+   {
+      // A malformed file can give any expression as the body
+      funExpr = dynamic_cast<ScriptCallable *>(createCppiaExpr(stream));
+      if (!funExpr)
+         throw "Function body is not a function";
+   }
    stream.module->creatingFunction = 0;
 }
 
