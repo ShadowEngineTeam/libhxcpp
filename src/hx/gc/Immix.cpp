@@ -4911,7 +4911,9 @@ public:
                         memcpy(buffer, src, size);
                         //GCLOG("   move %p -> %p %d (%08x %08x )\n", src, buffer, size, buffer[-1], buffer[1] );
 
-                        *(unsigned int **)src = buffer;
+                        // An object, string data among them, need only be 4-byte
+                        //  aligned, so the pointer is copied rather than stored
+                        memcpy(src, &buffer, sizeof(buffer));
                         header = IMMIX_OBJECT_HAS_MOVED;
                         moveObjs++;
 
@@ -4971,7 +4973,8 @@ public:
             if ( ((*(unsigned int **)ioPtr)[-1]) == IMMIX_OBJECT_HAS_MOVED )
             {
                //GCLOG("  patch object to  %p -> %p\n", *ioPtr,  (*(hx::Object ***)ioPtr)[0]);
-               *ioPtr = (*(hx::Object ***)ioPtr)[0];
+               // Copied: the moved object may be only 4-byte aligned
+               memcpy(ioPtr, *ioPtr, sizeof(*ioPtr));
                //GCLOG("    %08x %08x ...\n", ((int *)(*ioPtr))[0], ((int *)(*ioPtr))[1] );
             }
          }
@@ -4981,7 +4984,7 @@ public:
             if ( ((*(unsigned int **)ioPtr)[-1]) == IMMIX_OBJECT_HAS_MOVED )
             {
                //GCLOG("  patch reference to  %p -> %p\n", *ioPtr,  (*(void ***)ioPtr)[0]);
-               *ioPtr = (*(void ***)ioPtr)[0];
+               memcpy(ioPtr, *ioPtr, sizeof(*ioPtr));
                //GCLOG("    %08x %08x ...\n", ((int *)(*ioPtr))[0], ((int *)(*ioPtr))[1] );
             }
          }

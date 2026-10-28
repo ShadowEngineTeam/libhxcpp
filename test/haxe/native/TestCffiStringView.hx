@@ -87,11 +87,14 @@ class TestCffiStringView extends Test
       for(i in 0...3)
          Gc.run(true);
       Gc.compact();
-      var ok = true;
+      var wrong:String = null;
       for(i in 0...64)
-         if (viewText(views[i])!=lambdas(i + 1))
-            ok = false;
-      Assert.isTrue(ok);
+      {
+         var text = viewText(views[i]);
+         if (wrong==null && text!=lambdas(i + 1))
+            wrong = 'view $i has ${text.length} characters, ${text.charCodeAt(0)} first: "${text.substr(0, 16)}"';
+      }
+      Assert.isNull(wrong, wrong);
    }
 
    // Threads asking for the first view together all get the same text

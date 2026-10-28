@@ -13,7 +13,13 @@ for test in */; do
    test=${test%/}
    [ -f "$test/build.hxml" ] || continue
    total=$((total + 1))
-   if ! (cd "$test/bin" && neko "$root/hxcpp.n" Build.xml -DHXCPP="$root/" > build.log 2>&1); then
+   # Haxe passes -debug to the build tool on its command line and leaves it
+   # out of Options.txt, so a debug test would build as a release one
+   debug=
+   if grep -qE '^[[:space:]]*-?-debug[[:space:]]*$' "$test/build.hxml"; then
+      debug=-Ddebug
+   fi
+   if ! (cd "$test/bin" && neko "$root/hxcpp.n" Build.xml -DHXCPP="$root/" $debug > build.log 2>&1); then
       echo "Failed to build test $test"
       tail -30 "$test/bin/build.log"
       continue

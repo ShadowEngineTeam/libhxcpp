@@ -14,6 +14,17 @@ race_top:GlobalAllocator::GetFreeBlock
 race_top:GlobalAllocator::AllocMoreBlocks
 race_top:GlobalAllocator::ThreadLoop
 
+# GC: the zeroing thread. A block's mZeroed is read before the compare-and-
+# swap on its mZeroLock that claims it, the pool's abort flag and running set
+# are read as hints and checked again under sThreadPoolLock. Release builds
+# inline these into the entries above; debug builds do not.
+race_top:BlockDataInfo::tryZero
+race_top:BlockDataInfo::zeroAndUnlock
+race_top:GlobalAllocator::ZeroAsyncJit
+race_top:GlobalAllocator::StopThreadJobs
+race_top:GlobalAllocator::onZeroedBlockDequeued
+race_top:GlobalAllocator::finishThreadJob
+
 # GC: WaitForSafe, inlined into Collect, clears a running thread's allocation
 # limits without a lock so that its next allocation fails and it parks.
 race_top:GlobalAllocator::Collect

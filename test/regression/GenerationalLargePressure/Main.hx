@@ -52,6 +52,7 @@ class Main {
 		Gc.run(true);
 		untyped __cpp__("runJoined({0})", release);
 		untyped __cpp__("runJoined({0})", churn);
+		Sys.stderr().writeString('drops=$drops retained=${Std.int(retained / MB)} MB\n');
 		Sys.println("large allocation pressure starts collections: " + (drops > 0));
 		Sys.println("large pressure reclaims released old buffers: " + (retained < 48 * MB));
 		Gc.run(true);

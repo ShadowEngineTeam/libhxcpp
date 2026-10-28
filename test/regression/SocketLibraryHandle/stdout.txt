@@ -1,0 +1,1 @@
+a library's socket handle closes without the memory after it: true

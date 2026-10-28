@@ -87,6 +87,7 @@ SemaphoreLoopCollect: threads
 SocketEmptyBytes: sockets
 SocketIpv6Accept: sockets
 SocketIpv6ConcurrentFormat: threads (std::thread, which needs a pthreads build)
+SocketLibraryHandle: sockets
 SocketReadAhead: sockets
 SocketTinyTimeout: sockets
 SqliteNativeMemoryPressure: threads (std::thread, which needs a pthreads build)

@@ -256,6 +256,13 @@ struct ReadAheadLock
 
 static void forgetHanded(ReadAhead *inAhead);
 
+// The vtable of the wrappers made here
+static std::atomic<void *> sWrapperVtable(0);
+
+// In an unnamed namespace: libraries that make socket handles of their own,
+// as CrossByte's accept does, declare a SocketWrapper too, and two classes of
+// one name would share a vtable
+namespace {
 struct SocketWrapper : public hx::Object
 {
    HX_IS_INSTANCE_OF enum { _hx_ClassId = hx::clsIdSocket };
@@ -270,8 +277,23 @@ struct SocketWrapper : public hx::Object
 
    int __GetType() const HXCPP_OVERRIDE { return socketType; }
 
+   // A handle of the socket kind that a library made has stock hxcpp's
+   //  layout, the descriptor after the object header and nothing more, so
+   //  only the descriptor is read from it
+   bool own() const
+   {
+      return *(void *const *)this == sWrapperVtable.load(std::memory_order_relaxed);
+   }
+
+   ReadAhead *currentAhead()
+   {
+      return own() ? ahead.load(std::memory_order_acquire) : 0;
+   }
+
    ReadAhead *readAhead()
    {
+      if (!own())
+         return 0;
       ReadAhead *a = ahead.load(std::memory_order_acquire);
       if (!a && stream)
       {
@@ -286,9 +308,11 @@ struct SocketWrapper : public hx::Object
 
    bool holdsBytes()
    {
-      ReadAhead *a = ahead.load(std::memory_order_acquire);
+      ReadAhead *a = currentAhead();
       return a && a->held.load(std::memory_order_relaxed);
    }
+
+   unsigned int currentSerial() const { return own() ? serial : 0; }
 
    // A socket that is dropped without close still releases its descriptor
    static void finalize(Dynamic inObj)
@@ -314,14 +338,17 @@ struct SocketWrapper : public hx::Object
       wrap->stream = inStream;
       wrap->serial = ++sNextSocketSerial;
       wrap->ahead = 0;
+      sWrapperVtable.store(*(void **)wrap, std::memory_order_relaxed);
       _hx_set_finalizer(wrap, finalize);
       return wrap;
    }
 };
+}
 
 
-// The wrapper of a handle, or null for a sys.net.Socket without one
-SocketWrapper *val_wrapper(Dynamic inValue)
+// The wrapper of a handle, or null for a sys.net.Socket without one. A
+//  library's handle of the socket kind comes back as one too, for its socket
+static SocketWrapper *val_wrapper(Dynamic inValue)
 {
    if (inValue.mPtr)
    {
@@ -581,7 +608,7 @@ void _hx_std_socket_close( Dynamic handle )
       sSocketsClosed++;
    }
    reset_sock(handle);
-   ReadAhead *ahead = wrap ? wrap->ahead.load() : 0;
+   ReadAhead *ahead = wrap ? wrap->currentAhead() : 0;
    if (ahead)
    {
       ahead->discard();
@@ -1761,7 +1788,7 @@ void _hx_std_socket_shutdown( Dynamic o, bool r, bool w )
    // none, or fail on Windows, so the bytes read ahead go too: Windows still
    // reports them as readable. Linux goes on giving what it holds, and the
    // bytes read ahead come first, as they did.
-   ReadAhead *ahead = r && wrap ? wrap->ahead.load() : 0;
+   ReadAhead *ahead = r && wrap ? wrap->currentAhead() : 0;
    if (ahead)
       #ifdef NEKO_WINDOWS
       ahead->discard(true);
@@ -1988,7 +2015,7 @@ struct PollQueue
       FdSlots &at = slotOf[sock];
       if (!at.pending)
       {
-         Slot slot = { sock, inWrap->serial, 0, 0, -1, -1 };
+         Slot slot = { sock, inWrap->currentSerial(), 0, 0, -1, -1 };
          slots.push_back(slot);
          at.pending = (int)slots.size();
       }

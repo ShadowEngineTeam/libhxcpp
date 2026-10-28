@@ -2,9 +2,14 @@
 #include <hx/thread/ThreadLocal.hpp>
 static bool legacyLeaks()
 {
+#if (HXCPP_API_LEVEL<500)
 	__hxcpp_tls_set(0, ::String("legacy"));
 	hx::thread::ThreadLocal_obj *local = new hx::thread::ThreadLocal_obj();
 	return local->get() != null();
+#else
+	// API level 500 has no legacy slots to share an id with
+	return false;
+#endif
 }
 static void fillLocals()
 {

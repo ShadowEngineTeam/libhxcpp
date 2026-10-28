@@ -465,6 +465,10 @@ class BuildTool
          PathManager.mkdir(mCompiler.mObjDir);
 
       var baseDir = Sys.getCwd();
+      // Libraries linked a second time, last group first: a later group's
+      //  library can call into an earlier one, as hxcpp_std does into the
+      //  runtime, so the runtime's second copy has to come after the others
+      var linkAgain = new Array<String>();
       for(group in target.mFileGroups)
       {
          var useCache = CompileCache.hasCache && group.mUseCache;
@@ -702,7 +706,7 @@ class BuildTool
             target.mAutoLibs.push(linker.mLastOutName);
             // Linux the libraries must be added again if the references were not resolved the firs time
             if (group.mAddTwice)
-               target.mLibs.push(linker.mLastOutName);
+               linkAgain.unshift(linker.mLastOutName);
             Profile.pop();
          }
          else if (nvcc)
@@ -722,6 +726,8 @@ class BuildTool
          if (group.mDir!="." && group.mSetImportDir)
             Sys.setCwd( baseDir );
       }
+      for(lib in linkAgain)
+         target.mLibs.push(lib);
 
       switch(target.mTool)
       {
