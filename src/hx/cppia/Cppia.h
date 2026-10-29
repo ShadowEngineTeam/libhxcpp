@@ -515,7 +515,8 @@ struct CppiaFunction : public CppiaOwned<CppiaFunction>
    std::vector<ArgInfo> args;
    ScriptCallable       *funExpr;
    // The body as it came. A class's __init__ is an expression of any kind,
-   //  which is not a ScriptCallable, and has no funExpr
+   //  and an abstract function's a bare RETURN: neither is a ScriptCallable,
+   //  and neither has a funExpr
    CppiaExpr            *body;
 
    CppiaFunction(CppiaModule *inCppia,bool inIsStatic,bool inIsDynamic);

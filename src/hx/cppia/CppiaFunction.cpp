@@ -1168,16 +1168,14 @@ void CppiaFunction::load(CppiaStream &stream,bool inExpectBody)
    }
    if (inExpectBody)
    {
-      // A body is a function, or for an abstract function a bare RETURN. A
-      //  class's __init__ is an expression of any kind, which the class runs
-      //  as it is. A malformed file can give any other expression
+      // A body is a function, or for an abstract function a bare RETURN, which
+      //  is never run. A class's __init__ is an expression of any kind, which
+      //  the class runs as it is. Neither is a ScriptCallable, so neither has
+      //  a funExpr. A malformed file can give any other expression
       body = createCppiaExpr(stream);
-      if (name=="__init__")
-         funExpr = 0;
-      else if (!dynamic_cast<ScriptCallable *>(body) && std::string(body->getName())!="RetVal")
+      funExpr = dynamic_cast<ScriptCallable *>(body);
+      if (!funExpr && name!="__init__" && std::string(body->getName())!="RetVal")
          throw "Function body is not a function";
-      else
-         funExpr = (ScriptCallable *)body;
    }
    stream.module->creatingFunction = 0;
 }
