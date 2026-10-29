@@ -56,11 +56,11 @@ struct SubStrExpr : public StringExpr
          return val.substring(start,end);
    }
    #ifdef CPPIA_JIT
-   static void SLJIT_CALL runSubstr(String *ioValue, int start, hx::Object *end)
+   static void SLJIT_FUNC runSubstr(String *ioValue, int start, hx::Object *end)
    {
       JitStore(ioValue, JitLoad(ioValue).substr(start, Dynamic(end)));
    }
-   static void SLJIT_CALL runSubstring(String *ioValue, int start, hx::Object *end)
+   static void SLJIT_FUNC runSubstring(String *ioValue, int start, hx::Object *end)
    {
       JitStore(ioValue, JitLoad(ioValue).substring(start, Dynamic(end)));
    }
@@ -100,7 +100,7 @@ struct StringIteratorExpr : public StringExpr
    }
 
    #ifdef CPPIA_JIT
-   static hx::Object *SLJIT_CALL run(String *inValue)
+   static hx::Object *SLJIT_FUNC run(String *inValue)
    {
       String value = JitLoad(inValue);
       return ( KEYS ? value.keyValueIterator() : value.iterator() ).mPtr;
@@ -134,7 +134,7 @@ struct ToCaseExpr : public StringExpr
          return val.toLowerCase();
    }
    #ifdef CPPIA_JIT
-   static void SLJIT_CALL strToCase(String *ioVal)
+   static void SLJIT_FUNC strToCase(String *ioVal)
    {
       String value = JitLoad(ioVal);
       JitStore(ioVal, UPPER ? value.toUpperCase() : value.toLowerCase());
@@ -225,15 +225,15 @@ struct CharAtExpr : public StringExpr
    }
 
    #ifdef CPPIA_JIT
-   static hx::Object *SLJIT_CALL runCharCodeAt(String *inValue, int inIndex)
+   static hx::Object *SLJIT_FUNC runCharCodeAt(String *inValue, int inIndex)
    {
       return (JitLoad(inValue).charCodeAt(inIndex)).mPtr;
    }
-   static int SLJIT_CALL runCca(String *inValue, int inIndex)
+   static int SLJIT_FUNC runCca(String *inValue, int inIndex)
    {
       return (JitLoad(inValue).cca(inIndex));
    }
-   static void SLJIT_CALL runCharAt(String *ioValue, int inIndex)
+   static void SLJIT_FUNC runCharAt(String *ioValue, int inIndex)
    {
       JitStore(ioValue, JitLoad(ioValue).charAt(inIndex));
    }
@@ -313,7 +313,7 @@ struct SplitExpr : public CppiaExpr
 
 
    #ifdef CPPIA_JIT
-   static hx::Object *SLJIT_CALL runSplit(String *inValue, String *sep)
+   static hx::Object *SLJIT_FUNC runSplit(String *inValue, String *sep)
    {
       return (JitLoad(inValue).split(JitLoad(sep))).mPtr;
    }
@@ -377,11 +377,11 @@ struct IndexOfExpr : public CppiaExpr
 
 
    #ifdef CPPIA_JIT
-   static int SLJIT_CALL runIndexOf(String *ioValue, String *sought, hx::Object *first)
+   static int SLJIT_FUNC runIndexOf(String *ioValue, String *sought, hx::Object *first)
    {
       return JitLoad(ioValue).indexOf(JitLoad(sought), Dynamic(first));
    }
-   static int SLJIT_CALL runLastIndexOf(String *ioValue, String *sought, hx::Object *first)
+   static int SLJIT_FUNC runLastIndexOf(String *ioValue, String *sought, hx::Object *first)
    {
       return JitLoad(ioValue).lastIndexOf(JitLoad(sought), Dynamic(first));
    }
