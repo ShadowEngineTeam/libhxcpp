@@ -1040,7 +1040,7 @@ namespace cpp
             { \
                 auto casted = dynamic_cast<const  _hx_virtualarray_##name *>(inRhs); \
                 if (!casted) return 1; \
-                if (mThis != casted->mThis) return -1; \
+                if (mThis.GetPtr() != casted->mThis.GetPtr()) return -1; \
                 return 0; \
             } \
         }; \

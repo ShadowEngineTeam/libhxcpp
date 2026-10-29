@@ -1167,7 +1167,15 @@ void CppiaFunction::load(CppiaStream &stream,bool inExpectBody)
       DBGLOG("    arg %c%s:%s\n", arg.optional?'?':' ', cppia.identStr(arg.nameId), cppia.typeStr(arg.typeId) );
    }
    if (inExpectBody)
-      funExpr = (ScriptCallable *)createCppiaExpr(stream);
+   {
+      // A body is a function, or for an abstract function a bare RETURN. A
+      //  class's __init__ is an expression of any kind, which the class runs
+      //  as it is. A malformed file can give any other expression
+      CppiaExpr *body = createCppiaExpr(stream);
+      if (name!="__init__" && !dynamic_cast<ScriptCallable *>(body) && std::string(body->getName())!="RetVal")
+         throw "Function body is not a function";
+      funExpr = (ScriptCallable *)body;
+   }
    stream.module->creatingFunction = 0;
 }
 

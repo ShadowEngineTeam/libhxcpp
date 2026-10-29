@@ -256,6 +256,13 @@ struct ReadAheadLock
 
 static void forgetHanded(ReadAhead *inAhead);
 
+// The vtable of the wrappers made here
+static std::atomic<void *> sWrapperVtable(0);
+
+// In an unnamed namespace: libraries that make socket handles of their own,
+// as CrossByte's accept does, declare a SocketWrapper too, and two classes of
+// one name would share a vtable
+namespace {
 struct SocketWrapper : public hx::Object
 {
    HX_IS_INSTANCE_OF enum { _hx_ClassId = hx::clsIdSocket };
@@ -269,6 +276,11 @@ struct SocketWrapper : public hx::Object
    std::atomic<ReadAhead *> ahead;
 
    int __GetType() const HXCPP_OVERRIDE { return socketType; }
+
+   ReadAhead *currentAhead()
+   {
+      return ahead.load(std::memory_order_acquire);
+   }
 
    ReadAhead *readAhead()
    {
@@ -286,9 +298,10 @@ struct SocketWrapper : public hx::Object
 
    bool holdsBytes()
    {
-      ReadAhead *a = ahead.load(std::memory_order_acquire);
+      ReadAhead *a = currentAhead();
       return a && a->held.load(std::memory_order_relaxed);
    }
+
 
    // A socket that is dropped without close still releases its descriptor
    static void finalize(Dynamic inObj)
@@ -314,14 +327,17 @@ struct SocketWrapper : public hx::Object
       wrap->stream = inStream;
       wrap->serial = ++sNextSocketSerial;
       wrap->ahead = 0;
+      sWrapperVtable.store(*(void **)wrap, std::memory_order_relaxed);
       _hx_set_finalizer(wrap, finalize);
       return wrap;
    }
 };
+}
 
 
-// The wrapper of a handle, or null for a sys.net.Socket without one
-SocketWrapper *val_wrapper(Dynamic inValue)
+// The object of a handle of the socket kind, or null for a sys.net.Socket
+//  without one: a wrapper made here, or a library's in stock hxcpp's layout
+static hx::Object *val_handle(Dynamic inValue)
 {
    if (inValue.mPtr)
    {
@@ -335,20 +351,42 @@ SocketWrapper *val_wrapper(Dynamic inValue)
       }
 
       if (type==socketType)
-         return static_cast<SocketWrapper *>(inValue.mPtr);
+         return inValue.mPtr;
    }
 
    hx::Throw(HX_CSTRING("Invalid socket handle"));
    return 0;
 }
 
+// Where both layouts keep the descriptor: right after the object header. A
+//  library's handle is not a SocketWrapper, so it is not reached as one
+static SOCKET &handleSocket(hx::Object *inHandle)
+{
+   const size_t offset = (sizeof(hx::Object) + alignof(SOCKET) - 1) / alignof(SOCKET) * alignof(SOCKET);
+   return *reinterpret_cast<SOCKET *>(reinterpret_cast<char *>(inHandle) + offset);
+}
+
+static void checkWrapperLayout(SocketWrapper *inWrap)
+{
+   if (&handleSocket(inWrap)!=&inWrap->socket)
+      hx::Throw(HX_CSTRING("SocketWrapper keeps its descriptor where handleSocket does not look"));
+}
+
+// The wrapper, for a handle made here, with its read-ahead and poll serial
+static SocketWrapper *ownWrapper(hx::Object *inHandle)
+{
+   if (!inHandle || *reinterpret_cast<void **>(inHandle)!=sWrapperVtable.load(std::memory_order_relaxed))
+      return 0;
+   return static_cast<SocketWrapper *>(inHandle);
+}
+
 
 SOCKET val_sock(Dynamic inValue)
 {
-   SocketWrapper *wrap = val_wrapper(inValue);
+   hx::Object *handle = val_handle(inValue);
    // Not 0 - on posix that is stdin and operations would silently
    // target the console instead of failing
-   return wrap ? wrap->socket : INVALID_SOCKET;
+   return handle ? handleSocket(handle) : INVALID_SOCKET;
 }
 
 
@@ -366,7 +404,7 @@ void reset_sock(Dynamic inValue)
       }
 
       if (type==socketType) {
-         static_cast<SocketWrapper *>(inValue.mPtr)->socket = INVALID_SOCKET;
+         handleSocket(inValue.mPtr) = INVALID_SOCKET;
          return;
       }
    }
@@ -439,10 +477,11 @@ static void forgetHanded(ReadAhead *inAhead)
 // bytes it holds, which TLS would have read from the kernel, go to TLS first.
 size_t _hx_std_socket_handle(Dynamic inSocket)
 {
-   SocketWrapper *wrap = val_wrapper(inSocket);
-   if (!wrap)
+   hx::Object *handle = val_handle(inSocket);
+   if (!handle)
       return (size_t)INVALID_SOCKET;
-   ReadAhead *ahead = wrap->readAhead();
+   SocketWrapper *wrap = ownWrapper(handle);
+   ReadAhead *ahead = wrap ? wrap->readAhead() : 0;
    if (ahead)
    {
       ahead->stopped = true;
@@ -461,7 +500,7 @@ size_t _hx_std_socket_handle(Dynamic inSocket)
          }
       }
    }
-   return (size_t)wrap->socket;
+   return (size_t)handleSocket(handle);
 }
 
 // For SSL.cpp: copies to outBytes what a socket handed to TLS still holds of
@@ -558,7 +597,9 @@ Dynamic _hx_std_socket_new( bool udp, bool ipv6 )
       if( old >= 0 ) fcntl(s,F_SETFD,old|FD_CLOEXEC);
    #endif
 
-   return SocketWrapper::create(s,!udp);
+   SocketWrapper *wrap = SocketWrapper::create(s,!udp);
+   checkWrapperLayout(wrap);
+   return wrap;
 }
 
 /**
@@ -567,8 +608,9 @@ Dynamic _hx_std_socket_new( bool udp, bool ipv6 )
 **/
 void _hx_std_socket_close( Dynamic handle )
 {
-   SocketWrapper *wrap = val_wrapper(handle);
-   SOCKET s = wrap ? wrap->socket : INVALID_SOCKET;
+   hx::Object *object = val_handle(handle);
+   SocketWrapper *wrap = ownWrapper(object);
+   SOCKET s = object ? handleSocket(object) : INVALID_SOCKET;
    if( s != INVALID_SOCKET )
    {
       // No EINTR retry: posix close() releases the descriptor even when
@@ -581,7 +623,7 @@ void _hx_std_socket_close( Dynamic handle )
       sSocketsClosed++;
    }
    reset_sock(handle);
-   ReadAhead *ahead = wrap ? wrap->ahead.load() : 0;
+   ReadAhead *ahead = wrap ? wrap->currentAhead() : 0;
    if (ahead)
    {
       ahead->discard();
@@ -646,8 +688,9 @@ int _hx_std_socket_send( Dynamic o, Array<unsigned char> buf, int p, int l )
 **/
 int _hx_std_socket_recv( Dynamic o, Array<unsigned char> buf, int p, int l )
 {
-   SocketWrapper *wrap = val_wrapper(o);
-   SOCKET sock = wrap ? wrap->socket : INVALID_SOCKET;
+   hx::Object *handle = val_handle(o);
+   SocketWrapper *wrap = ownWrapper(handle);
+   SOCKET sock = handle ? handleSocket(handle) : INVALID_SOCKET;
    int dlen = buf->length;
    if( p < 0 || l < 0 || p > dlen || l > dlen - p )
       return 0;
@@ -690,8 +733,9 @@ int _hx_std_socket_recv( Dynamic o, Array<unsigned char> buf, int p, int l )
 **/
 int _hx_std_socket_recv_char( Dynamic o )
 {
-   SocketWrapper *wrap = val_wrapper(o);
-   SOCKET sock = wrap ? wrap->socket : INVALID_SOCKET;
+   hx::Object *handle = val_handle(o);
+   SocketWrapper *wrap = ownWrapper(handle);
+   SOCKET sock = handle ? handleSocket(handle) : INVALID_SOCKET;
 
    ReadAhead *ahead = wrap ? wrap->readAhead() : 0;
    ReadAheadLock lock(ahead);
@@ -783,8 +827,9 @@ void _hx_std_socket_write( Dynamic o, Array<unsigned char> buf )
 **/
 Array<unsigned char> _hx_std_socket_read( Dynamic o )
 {
-   SocketWrapper *wrap = val_wrapper(o);
-   SOCKET sock = wrap ? wrap->socket : INVALID_SOCKET;
+   hx::Object *handle = val_handle(o);
+   SocketWrapper *wrap = ownWrapper(handle);
+   SOCKET sock = handle ? handleSocket(handle) : INVALID_SOCKET;
    Array<unsigned char> result = Array_obj<unsigned char>::__new();
    ReadAhead *ahead = wrap ? wrap->readAhead() : 0;
    ReadAheadLock lock(ahead);
@@ -1194,7 +1239,7 @@ static bool holds_read_ahead( Array<Dynamic> a )
       return false;
    for(int i=0;i<a->length;i++)
    {
-      SocketWrapper *wrap = val_wrapper(a[i]);
+      SocketWrapper *wrap = ownWrapper(val_handle(a[i]));
       if( wrap && wrap->socket != INVALID_SOCKET && wrap->holdsBytes() )
          return true;
    }
@@ -1205,7 +1250,7 @@ static void add_read_ahead( Array<Dynamic> a, fd_set *tmp )
 {
    for(int i=0;i<a->length;i++)
    {
-      SocketWrapper *wrap = val_wrapper(a[i]);
+      SocketWrapper *wrap = ownWrapper(val_handle(a[i]));
       if( wrap && wrap->socket != INVALID_SOCKET && wrap->holdsBytes() && !FD_ISSET(wrap->socket,tmp) )
          FD_SET(wrap->socket,tmp);
    }
@@ -1731,8 +1776,9 @@ void _hx_std_socket_set_timeout( Dynamic o, Dynamic t )
 **/
 void _hx_std_socket_shutdown( Dynamic o, bool r, bool w )
 {
-   SocketWrapper *wrap = val_wrapper(o);
-   SOCKET sock = wrap ? wrap->socket : INVALID_SOCKET;
+   hx::Object *handle = val_handle(o);
+   SocketWrapper *wrap = ownWrapper(handle);
+   SOCKET sock = handle ? handleSocket(handle) : INVALID_SOCKET;
    if( !r && !w )
       return;
 
@@ -1761,7 +1807,7 @@ void _hx_std_socket_shutdown( Dynamic o, bool r, bool w )
    // none, or fail on Windows, so the bytes read ahead go too: Windows still
    // reports them as readable. Linux goes on giving what it holds, and the
    // bytes read ahead come first, as they did.
-   ReadAhead *ahead = r && wrap ? wrap->ahead.load() : 0;
+   ReadAhead *ahead = r && wrap ? wrap->currentAhead() : 0;
    if (ahead)
       #ifdef NEKO_WINDOWS
       ahead->discard(true);
@@ -1847,7 +1893,7 @@ static int pollType = 0;
 
 SOCKET wrapped_sock(Dynamic inWrapper)
 {
-   return inWrapper.mPtr ? static_cast<SocketWrapper *>(inWrapper.mPtr)->socket : INVALID_SOCKET;
+   return inWrapper.mPtr ? handleSocket(inWrapper.mPtr) : INVALID_SOCKET;
 }
 
 #ifdef HX_POLL_QUEUE
@@ -1974,9 +2020,9 @@ struct PollQueue
       #endif
    }
 
-   void add(int inIndex, SocketWrapper *inWrap, bool inRead)
+   void add(int inIndex, hx::Object *inHandle, bool inRead)
    {
-      int sock = inWrap ? inWrap->socket : INVALID_SOCKET;
+      int sock = inHandle ? handleSocket(inHandle) : INVALID_SOCKET;
       (inRead ? readFds : writeFds)[inIndex] = sock;
       if (sock < 0)
          return;
@@ -1988,7 +2034,8 @@ struct PollQueue
       FdSlots &at = slotOf[sock];
       if (!at.pending)
       {
-         Slot slot = { sock, inWrap->serial, 0, 0, -1, -1 };
+         SocketWrapper *wrap = ownWrapper(inHandle);
+         Slot slot = { sock, wrap ? wrap->serial : 0, 0, 0, -1, -1 };
          slots.push_back(slot);
          at.pending = (int)slots.size();
       }
@@ -2024,9 +2071,9 @@ struct PollQueue
       closedSeen = sSocketsClosed.load();
 
       for(int i=0;i<len;i++)
-         add(i, static_cast<SocketWrapper *>(inReads[i].mPtr), true);
+         add(i, inReads[i].mPtr, true);
       for(int i=0;i<wlen;i++)
-         add(i, static_cast<SocketWrapper *>(inWrites[i].mPtr), false);
+         add(i, inWrites[i].mPtr, false);
 
       // The last prepare's registrations carry over for the same socket.
       //  Those of a socket left out, or closed and its number given to
@@ -2281,7 +2328,7 @@ void poll_read_ahead(polldata *p, std::vector<int> &outHeld)
       return;
    for(int i=0;i<p->rsockets->length;i++)
    {
-      SocketWrapper *wrap = static_cast<SocketWrapper *>(p->rsockets[i].mPtr);
+      SocketWrapper *wrap = ownWrapper(p->rsockets[i].mPtr);
       if (wrap && wrap->socket != INVALID_SOCKET && wrap->holdsBytes())
          outHeld.push_back(i);
    }
@@ -2339,10 +2386,10 @@ Array<Dynamic> _hx_std_socket_poll_prepare( Dynamic pdata, Array<Dynamic> rsocks
    //  cannot drop a socket the poll still has the descriptor of
    Array<Dynamic> rwraps = Array_obj<Dynamic>::__new(len,len);
    for(int i=0;i<len;i++)
-      rwraps[i] = val_wrapper(rsocks[i]);
+      rwraps[i] = val_handle(rsocks[i]);
    Array<Dynamic> wwraps = Array_obj<Dynamic>::__new(wlen,wlen);
    for(int i=0;i<wlen;i++)
-      wwraps[i] = val_wrapper(wsocks[i]);
+      wwraps[i] = val_handle(wsocks[i]);
    p->rsockets = len ? rwraps : null();
    HX_OBJ_WB_GET(p, p->rsockets.mPtr);
    p->wsockets = wlen ? wwraps : null();
@@ -2698,8 +2745,9 @@ int _hx_std_socket_send_to( Dynamic o, Array<unsigned char> buf, int p, int l, D
 int _hx_std_socket_recv_from( Dynamic o, Array<unsigned char> buf, int p, int l, Dynamic outAddr)
 {
    int retry = 0;
-   SocketWrapper *wrap = val_wrapper(o);
-   SOCKET sock = wrap ? wrap->socket : INVALID_SOCKET;
+   hx::Object *handle = val_handle(o);
+   SocketWrapper *wrap = ownWrapper(handle);
+   SOCKET sock = handle ? handleSocket(handle) : INVALID_SOCKET;
 
    int dlen = buf->length;
    if( p < 0 || l < 0 || p > dlen || l > dlen - p )
