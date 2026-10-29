@@ -14,9 +14,14 @@ for test in */; do
    [ -f "$test/build.hxml" ] || continue
    total=$((total + 1))
    # Haxe passes -debug to the build tool on its command line and leaves it
-   # out of Options.txt, so a debug test would build as a release one
+   # out of Options.txt, so a debug test would build as a release one. Only
+   # the section that makes bin counts: a cppia script's -debug is its own
    debug=
-   if grep -qE '^[[:space:]]*-?-debug[[:space:]]*$' "$test/build.hxml"; then
+   if tr -d '' < "$test/build.hxml" | awk '
+         /^[[:space:]]*--next/ { if (cpp && dbg) found=1; cpp=0; dbg=0; next }
+         /^[[:space:]]*-?-cpp[[:space:]]+bin[[:space:]]*$/ { cpp=1 }
+         /^[[:space:]]*-?-debug[[:space:]]*$/ { dbg=1 }
+         END { exit !(found || (cpp && dbg)) }'; then
       debug=-Ddebug
    fi
    if ! (cd "$test/bin" && neko "$root/hxcpp.n" Build.xml -DHXCPP="$root/" $debug > build.log 2>&1); then
