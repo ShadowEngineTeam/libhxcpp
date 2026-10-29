@@ -1143,7 +1143,7 @@ ScriptCallable *getClosureFunction(hx::Object *inObj)
 // --- CppiaFunction ----
 
 CppiaFunction::CppiaFunction(CppiaModule *inCppia,bool inIsStatic,bool inIsDynamic) :
-   cppia(*inCppia), isStatic(inIsStatic), isDynamic(inIsDynamic), funExpr(0)
+   cppia(*inCppia), isStatic(inIsStatic), isDynamic(inIsDynamic), funExpr(0), body(0)
 {
    linked = false;
    vtableSlot = -1;
@@ -1171,10 +1171,13 @@ void CppiaFunction::load(CppiaStream &stream,bool inExpectBody)
       // A body is a function, or for an abstract function a bare RETURN. A
       //  class's __init__ is an expression of any kind, which the class runs
       //  as it is. A malformed file can give any other expression
-      CppiaExpr *body = createCppiaExpr(stream);
-      if (name!="__init__" && !dynamic_cast<ScriptCallable *>(body) && std::string(body->getName())!="RetVal")
+      body = createCppiaExpr(stream);
+      if (name=="__init__")
+         funExpr = 0;
+      else if (!dynamic_cast<ScriptCallable *>(body) && std::string(body->getName())!="RetVal")
          throw "Function body is not a function";
-      funExpr = (ScriptCallable *)body;
+      else
+         funExpr = (ScriptCallable *)body;
    }
    stream.module->creatingFunction = 0;
 }

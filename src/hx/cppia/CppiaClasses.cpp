@@ -1419,7 +1419,7 @@ void CppiaClassInfo::linkTypes()
       }
       else if (staticFunctions[i]->name == "__init__")
       {
-         initExpr = staticFunctions[i]->funExpr;
+         initExpr = staticFunctions[i]->body;
          staticFunctions.erase( staticFunctions.begin() + i);
       }
       else
