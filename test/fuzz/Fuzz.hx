@@ -367,7 +367,7 @@ class Fuzz {
 		var v2 = s1 == null ? null : attempt(() -> haxe.Unserializer.run(s1));
 		var s2:String = v2 == null ? null : attempt(() -> serialize(v2));
 		var v3 = s2 == null ? null : attempt(() -> haxe.Unserializer.run(s2));
-		if (v3 != null && canon(v2) != canon(v3))
+		if (v3 != null && differ(v2, v3))
 			fail('serialized $s1 then $s2');
 	}
 
@@ -397,7 +397,7 @@ class Fuzz {
 		if (v1 == null)
 			return;
 		var s2 = haxe.Json.stringify(v1);
-		if (canon(v1) != canon(haxe.Json.parse(s2)))
+		if (differ(v1, haxe.Json.parse(s2)))
 			fail('printed $s1 then $s2');
 	}
 
@@ -548,11 +548,33 @@ class Fuzz {
 	}
 
 	/**
+		Whether two values have different texts from canon(). A value that
+		takes more than CANON_WORK steps is not compared: the serializer's
+		references can share a value at every level, as "ay1:aoy0:r0gr0h"
+		does, and the depth cut-off alone leaves 2^32 steps.
+	**/
+	static function differ(a:Dynamic, b:Dynamic):Bool {
+		try {
+			canonLeft = CANON_WORK;
+			var ta = canon(a);
+			canonLeft = CANON_WORK;
+			return ta != canon(b);
+		} catch (e:CanonTooBig) {
+			return false;
+		}
+	}
+
+	static inline var CANON_WORK = 100000;
+	static var canonLeft = 0;
+
+	/**
 		A text for a value that does not depend on the order fields and map
 		keys come out in. Shared and cyclic values from the serializer's
 		references are cut off below a depth.
 	**/
 	static function canon(v:Dynamic, depth = 0):String {
+		if (--canonLeft < 0)
+			throw new CanonTooBig();
 		if (depth > 32)
 			return "...";
 		function sorted(items:Array<String>) {
@@ -683,4 +705,9 @@ private class Reader {
 			v.set(k, byte());
 		return v.getDouble(0);
 	}
+}
+
+/** Thrown by Fuzz.canon for a value too big to compare. **/
+private class CanonTooBig {
+	public function new() {}
 }
