@@ -362,6 +362,11 @@ class Fuzz {
 		// name prints until the stack overflows, on every target
 		if (b.toString().indexOf("l") >= 0 && b.toString().indexOf("r") >= 0)
 			return;
+		// The std's Unserializer takes a negative string or bytes length
+		// ("y-10:") as a step back, and parses the same text again until the
+		// stack overflows, on every target
+		if (~/[ys]-/.match(b.toString()))
+			return;
 		var v1 = attempt(() -> haxe.Unserializer.run(b.toString()));
 		var s1:String = v1 == null ? null : attempt(() -> serialize(v1));
 		var v2 = s1 == null ? null : attempt(() -> haxe.Unserializer.run(s1));
