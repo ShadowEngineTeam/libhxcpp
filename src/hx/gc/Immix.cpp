@@ -3944,6 +3944,9 @@ public:
       {
          if (!mLocalPool[p])
          {
+            // Pooled allocators hold no holes. Between GetPooledAllocator and AddLocal an allocator
+            //  is neither pooled nor registered, so a collection in that window would not reset it.
+            ClearPooledAlloc(inAlloc);
             mLocalPool[p] = inAlloc;
             return true;
          }
