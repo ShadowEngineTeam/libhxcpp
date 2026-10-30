@@ -1419,7 +1419,7 @@ void CppiaClassInfo::linkTypes()
       }
       else if (staticFunctions[i]->name == "__init__")
       {
-         initExpr = staticFunctions[i]->funExpr;
+         initExpr = staticFunctions[i]->body;
          staticFunctions.erase( staticFunctions.begin() + i);
       }
       else
@@ -1530,7 +1530,7 @@ void CppiaClassInfo::link()
             for(size_t n=0; n<nativeInterfaceFunctions.size(); n++)
             {
                ScriptNamedFunction *host = nativeInterfaceFunctions[n];
-               if (host->name && memberFunctions[i]->name==host->name && host->signature &&
+               if (func && host->name && memberFunctions[i]->name==host->name && host->signature &&
                      !interfaceSignatureMatches(host->signature, func))
                {
                   func = createInterfaceAdapter(cppia, host, func);
