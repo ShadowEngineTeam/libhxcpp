@@ -15,8 +15,6 @@ namespace hx
 			struct Impl;
 
 			Impl* impl;
-			// Slots are recycled, values a thread stored for an older generation are not visible.
-			const int generation;
 
 		public:
 			ThreadLocal_obj();
