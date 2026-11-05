@@ -5,7 +5,8 @@ package;
 
    On an interactive colour terminal this draws a status area pinned to the bottom of the output,
    laid out like Gradle's rich console: the progress bar, then one line per compile thread with the
-   file it is compiling, or `> IDLE`. Finished files scroll above the status area.
+   file it is compiling, or `> IDLE`. Finished files are not listed; only other output
+   (compiler warnings, errors) scrolls above the status area.
 
    Everywhere else (CI, pipes, `HXCPP_NO_PROGRESS_BAR`) every finished file gets one plain line.
 **/
@@ -57,12 +58,12 @@ class Progress
       render(null);
    }
 
-   /** Prints `inLine` above the status area, marks thread `inTid` as idle and redraws. */
-   public function end(inTid:Int, inLine:String):Void
+   /** Marks thread `inTid` as idle and redraws. Like Gradle, finished files are not listed. */
+   public function end(inTid:Int):Void
    {
       current++;
       workers[slot(inTid)] = null;
-      render(inLine);
+      render(null);
    }
 
    /** Removes the status area for good, once the group is done. */

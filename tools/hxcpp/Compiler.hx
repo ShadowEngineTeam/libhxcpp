@@ -501,7 +501,7 @@ class Compiler
             printMutex.acquire();
 
             if (showBar)
-               inProgress.end(inTid, ['-', progressFileName, tagInfo].join(" "));
+               inProgress.end(inTid);
             else
             {
                var output = "";
