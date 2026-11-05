@@ -1933,6 +1933,7 @@ class BuildTool
          Profile.enable();
 
       Log.setColor(defines);
+      Progress.setup(defines);
       Log.verbose = Log.verbose || defines.exists("HXCPP_VERBOSE");
       Log.quiet = defines.exists("HXCPP_QUIET") && !Log.verbose;
       Log.mute = defines.exists("HXCPP_SILENT") && !Log.quiet && !Log.verbose;

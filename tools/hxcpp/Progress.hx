@@ -43,12 +43,25 @@ class Progress
    **/
    public static function useBar():Bool
    {
-      if (Log.verbose || Log.quiet || Log.mute || Log.colorSupported != true)
-         return false;
-      for (name in ["CI", "GITHUB_ACTIONS", "HXCPP_NO_PROGRESS_BAR"])
+      return !disabled && !(Log.verbose || Log.quiet || Log.mute || Log.colorSupported != true);
+   }
+
+   static var disabled = false;
+
+   /**
+      Turns the status area off for CI and for `HXCPP_NO_PROGRESS_BAR`, given as a define
+      (`-D HXCPP_NO_PROGRESS_BAR`) or as an environment variable. The defines include the environment.
+   **/
+   public static function setup(defines:haxe.ds.StringMap<String>):Void
+   {
+      if (defines.exists("HXCPP_NO_PROGRESS_BAR"))
+         disabled = true;
+
+      // CI is set by GitHub Actions, GitLab, CircleCI, Travis, Bitbucket, Buildkite and most others;
+      // the rest are services that do not set it.
+      for (name in ["CI", "GITHUB_ACTIONS", "TF_BUILD", "JENKINS_URL", "TEAMCITY_VERSION", "BUILDKITE", "APPVEYOR", "CODEBUILD_BUILD_ID"])
          if (Sys.getEnv(name) != null)
-            return false;
-      return true;
+            disabled = true;
    }
 
    /** Marks `inName` as being compiled by thread `inTid` and redraws the status area. */
