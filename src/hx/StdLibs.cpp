@@ -437,26 +437,23 @@ void __trace(Dynamic inObj, Dynamic info)
 
 #ifdef HX_WINDOWS
    HANDLE handle;
-   if (!hxStdoutIsConsole(handle))
+   if (hxStdoutIsConsole(handle))
+   {
+      fflush(stdout);
+      String s;
+      if (info == null()) {
+         s = HX_CSTRING("?? ") + text + HX_CSTRING("\n");
+      } else {
+         String filename = Dynamic((info)->__Field(HX_CSTRING("fileName"), HX_PROP_DYNAMIC))->toString();
+         int line = Dynamic((info)->__Field(HX_CSTRING("lineNumber"), HX_PROP_DYNAMIC))->__ToInt();
+         s = filename + HX_CSTRING(":") + line + HX_CSTRING(": ") + text + HX_CSTRING("\n");
+      }
+      if (s.isUTF16Encoded())
+         WriteConsoleAllW(handle, s.__WCStr(), s.length);
+      else
+         WriteConsoleAllA(handle, s.__CStr(), s.length);
       return;
-
-   fflush(stdout);
-   String s;
-   if (info == null()) {
-      s = HX_CSTRING("?? ") + text + HX_CSTRING("\n");
-   } else {
-      String filename = Dynamic((info)->__Field(HX_CSTRING("fileName"), HX_PROP_DYNAMIC))->toString();
-      int line = Dynamic((info)->__Field(HX_CSTRING("lineNumber"), HX_PROP_DYNAMIC))->__ToInt();
-      s = filename + HX_CSTRING(":") + line + HX_CSTRING(": ") + text + HX_CSTRING("\n");
    }
-   if (s.isUTF16Encoded())
-      WriteConsoleAllW(handle, s.__WCStr(), s.length);
-   else
-      WriteConsoleAllA(handle, s.__CStr(), s.length);
-#else
-#if defined(HX_MACOS) || defined(HX_LINUX)
-   if (!isatty(STDOUT_FILENO))
-      return;
 #endif
 
    hx::strbuf convertBuf;
@@ -471,7 +468,6 @@ void __trace(Dynamic inObj, Dynamic info)
       PRINTF("%s:%d: %s\n", filename, line, text.raw_ptr() ? text.out_str(&convertBuf) : "null");
    }
    fflush(stdout);
-#endif
 }
 
 void __hxcpp_exit(int inExitCode)
@@ -765,20 +761,15 @@ void __hxcpp_print_string(const String &inString)
    const String &inV = inString.raw_ptr() ? inString : HX_CSTRING("null");
 #ifdef HX_WINDOWS
    HANDLE handle;
-   if (!hxStdoutIsConsole(handle))
+   if (hxStdoutIsConsole(handle) && inV.isUTF16Encoded())
+   {
+      fflush(stdout);
+      WriteConsoleAllW(handle, inV.__WCStr(), inV.length);
       return;
-
-   fflush(stdout);
-   WriteConsoleAllW(handle, inV.__WCStr(), inV.length);
-#else
-#if defined(HX_MACOS) || defined(HX_LINUX)
-   if (!isatty(STDOUT_FILENO))
-      return;
+   }
 #endif
-
    hx::strbuf convertBuf;
    PRINTF("%s", inV.out_str(&convertBuf) );
-#endif
 }
 
 void __hxcpp_println_string(const String &inString)
@@ -786,23 +777,24 @@ void __hxcpp_println_string(const String &inString)
    const String &inV = inString.raw_ptr() ? inString : HX_CSTRING("null");
 #ifdef HX_WINDOWS
    HANDLE handle;
-   if (!hxStdoutIsConsole(handle))
+   bool isConsole = hxStdoutIsConsole(handle);
+   if (isConsole && inV.isUTF16Encoded())
+   {
+      fflush(stdout);
+      WriteConsoleAllW(handle, inV.__WCStr(), inV.length);
+      fwrite("\n", 1, 1, stdout);
+      fflush(stdout);
       return;
-
-   fflush(stdout);
-   WriteConsoleAllW(handle, inV.__WCStr(), inV.length);
-   fwrite("\n", 1, 1, stdout);
-   fflush(stdout);
-#else
-#if defined(HX_MACOS) || defined(HX_LINUX)
-   if (!isatty(STDOUT_FILENO))
-      return;
+   }
 #endif
-
    hx::strbuf convertBuf;
    PRINTF("%s\n", inV.out_str(&convertBuf));
+   // Flush every line, redirected or not.  Boot asks for line buffering,
+   // but the Windows CRT treats _IOLBF as full buffering, so a redirected
+   // stdout there held a server's log lines back from whatever reads them,
+   // and lost them if the process died.  Elsewhere the buffer is already
+   // empty after the newline, so this costs nothing.
    fflush(stdout);
-#endif
 }
 
 
