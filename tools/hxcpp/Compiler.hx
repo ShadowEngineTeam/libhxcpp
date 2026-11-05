@@ -492,20 +492,30 @@ class Compiler
             }
          }
 
-         if (!Log.verbose && (inTid >= 0 && BuildTool.threadExitCode == 0))
+         if (!Log.verbose && (inTid < 0 || BuildTool.threadExitCode == 0))
          {
             printMutex.acquire();
 
-            var output = "";
-            if (inProgress != null)
+            if (inProgress != null && Progress.useBar())
             {
+               // Replace the bar with this file, then draw the bar again below it.
                inProgress.current++;
-               output = [inProgress.getFormattedProgress(), '-', progressFileName, tagInfo].join(" ");
+               Log.print("\r\x1b[2K" + ['-', progressFileName, tagInfo].join(" ") + "\n" + inProgress.getBar());
+               Sys.stdout().flush();
             }
             else
-               output = ['-', progressFileName, tagInfo].join(" ");
+            {
+               var output = "";
+               if (inProgress != null)
+               {
+                  inProgress.current++;
+                  output = [inProgress.getFormattedProgress(), '-', progressFileName, tagInfo].join(" ");
+               }
+               else
+                  output = ['-', progressFileName, tagInfo].join(" ");
 
-            Log.info(output);
+               Log.info(output);
+            }
 
             printMutex.release();
          }

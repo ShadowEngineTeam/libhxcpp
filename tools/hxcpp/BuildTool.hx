@@ -637,6 +637,17 @@ class BuildTool
                   else
                      flags = flags.concat( BuildTool.getNvccFlags() );
 
+                  // Sorted for reading: defines first, then everything else, each alphabetically.
+                  flags = flags.copy();
+                  flags.sort(function(a:String, b:String):Int
+                  {
+                     var aDefine = StringTools.startsWith(a, "-D");
+                     var bDefine = StringTools.startsWith(b, "-D");
+                     if (aDefine != bDefine)
+                        return aDefine ? -1 : 1;
+                     return a < b ? -1 : (a > b ? 1 : 0);
+                  });
+
                   for (compilerFlag in flags)
                   {
                      if (StringTools.startsWith(compilerFlag, "-D"))
@@ -693,6 +704,11 @@ class BuildTool
                   }
             });
          }
+
+         // Clear the bar so the next output starts on a clean line.
+         if (compile_progress != null && compile_progress.current > 0 && Progress.useBar())
+            Log.print("\r\x1b[2K");
+
          Profile.pop();
 
          if (CompileCache.hasCache && group.mAsLibrary && mLinkers.exists("static_link"))

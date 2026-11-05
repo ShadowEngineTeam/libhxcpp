@@ -489,6 +489,7 @@ class ProcessManager
             {
                message += errOut.join("\n") + '${Log.NORMAL}';
             }
+            clearProgressBar();
             Log.error(message,"",null,false);
             Log.unlock();
          }
@@ -501,9 +502,22 @@ class ProcessManager
          
       if (output.length>0)
       {
+         Log.lock();
+         clearProgressBar();
          Log.info(output.join("\n"));
+         Log.unlock();
       }
       
       return 0;
+   }
+
+   // Compiler output would otherwise land on the progress bar's line; the bar is redrawn after the next file.
+   static function clearProgressBar()
+   {
+      if (Progress.useBar())
+      {
+         Log.print("\r\x1b[2K");
+         Sys.stdout().flush();
+      }
    }
 }
