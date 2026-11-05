@@ -679,7 +679,7 @@ class BuildTool
 
          var compile_progress = null;
          if (!Log.verbose)
-            compile_progress = new Progress(0,to_be_compiled.length);
+            compile_progress = new Progress(0,to_be_compiled.length,threadPool==null ? 1 : sCompileThreadCount);
 
          if (threadPool==null)
          {
@@ -705,9 +705,9 @@ class BuildTool
             });
          }
 
-         // Clear the bar so the next output starts on a clean line.
-         if (compile_progress != null && compile_progress.current > 0 && Progress.useBar())
-            Log.print("\r\x1b[2K");
+         // Remove the status area so the next output starts on a clean line.
+         if (compile_progress != null)
+            compile_progress.finish();
 
          Profile.pop();
 

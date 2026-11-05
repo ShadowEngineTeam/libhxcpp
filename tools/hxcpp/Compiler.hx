@@ -465,6 +465,10 @@ class Compiler
             progressFileName = "\x1b[33;1m" + progressFileName + "\x1b[0m";
          }
 
+         var showBar = inProgress != null && Progress.useBar();
+         if (showBar)
+            inProgress.begin(inTid, inFile.mName);
+
          if (inTid >= 0)
          {
             if (BuildTool.threadExitCode == 0)
@@ -496,13 +500,8 @@ class Compiler
          {
             printMutex.acquire();
 
-            if (inProgress != null && Progress.useBar())
-            {
-               // Replace the bar with this file, then draw the bar again below it.
-               inProgress.current++;
-               Log.print("\r\x1b[2K" + ['-', progressFileName, tagInfo].join(" ") + "\n" + inProgress.getBar());
-               Sys.stdout().flush();
-            }
+            if (showBar)
+               inProgress.end(inTid, ['-', progressFileName, tagInfo].join(" "));
             else
             {
                var output = "";

@@ -511,13 +511,9 @@ class ProcessManager
       return 0;
    }
 
-   // Compiler output would otherwise land on the progress bar's line; the bar is redrawn after the next file.
+   // Compiler output would otherwise land inside the status area; it is redrawn on the next update.
    static function clearProgressBar()
    {
-      if (Progress.useBar())
-      {
-         Log.print("\r\x1b[2K");
-         Sys.stdout().flush();
-      }
+      Progress.clearActive();
    }
 }
