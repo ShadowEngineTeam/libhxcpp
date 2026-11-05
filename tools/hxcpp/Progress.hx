@@ -109,7 +109,7 @@ class Progress
 
       var lines = [getBar()];
       for (worker in workers)
-         lines.push(worker == null ? "\x1b[2m> IDLE\x1b[0m" : "> " + cut(worker, MAX_LINE - 2));
+         lines.push(worker == null ? "\x1b[2m> IDLE\x1b[0m" : "\x1b[1m>\x1b[0m " + colorPath(cut(worker, MAX_LINE - 2)));
 
       out += lines.join("\n");
       drawnLines = lines.length;
@@ -128,6 +128,15 @@ class Progress
       var out = drawnLines > 1 ? "\x1b[" + (drawnLines - 1) + "A" : "";
       drawnLines = 0;
       return out + "\r\x1b[J";
+   }
+
+   /** Same colours as the finished file lines: the folder in yellow, the file name in bold yellow. */
+   static function colorPath(inPath:String):String
+   {
+      var slash = inPath.lastIndexOf("/");
+      if (slash < 0)
+         return "\x1b[33;1m" + inPath + "\x1b[0m";
+      return "\x1b[33m" + inPath.substr(0, slash + 1) + "\x1b[33;1m" + inPath.substr(slash + 1) + "\x1b[0m";
    }
 
    static function cut(inText:String, inMax:Int):String
