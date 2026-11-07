@@ -68,6 +68,8 @@ class Compiler
    public var mPCHUse:String;
    public var mPCHFilename:String;
    public var mPCH:String;
+   // Whether the last precompile built the header rather than reusing it
+   public var mPCHRebuilt:Bool = false;
 
    public var mRcExe:String;
    public var mRcExt:String;
@@ -662,6 +664,7 @@ class Compiler
       // gcc falls back to the plain header next to the .gch when it can't use it
       if (mPCH == "gcc")
          writePchForwarder(inGroup, dir, file);
+      mPCHRebuilt = false;
 
       if (inGroup.isCached() || inReuseIfPossible)
       {
@@ -670,6 +673,7 @@ class Compiler
           if (FileSystem.exists(pch_name) && (obj==null || FileSystem.exists(obj)) )
              return obj;
       }
+      mPCHRebuilt = true;
 
       args = args.concat( mPCHFlags );
 
