@@ -62,6 +62,10 @@
   <include name="toolchain/common-defines.xml" />
   <flag value="-flto" if="HXCPP_OPTIMIZE_LINK" unless="debug || HXCPP_LTO_THIN"/>
   <flag value="-flto=thin" if="HXCPP_LTO_THIN" unless="debug"/>
+  <flag value="-fprofile-generate" if="HXCPP_PGO_GENERATE"/>
+  <flag value="-fprofile-use=${HXCPP_PGO_DIR}/default.profdata" if="HXCPP_PGO_USE"/>
+  <flag value="-Wno-profile-instr-unprofiled" if="HXCPP_PGO_USE"/>
+  <flag value="-Wno-profile-instr-out-of-date" if="HXCPP_PGO_USE"/>
   <flag value="-DHXCPP_BIG_ENDIAN" if="HXCPP_BIG_ENDIAN"/>
   <flag value="-I${HXCPP}/include"/>
   <!-- Removed for iOS 8 (no need) -->

@@ -63,6 +63,10 @@
   <!-- Options -->
   <flag value="-flto" if="HXCPP_OPTIMIZE_LINK" unless="debug || HXCPP_LTO_THIN"/>
   <flag value="-flto=thin" if="HXCPP_LTO_THIN" unless="debug"/>
+  <flag value="-fprofile-generate" if="HXCPP_PGO_GENERATE"/>
+  <flag value="-fprofile-use=${HXCPP_PGO_DIR}/default.profdata" if="HXCPP_PGO_USE"/>
+  <flag value="-Wno-profile-instr-unprofiled" if="HXCPP_PGO_USE"/>
+  <flag value="-Wno-profile-instr-out-of-date" if="HXCPP_PGO_USE"/>
   <flag value="-fvisibility=hidden"/>
   <flag value="-ffunction-sections"/>
   <flag value="-fstack-protector"/>
@@ -89,6 +93,7 @@
   <flag value="-fuse-ld=${HXCPP_USE_LD}" if="HXCPP_USE_LD"/>
   <flag value="-flto" if="HXCPP_OPTIMIZE_LINK" unless="debug || HXCPP_LTO_THIN"/>
   <flag value="-flto=thin" if="HXCPP_LTO_THIN" unless="debug"/>
+  <flag value="-fprofile-generate" if="HXCPP_PGO_GENERATE"/>
 
   <exe name="clang++" />
   <flag value ="-shared" />
@@ -125,6 +130,7 @@
   <flag value="-fuse-ld=${HXCPP_USE_LD}" if="HXCPP_USE_LD"/>
   <flag value="-flto" if="HXCPP_OPTIMIZE_LINK" unless="debug || HXCPP_LTO_THIN"/>
   <flag value="-flto=thin" if="HXCPP_LTO_THIN" unless="debug"/>
+  <flag value="-fprofile-generate" if="HXCPP_PGO_GENERATE"/>
 
   <exe name="clang++" />
 

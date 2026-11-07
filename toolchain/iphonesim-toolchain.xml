@@ -24,6 +24,10 @@
 
   <flag value="-g" if="HXCPP_DEBUG_LINK"/>
   <flag value="-O2" unless="debug"/>
+  <flag value="-fprofile-generate" if="HXCPP_PGO_GENERATE"/>
+  <flag value="-fprofile-use=${HXCPP_PGO_DIR}/default.profdata" if="HXCPP_PGO_USE"/>
+  <flag value="-Wno-profile-instr-unprofiled" if="HXCPP_PGO_USE"/>
+  <flag value="-Wno-profile-instr-out-of-date" if="HXCPP_PGO_USE"/>
   <flag value="-fmessage-length=0"/>
   <flag value="-pipe"/>
   <flag value="-Wno-trigraphs"/>

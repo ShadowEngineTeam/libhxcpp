@@ -48,8 +48,16 @@ class Pgo
          family = "clang";
       else if (toolchain=="linux" && !defines.exists("xcompile"))
          family = isClang() ? "clang" : "gcc";
+      else if (toolchain=="android" || toolchain=="iphoneos" || toolchain=="iphonesim")
+      {
+         // Clang on a device: the program cannot write to the build machine, so it is told where
+         //  to write its counts when it runs (see HXCPP_PGO_ON_DEVICE), and they are copied back
+         //  into HXCPP_PGO_DIR before the use build
+         family = "clang";
+         defines.set("HXCPP_PGO_ON_DEVICE", "1");
+      }
       else
-         Log.error("HXCPP_PGO needs MSVC on Windows, GCC or Clang on Linux, or Clang on macOS, building for the machine it runs on");
+         Log.error("HXCPP_PGO needs MSVC on Windows, GCC or Clang on Linux, Clang on macOS, or an Android or iOS build");
 
       generate = mode=="generate";
       dir = defines.exists("HXCPP_PGO_DIR") ? defines.get("HXCPP_PGO_DIR") : "pgo";
@@ -57,6 +65,17 @@ class Pgo
          dir = PathManager.combine(Sys.getCwd(), dir);
       dir = Path.normalize(dir);
       PathManager.mkdir(dir);
+
+      // HXCPP_PGO_IF_COUNTS: a use build without counts is built as usual instead of failing,
+      //  for builds of several architectures where only some were trained
+      if (!generate && defines.exists("HXCPP_PGO_IF_COUNTS") && countFiles().length==0
+         && (family!="msvc" || msvcCountsBeside(Sys.getCwd()).length==0))
+      {
+         Log.warn('HXCPP_PGO=use found no counts in $dir: building without them');
+         defines.remove("HXCPP_PGO");
+         defines.remove("HXCPP_PGO_ON_DEVICE");
+         return;
+      }
 
       defines.set("HXCPP_PGO_DIR", dir);
       defines.set("HXCPP_OPTIMIZE_LINK", "1");
