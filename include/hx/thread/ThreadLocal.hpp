@@ -1,4 +1,5 @@
-#pragma once
+#ifndef HX_THREAD_THREADLOCAL_HPP
+#define HX_THREAD_THREADLOCAL_HPP
 
 #ifndef HXCPP_H
 #include <hxcpp.h>
@@ -24,3 +25,5 @@ namespace hx
 		};
 	}
 }
+
+#endif

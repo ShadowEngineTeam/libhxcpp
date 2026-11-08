@@ -1,4 +1,5 @@
-#pragma once
+#ifndef CPP_MARSHAL_BOXED_HPP
+#define CPP_MARSHAL_BOXED_HPP
 
 #include "Definitions.inc"
 
@@ -37,3 +38,4 @@ inline cpp::marshal::Boxed_obj<T>::Boxed_obj(TArgs... args) : value(std::forward
 {
     setFinaliser(std::integral_constant<bool, !std::is_trivially_destructible<T>::value>{});
 }
+#endif

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef HX_ZIP_ZLIB_ZLIBMEMORY_HPP
+#define HX_ZIP_ZLIB_ZLIBMEMORY_HPP
 
 #include <hxcpp.h>
 #include <zlib-ng.h>
@@ -70,3 +71,5 @@ namespace hx
 		}
 	}
 }
+
+#endif

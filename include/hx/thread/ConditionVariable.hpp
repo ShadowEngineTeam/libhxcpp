@@ -1,4 +1,5 @@
-#pragma once
+#ifndef HX_THREAD_CONDITIONVARIABLE_HPP
+#define HX_THREAD_CONDITIONVARIABLE_HPP
 
 #ifndef HXCPP_H
 #include <hxcpp.h>
@@ -18,6 +19,7 @@ namespace hx
 			bool tryAcquire();
 			void release();
 			void wait();
+			bool timedWait(double seconds);
 			void signal();
 			void broadcast();
 
@@ -28,3 +30,5 @@ namespace hx
 		};
 	}
 }
+
+#endif
