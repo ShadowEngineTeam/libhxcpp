@@ -214,7 +214,10 @@ Dynamic CppiaVar::getValue(hx::Object *inThis)
    switch(storeType)
    {
       case fsByte: return *(unsigned char *)(base);
-      case fsInt: return *(int *)(base);
+      case fsInt:
+         if (type && (type->name==HX_CSTRING("Bool") || type->name==HX_CSTRING("bool")))
+            return (bool)*(int *)(base);
+         return *(int *)(base);
       case fsBool: return *(bool *)(base);
       case fsFloat: return *(Float *)(base);
       case fsString: return *(String *)(base);
