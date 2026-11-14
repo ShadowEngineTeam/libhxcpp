@@ -1,3 +1,0 @@
-UTF8 encoding preserves the complete payload: true
-retained UTF8 storage stays close to the output length: true
-ASCII control storage stays close to the output length: true

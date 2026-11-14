@@ -1,3 +1,0 @@
-joined integers match their strings: true
-one: 42, none: []
-printed: [-3,0,12] [[1,-2],[30]]

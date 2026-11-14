@@ -1,3 +1,0 @@
-empty UTF8 encoding returns an empty array: true
-ASCII UTF8 encoding remains intact: true
-Unicode UTF8 encoding remains intact: true
