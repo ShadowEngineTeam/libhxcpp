@@ -4,9 +4,10 @@ package;
    Compile progress.
 
    On an interactive colour terminal this draws a status area pinned to the bottom of the output,
-   laid out like Gradle's rich console: the progress bar, then one line per compile thread with the
-   file it is compiling, or `> IDLE`. Finished files are not listed; only other output
-   (compiler warnings, errors) scrolls above the status area.
+   laid out like Gradle's rich console: the progress bar, then a line for each compile thread that
+   has picked up work, with the file it is compiling, or `> IDLE`. Like Gradle, a thread's line only
+   appears once it starts its first file, and then stays. Finished files are not listed; only other
+   output (compiler warnings, errors) scrolls above the status area.
 
    Everywhere else (CI, pipes, `HXCPP_NO_PROGRESS_BAR`) every finished file gets one plain line.
 **/
@@ -28,6 +29,9 @@ class Progress
 
    var startTime:Float;
    var workers:Array<Null<String>>;
+
+   /** Threads in the order they started their first file: one status line each. */
+   var rows:Array<Int> = [];
 
    public function new(inCurrent:Int, inTotal:Int, inWorkers:Int = 1)
    {
@@ -67,16 +71,23 @@ class Progress
    /** Marks `inName` as being compiled by thread `inTid` and redraws the status area. */
    public function begin(inTid:Int, inName:String):Void
    {
-      workers[slot(inTid)] = inName;
+      Log.lock();
+      var tid = slot(inTid);
+      workers[tid] = inName;
+      if (rows.indexOf(tid) < 0)
+         rows.push(tid);
       render(null);
+      Log.unlock();
    }
 
    /** Marks thread `inTid` as idle and redraws. Like Gradle, finished files are not listed. */
    public function end(inTid:Int):Void
    {
+      Log.lock();
       current++;
       workers[slot(inTid)] = null;
       render(null);
+      Log.unlock();
    }
 
    /** Removes the status area for good, once the group is done. */
@@ -122,8 +133,11 @@ class Progress
          out += inLine + "\n";
 
       var lines = [getBar()];
-      for (worker in workers)
+      for (tid in rows)
+      {
+         var worker = workers[tid];
          lines.push(worker == null ? "\x1b[2m> IDLE\x1b[0m" : "\x1b[1m>\x1b[0m " + colorPath(cut(worker, MAX_LINE - 2)));
+      }
 
       out += lines.join("\n");
       drawnLines = lines.length;
