@@ -139,7 +139,8 @@ class Progress
          lines.push(worker == null ? "\x1b[2m> IDLE\x1b[0m" : "\x1b[1m>\x1b[0m " + colorPath(cut(worker, MAX_LINE - 2)));
       }
 
-      out += lines.join("\n");
+      // Ends with a newline so the cursor waits on its own line below the status area, as in Gradle
+      out += lines.join("\n") + "\n";
       drawnLines = lines.length;
 
       Log.print(out);
@@ -153,7 +154,7 @@ class Progress
       if (drawnLines == 0)
          return "";
 
-      var out = drawnLines > 1 ? "\x1b[" + (drawnLines - 1) + "A" : "";
+      var out = "\x1b[" + drawnLines + "A";
       drawnLines = 0;
       return out + "\r\x1b[J";
    }
