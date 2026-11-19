@@ -1,3 +1,0 @@
-size covers the string: true
-frozen copy equal: true
-frozen UTF-16 copy equal: true
