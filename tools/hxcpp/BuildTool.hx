@@ -810,6 +810,14 @@ class BuildTool
 
             if (output!="")
             {
+               // The link is recorded as done, so a step after it that fails
+               //  would leave the output looking up to date: forget the link
+               var unfinished = linker.mLastHashFile;
+               Tools.addOnExitHook(function(code:Int) {
+                  if (code!=0 && unfinished!=null)
+                     try { FileSystem.deleteFile(unfinished); } catch(e:Dynamic) { }
+               });
+
                if (target.mToolID=="exe" || target.mToolID=="dll")
                   Pgo.linked(output);
 
@@ -845,6 +853,7 @@ class BuildTool
                      mManifester.add(output, manifest,target.mToolID=="exe");
                   }
                }
+               unfinished = null;
             }
 
 
@@ -1895,7 +1904,7 @@ class BuildTool
             var allDefines = new Map<String,Bool>();
             for(file in FileSystem.readDirectory(dir))
                if (file.endsWith(".hx"))
-                  for(line in sys.io.File.getContent(file).split("\n"))
+                  for(line in sys.io.File.getContent('$dir/$file').split("\n"))
                      if (defineMatch.match(line))
                         allDefines.set(defineMatch.matched(1),true);
             for(key in allDefines.keys())
