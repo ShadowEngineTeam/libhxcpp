@@ -60,7 +60,7 @@
 
       inline operator DATA *()
       {
-         #if !defined(HXCPP_M64) && (_MSC_VER >= 1400)
+         #if !defined(HXCPP_M64) && !defined(HXCPP_ARM64) && (_MSC_VER >= 1400)
          if (mSlot < kMaxInlineSlots)
            return (DATA *)__readfsdword(mFastOffset);
          return (DATA *)TlsGetValue(mSlot);
