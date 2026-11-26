@@ -686,7 +686,7 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
    // Compound assignment, ++ and --, insert and toString, which the JIT did
    //  not compile: a[i] op= val stored val alone, and the others did nothing
    //  (libhxcpp #468). They work as the interpreter does
-   static hx::Object * SLJIT_CALL runAssign(ArrayAnyImpl *inArray, int inIndex, hx::Object *inValue)
+   static hx::Object * SLJIT_FUNC runAssign(ArrayAnyImpl *inArray, int inIndex, hx::Object *inValue)
    {
       TRY_NATIVE
       Dynamic orig = inArray->__GetItem(inIndex);
@@ -697,7 +697,7 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
       return 0;
    }
 
-   static hx::Object * SLJIT_CALL runCrement(ArrayAnyImpl *inArray, int inIndex)
+   static hx::Object * SLJIT_FUNC runCrement(ArrayAnyImpl *inArray, int inIndex)
    {
       TRY_NATIVE
       return applyCrement(inArray, inIndex).mPtr;
@@ -705,14 +705,14 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
       return 0;
    }
 
-   static void SLJIT_CALL runInsert(ArrayAnyImpl *inArray, hx::Object *inPos, hx::Object *inValue)
+   static void SLJIT_FUNC runInsert(ArrayAnyImpl *inArray, hx::Object *inPos, hx::Object *inValue)
    {
       TRY_NATIVE
       inArray->CALL(insert)(Dynamic(inPos), Dynamic(inValue));
       CATCH_NATIVE
    }
 
-   static void SLJIT_CALL runToString(ArrayAnyImpl *inArray, String *outValue)
+   static void SLJIT_FUNC runToString(ArrayAnyImpl *inArray, String *outValue)
    {
       TRY_NATIVE
       JitStore(outValue, inArray->toString());

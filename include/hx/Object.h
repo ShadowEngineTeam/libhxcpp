@@ -39,7 +39,13 @@ HXCPP_EXTERN_CLASS_ATTRIBUTES null BadCast();
 
 #ifdef HXCPP_SCRIPTABLE
 
+// The calling convention of the script stubs Haxe generates into host code,
+// which the runtime and the cppia JIT call. It is the C one on every platform,
+// as sljit's is since 0.95. It was fastcall on 32-bit x86, so there a host
+// object compiled with older headers does not match this runtime
+// (openfl/libhxcpp#419). Haxe still writes the name, so it stays.
 #define CPPIA_CALL
+
 
 typedef void (CPPIA_CALL *StackExecute)(struct StackContext *ctx);
 struct ScriptFunction

@@ -17,7 +17,9 @@ namespace hx
 
 // On Apple Silicon, MAP_JIT memory is either writable or executable for the
 // current thread, never both: generating or freeing code makes it writable for
-// that long, and executable again before anything runs it.
+// that long, and executable again before anything runs it. sljit's allocator
+// switches it itself on macOS, but not on iOS and tvOS, and its alloc_chunk
+// leaves the thread on writable.
 struct JitWritable
 {
    JitWritable() { set(true); }
@@ -36,6 +38,10 @@ bool CppiaCompiler::canRun()
    static int sCanRun = -1;
    if (sCanRun<0)
    {
+      #ifdef HX_JIT_CPU_UNSUPPORTED
+      sCanRun = 0;
+      #else
+      JitWritable writable;
       #if (defined SLJIT_EXECUTABLE_ALLOCATOR && SLJIT_EXECUTABLE_ALLOCATOR)
       // A chunk mapped and released as sljit's allocator maps its own, MAP_JIT
       //  included. Allocating through the allocator left its free list as if a
@@ -45,12 +51,12 @@ bool CppiaCompiler::canRun()
       if (probe)
          free_chunk(probe, CHUNK_SIZE);
       #else
-      JitWritable writable;
-      void *probe = SLJIT_MALLOC_EXEC(16);
+      void *probe = SLJIT_MALLOC_EXEC(16, NULL);
       if (probe)
-         SLJIT_FREE_EXEC(probe);
+         SLJIT_FREE_EXEC(probe, NULL);
       #endif
       sCanRun = probe ? 1 : 0;
+      #endif
    }
    return sCanRun==1;
 }
@@ -68,7 +74,11 @@ void CppiaCompiler::reportCannotRun()
    if (!sReported)
    {
       sReported = true;
+      #ifdef HX_JIT_CPU_UNSUPPORTED
+      JIT_NOTICE("cppia: the JIT is enabled but does not support " HX_JIT_CPU_UNSUPPORTED ", so scripts run in the interpreter\n");
+      #else
       JIT_NOTICE("cppia: the JIT is enabled but cannot get executable memory here, so scripts run in the interpreter\n");
+      #endif
    }
 }
 
@@ -252,8 +262,8 @@ int sThisReg = SLJIT_S2;
 // more of the script stack.  When it cannot grow, as jitted code cannot
 // unwind C++ exceptions, follow the runtime convention: store the exception
 // and let the emitted checkException route it.  Declared SLJIT_FUNC like
-// every function jitted code calls: on 32-bit x86 that is fastcall, and a
-// plain function would read its context from the stack
+// every function jitted code calls: the C calling convention, cdecl on
+// 32-bit x86
 static void SLJIT_FUNC cppiaJitGrowStack(CppiaCtx *inCtx)
 {
    if (!inCtx->growScriptStack(0))
@@ -369,7 +379,7 @@ public:
       compiler = sljit_create_compiler(NULL);
 
       int options = 0;
-      // S0 is stack
+      // S0 is the context, the function's one argument
       int saveds = 1;
       if (usesFrame && saveds<2)
          saveds = 2;
@@ -522,11 +532,17 @@ public:
    }
 
 
-   void emit_ijump(const JitVal &inVal,int inArgs=SLJIT_ARGS1V(P))
+   // Calls a function that takes word or pointer arguments in R0, R1 and R2,
+   // and leaves a word or pointer result, if it has one, in R0
+   void emit_icall(sljit_s32 inArgTypes, sljit_s32 inType, sljit_sw inWhere)
    {
-      sljit_sw t = getTarget(inVal);
       if (compiler)
-         sljit_emit_icall(compiler, SLJIT_CALL, inArgs, t, getData(inVal));
+         sljit_emit_icall(compiler, SLJIT_CALL, inArgTypes, inType, inWhere);
+   }
+
+   void emit_call_native(void *func, sljit_s32 inArgTypes)
+   {
+      emit_icall(inArgTypes, SLJIT_IMM, SLJIT_FUNC_ADDR(func));
    }
 
    JumpId jump(LabelId inTo=0) HXCPP_OVERRIDE
@@ -570,6 +586,8 @@ public:
       sljit_sw t1 = getTarget(v1);
       if (compiler)
       {
+         // With a NaN, only != holds, so only != jumps; reversed, the test is
+         // the negation, which jumps on NaN unless it is ==
          bool jumpOnNan = condition==cmpD_NOT_EQUAL;
          if (inReverse)
          {
@@ -577,42 +595,31 @@ public:
             condition = (JitCompare)( (int)condition ^ 0x01 );
          }
 
-         if (jumpOnNan)
+         // sljit's ordered and unordered types say what a NaN does, which its
+         // plain ones leave unspecified
+         sljit_s32 type = 0;
+         switch( (int)condition & ~SLJIT_32 )
          {
-            JumpId passed = sljit_emit_fcmp(compiler, condition, t0, getData(v0), t1, getData(v1) );
-
-            // test failed, but test nan
-            JumpId notNan = sljit_emit_jump(compiler,SLJIT_ORDERED);
-
-            // is nan - fallthough
-            // test passed, but was nan
-            comeFrom(passed);
-            JumpId good = sljit_emit_jump(compiler,SLJIT_JUMP);
-            if (andJump)
-               sljit_set_label(good, andJump);
-
-            comeFrom(notNan);
-            return good;
+            case cmpD_EQUAL:
+               type = jumpOnNan ? SLJIT_UNORDERED_OR_EQUAL : SLJIT_ORDERED_EQUAL; break;
+            case cmpD_NOT_EQUAL:
+               type = jumpOnNan ? SLJIT_UNORDERED_OR_NOT_EQUAL : SLJIT_ORDERED_NOT_EQUAL; break;
+            case cmpD_LESS:
+               type = jumpOnNan ? SLJIT_UNORDERED_OR_LESS : SLJIT_ORDERED_LESS; break;
+            case cmpD_GREATER_EQUAL:
+               type = jumpOnNan ? SLJIT_UNORDERED_OR_GREATER_EQUAL : SLJIT_ORDERED_GREATER_EQUAL; break;
+            case cmpD_GREATER:
+               type = jumpOnNan ? SLJIT_UNORDERED_OR_GREATER : SLJIT_ORDERED_GREATER; break;
+            case cmpD_LESS_EQUAL:
+               type = jumpOnNan ? SLJIT_UNORDERED_OR_LESS_EQUAL : SLJIT_ORDERED_LESS_EQUAL; break;
+            default:
+               setError("Unknown float compare");
          }
-         else
-         {
-            JumpId userCmpPassed = sljit_emit_fcmp(compiler, condition, t0, getData(v0), t1, getData(v1) );
-            // user test failed - will also fail with nan, so done.
-            JumpId userCmpFailed = sljit_emit_jump(compiler,SLJIT_JUMP);
 
-            // user test passed - unless nan ...
-            comeFrom(userCmpPassed);
-
-            // Result is not-nan when user test passed
-            JumpId notNan = sljit_emit_jump(compiler,SLJIT_ORDERED);
-            if (andJump)
-               sljit_set_label(notNan, andJump);
-            // is nan ..
-
-            comeFrom(userCmpFailed);
-
-            return notNan;
-         }
+         JumpId result = sljit_emit_fcmp(compiler, type | ((int)condition & SLJIT_32), t0, getData(v0), t1, getData(v1) );
+         if (andJump)
+            sljit_set_label(result, andJump);
+         return result;
       }
       return 0;
    }
@@ -1286,7 +1293,7 @@ public:
       }
       else
       {
-         emit_op2(SLJIT_SUB | SLJIT_32, inDest, JitVal(0), inSrc);
+         emit_op2(SLJIT_SUB32, inDest, JitVal(0), inSrc);
       }
    }
 
@@ -1318,7 +1325,7 @@ public:
 
    void bitNot(const JitVal &inDest, const JitVal &v0) HXCPP_OVERRIDE
    {
-      emit_op2(SLJIT_XOR | SLJIT_32, inDest, v0, JitVal(-1));
+      emit_op2(SLJIT_XOR32, inDest, v0, JitVal(-1));
    }
 
    void bitOp(BitOp inOp, const JitVal &inDest, const JitVal &v0, const JitVal &v1 ) HXCPP_OVERRIDE
@@ -1424,7 +1431,8 @@ public:
    void call(const JitVal &func,const JitVal &inArg0) HXCPP_OVERRIDE
    {
       move(sJitArg0,inArg0);
-      emit_ijump(func,SLJIT_ARGS1V(P));
+      sljit_s32 t = getTarget(func);
+      emit_icall(SLJIT_ARGS1(W, P), t, getData(func));
    }
 
    void callNative(void *func) HXCPP_OVERRIDE
@@ -1434,8 +1442,7 @@ public:
          maxTempCount =1;
       if (compiler)
       {
-         auto call = sljit_emit_call(compiler, SLJIT_CALL, SLJIT_ARGS1V(P));
-         sljit_set_target(call, SLJIT_FUNC_ADDR(func));
+         emit_call_native(func, SLJIT_ARGS1(W, P));
       }
    }
    void callNative(void *func, const JitVal &inArg0) HXCPP_OVERRIDE
@@ -1461,10 +1468,7 @@ public:
          move( sJitArg0, inArg0);
 
       if (compiler)
-      {
-         auto call = sljit_emit_call(compiler, SLJIT_CALL, SLJIT_ARGS1V(P));
-         sljit_set_target(call, SLJIT_FUNC_ADDR(func));
-      }
+         emit_call_native(func, SLJIT_ARGS1(W, P));
 
       if (restoreLocal>=0)
          localSize = restoreLocal;
@@ -1523,10 +1527,7 @@ public:
 
 
       if (compiler)
-      {
-         auto call = sljit_emit_call(compiler, SLJIT_CALL, SLJIT_ARGS2V(P, P));
-         sljit_set_target(call, SLJIT_FUNC_ADDR(func));
-      }
+         emit_call_native(func, SLJIT_ARGS2(W, P, P));
 
       if (restoreLocal>=0)
          localSize = restoreLocal;
@@ -1607,8 +1608,7 @@ public:
 
       if (compiler)
       {
-         auto call = sljit_emit_call(compiler, SLJIT_CALL, SLJIT_ARGS3V(P, P, P));
-         sljit_set_target(call, SLJIT_FUNC_ADDR(func));
+         emit_call_native(func, SLJIT_ARGS3(W, P, P, P));
       }
 
       if (restoreLocal>=0)

@@ -6474,7 +6474,7 @@ struct EnumIExpr : public CppiaDynamicExpr
    }
 
    #ifdef CPPIA_JIT
-   static hx::Object * SLJIT_CALL paramChecked(hx::Object *inValue, int inIndex)
+   static hx::Object * SLJIT_FUNC paramChecked(hx::Object *inValue, int inIndex)
    {
       EnumBase_obj *value = static_cast<EnumBase_obj *>(inValue);
       if (!value || inIndex>=value->_hx_getParamCount())
