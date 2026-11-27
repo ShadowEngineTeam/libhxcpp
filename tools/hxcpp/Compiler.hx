@@ -240,6 +240,12 @@ class Compiler
       return args;
    }
 
+   static function isArmasm(exe:String)
+   {
+      var name = new Path(exe).file.toLowerCase();
+      return name=="armasm64" || name=="armasm";
+   }
+
    public function getArgs(inFile:File)
    {
       var nvcc = inFile.isNvcc();
@@ -247,6 +253,9 @@ class Compiler
       var isRc = mRcExe!=null && inFile.isResource();
       var args = nvcc ? inFile.mGroup.mCompilerFlags.concat( BuildTool.getNvccFlags() ) :
                        inFile.mCompilerFlags.concat(inFile.mGroup.mCompilerFlags);
+      // armasm takes none of cl's options, so its files get the asm flags only
+      if (asm && isArmasm(inFile.getAsmExe(mAsmExe)))
+         args = [];
       var tagFilter = inFile.getTags().split(",");
       addOptimTags(tagFilter);
       if (!isRc && !asm)
@@ -386,6 +395,7 @@ class Compiler
       var asm = inFile.isAsm();
       var exe = asm ? inFile.getAsmExe(mAsmExe) : nvcc ? BuildTool.getNvcc() : mExe;
       var nasm = asm && (exe.endsWith("nasm") || exe.endsWith("nasm.exe"));
+      var armasm = asm && isArmasm(exe);
       var isRc =  mRcExe!=null && inFile.isResource();
       if (isRc)
          exe = mRcExe;
@@ -447,7 +457,7 @@ class Compiler
                args.push( (new Path( inFile.mDir + inFile.mName)).toString() );
          }
 
-         var out = (nvcc||nasm) ? "-o " : mOutFlag;
+         var out = (nvcc||nasm||armasm) ? "-o " : mOutFlag;
          if (out.substr(-1)==" ")
          {
             args.push(out.substr(0,out.length-1));

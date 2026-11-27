@@ -149,9 +149,13 @@
     <asmExe value="llvm-ml${TOOLS_EXE_SUFFIX}" />
   </section>
   <section unless="HXCPP_MSVC_LLVM">
-    <asmExe value="ml64.exe" if="HXCPP_M64" />
-    <asmExe value="ml.exe" unless="HXCPP_M64" />
+    <asmExe value="ml64.exe" if="HXCPP_M64" unless="HXCPP_ARM64" />
+    <asmExe value="ml.exe" unless="HXCPP_M64 || HXCPP_ARM64" />
   </section>
+  <!-- llvm-ml only assembles x86 -->
+  <asmExe value="armasm64.exe" if="HXCPP_ARM64" />
+  <asmflag value="-nologo" />
+  <asmflag value="-c" unless="HXCPP_ARM64" />
 
   <objdir value="${MSVC_OBJ_DIR}" />
 
