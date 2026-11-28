@@ -5,6 +5,7 @@
 #include <mutex>
 #include <vector>
 #include <algorithm>
+#include <math.h>
 #include <hx/OS.h>
 
 #include <string.h>
