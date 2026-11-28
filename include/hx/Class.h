@@ -271,7 +271,7 @@ inline void RegisterClass(const String &inClassName, hx::Class inClass)
 template<typename T>
 inline bool TCanCast(hx::Object *inPtr)
 {
-	return inPtr && inPtr->_hx_isInstanceOf(T::_hx_ClassId);
+   return inPtr && ::hx::IsInstanceOfType<T>(inPtr, 0);
 }
 
 
@@ -282,7 +282,7 @@ inline bool TIsInterface(hx::Object *inPtr)
 }
 
 
-HXCPP_EXTERN_CLASS_ATTRIBUTES void RegisterVTableOffset(int inOffset);
+HXCPP_EXTERN_CLASS_ATTRIBUTES void RegisterVTableOffset(uintptr_t inOffset);
 
 // Generated for each @:nativeGen interface a class implements. Haxe makes those
 // interfaces virtual bases, whose offset can only be read from a constructed
