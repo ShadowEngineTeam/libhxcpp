@@ -16,7 +16,7 @@
     <section unless="isMsvc">
 
       <compilerflag value="-DHAVE_UNISTD_H" />
-      <compilerflag value="-DHAVE_CPUID_GNU" unless="HXCPP_ARMV7 || HXCPP_ARM64" />
+      <compilerflag value="-DHAVE_CPUID_GNU" unless="HXCPP_ARMV7 || HXCPP_ARM64 || emscripten" />
       <compilerflag value="-DHAVE_ATTRIBUTE_ALIGNED" />
       <compilerflag value="-DHAVE_BUILTIN_ASSUME_ALIGNED" />
       <compilerflag value="-DHAVE_VISIBILITY_HIDDEN" />
@@ -38,7 +38,7 @@
 
     </section>
 
-    <section unless="HXCPP_ARM64 || HXCPP_ARMV7">
+    <section unless="HXCPP_ARM64 || HXCPP_ARMV7 || emscripten">
 
       <compilerflag value="-DX86_FEATURES" />
       <compilerflag value="-DX86_HAVE_XSAVE_INTRIN" unless="isMsvc" />
@@ -104,7 +104,7 @@
 
     </section>
 
-    <section unless="HXCPP_ARM64 || HXCPP_ARMV7">
+    <section unless="HXCPP_ARM64 || HXCPP_ARMV7 || emscripten">
 
       <section unless="isMsvc">
 
